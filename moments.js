@@ -400,8 +400,8 @@ const LV_HELP = {
   block:{t:"How to block", steps:["A shot is heading for goal.", "Tap <b>Block!</b> when the ball is <b>in the green</b>.", "Miss it and they'll probably score, and sometimes it deflects in off you."],
     svg:`<svg viewBox="0 0 240 120"><rect width="240" height="120" rx="12" fill="#1D6537"/><path d="M14 60H214" stroke="rgba(255,255,255,.35)" stroke-width="4"/><rect x="166" y="28" width="34" height="64" rx="8" fill="rgba(74,222,128,.35)" stroke="#4ADE80" stroke-width="2"/>
       <rect x="216" y="24" width="12" height="72" fill="rgba(255,255,255,.2)" stroke="#F4F7F2" stroke-width="3"/><circle cx="80" cy="60" r="9" fill="#fff"/><path d="M98 60h40m-8-7 8 7-8 7" stroke="#FFE9A8" stroke-width="3" fill="none"/>${LV_TXT(115,112,"TAP WHEN THE BALL'S IN THE GREEN")}</svg>`},
-  intercept:{t:"How to intercept", steps:["Their midfielder has the ball, with three teammates to pass to.", "Watch him: a <b>gold arrow</b> shows where he's looking. <b>Tap that lane</b> to cut the pass out.",
-    "Good passers sometimes look one way and pass the other, so wait for the real look."],
+  intercept:{t:"How to intercept", steps:["Their midfielder has the ball, with three team-mates to pass to: left, middle and right.", "Wait until his <b>lane lights up gold</b> and the button says <b>Now!</b>, then <b>tap that lane</b> (anywhere in that third of the pitch) to step in and win it.",
+    "Good passers flash a look one way and pass the other, so don't go on the first glance. Too slow and the pass gets through."],
     svg:lvDemo("bottom", `${lvMan(150,40,"#EF4444")}${lvMan(70,110,"#EF4444")}${lvMan(150,124,"#EF4444")}${lvMan(230,110,"#EF4444")}<path d="M150 46L222 100" stroke="#F5C542" stroke-width="4" stroke-dasharray="7 5"/>${lvMan(150,84,"#F5C542")}`, "TAP THE LANE HE'S LOOKING AT")},
   save:{t:"How to save", steps:["The striker lines up his shot. Don't move too early: strikers punish keepers who guess.",
     "Watch which way the ball goes, then <b>tap that side of the goal</b>: left, middle or right.", "Your shot-stopping decides how much time you get. Penalties are quicker."],
@@ -886,25 +886,26 @@ function lvGameIntercept(st, m){
   const react = clamp(700*(1 + e), 400, 1100), wait = 700 + Math.random()*800, dummy = f.oppStr > a.def + 3 && Math.random()<.35;
   const L = {l:[70,110], c:[150,126], r:[230,110]};
   return new Promise(res=>{
-    lvShow(`${lvHead(st, m.min)}<h2 class="lv-t">Read the pass</h2><p class="lv-s">Watch where he looks, then tap that lane to cut it out.</p>
-      <div class="lv-stage">${lvField("bottom", `<path d="M112 20v150M188 20v150" stroke="rgba(255,255,255,.2)" stroke-width="2" stroke-dasharray="6 6"/>${lvMan(150,40,kit.them)}${Object.values(L).map(([x,y])=>lvMan(x, y, kit.them)).join("")}<g id="lvMe">${lvMan(0,0,kit.us,{ring:"#F5C542"})}</g>
+    lvShow(`${lvHead(st, m.min)}<h2 class="lv-t">Cut out the pass</h2><p class="lv-s">He's passing to one of his three team-mates. When his lane lights up gold, tap it to step in. He might look one way first.</p>
+      <div class="lv-stage">${lvField("bottom", `${Object.entries(L).map(([z,[x,y]])=>`<path id="lvLn${z}" d="M150 46L${x} ${y}" stroke="rgba(255,255,255,.13)" stroke-width="14" stroke-linecap="round"/>`).join("")}${lvMan(150,40,kit.them)}${Object.values(L).map(([x,y])=>lvMan(x, y, kit.them)).join("")}<g id="lvMe">${lvMan(0,0,kit.us,{ring:"#F5C542"})}</g>
           <path id="lvLook" d="M0 0" stroke="#F5C542" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6" opacity="0"/>${lvBallSvg("lvIb", 150, 44, 4)}`)}
         <div class="lv-thirds">${["l","c","r"].map(z=>`<button type="button" class="lv-tap" data-z="${z}" aria-label="Cut out the pass ${{l:"left",c:"through the middle",r:"right"}[z]}"></button>`).join("")}</div></div>
-      <button type="button" class="btn big lv-act" disabled>Watch his eyes</button>`);
+      <button type="button" class="btn big lv-act" disabled>Watch his eyes…</button>`);
     lvSkippable(res);
-    const stage = lv$(".lv-stage"), look = lv$("#lvLook"), t0 = performance.now(); let dir = null, at = 0, done = false, faked = !dummy, cur = [150, 44];
+    const stage = lv$(".lv-stage"), look = lv$("#lvLook"), act = lv$(".lv-act"), lane = (z, col) => lv$("#lvLn" + z)?.setAttribute("stroke", col), t0 = performance.now(); let dir = null, at = 0, done = false, faked = !dummy, cur = [150, 44];
     lvMove("#lvMe", 150, 86);
     const show = z => { const [x,y] = L[z]; look.setAttribute("d", `M150 46L${150 + (x-150)*.72} ${46 + (y-46)*.72}`); look.setAttribute("opacity", 1); };
     lvLoop(now=>{
       if (done) return false;
       const t = now - t0;
       if (!faked && t>=wait-450){ faked = true; show(pick(["l","c","r"])); setTimeout(()=>{ if (!dir && lvEl) look.setAttribute("opacity", 0); }, 200); }
-      if (!dir && t>=wait){ dir = pick(["l","c","r"]); at = now; stage.dataset.look = dir; show(dir); }
+      if (!dir && t>=wait){ dir = pick(["l","c","r"]); at = now; stage.dataset.look = dir; show(dir); lane(dir, "rgba(245,197,66,.42)"); act.textContent = "Now! Tap his lane"; act.classList.add("primary"); }
       if (dir){ const k = clamp((now-at-react*.45)/(react*.55), 0, 1), [x,y] = L[dir]; cur = [150 + (x-150)*k, 44 + (y-44)*k]; lvBallAt("#lvIb", cur[0], cur[1], 1, 0, k*500, k>0); if (k>=1){ end(null); return false; } }
     });
     const end = async z=>{
       if (done) return; done = true; cancelAnimationFrame(lvRaf);
       const ok = z && (dir ? z===dir : Math.random()<1/3);
+      if (z) lane(z, ok ? "rgba(74,222,128,.5)" : "rgba(248,113,113,.45)");
       // you step across into the lane you picked; if it's the right one, the ball's yours
       if (z){ const tx = {l:104, c:150, r:196}[z]; await lvTween(200, k=>lvMove("#lvMe", 150 + (tx-150)*lvEaseOut(k), 86 + 6*k));
         if (ok) await lvFly("#lvIb", cur, [tx + 6, 90], 160); }

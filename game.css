@@ -607,6 +607,8 @@ html.lv-open,html.lv-open body{overflow:hidden}
 .lv-aim.on{background:rgba(245,197,66,.22);box-shadow:inset 0 0 0 2px #F5C542}
 .lv-aim.on::after{content:"";display:block;width:18px;height:18px;margin:auto;border-radius:50%;border:2px solid #F5C542;box-shadow:0 0 12px #F5C542}
 .lv-thirds{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr)}
+.lv-thirds .lv-tap{position:relative;inset:auto;width:auto;height:auto}
+.lv-thirds .lv-tap:focus-visible{outline:none}   /* the screen focuses the first zone when it opens: no outline hinting a side */   /* grid cells, not the free-floating tap zones .lv-tap makes elsewhere */
 .lv-thirds button+button{border-left:1px dashed rgba(255,255,255,.14)}
 .lv-thirds button:active{background:rgba(245,197,66,.15)}
 .lv-cue{position:absolute;left:0;right:0;top:2px;text-align:center;font-family:var(--f-label);font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:14px;color:#FFE9A8;animation:lvpulse .8s ease-in-out infinite alternate;pointer-events:none}
