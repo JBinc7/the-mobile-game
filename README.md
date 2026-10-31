@@ -97,26 +97,21 @@ The Season screen keeps it short: this week's match (both badges, the competitio
 
 ## Mini-game lab (development)
 
-The **mini-game lab** is a development area for trying out mini-games: every one in one place, to play as often as you like. The 30 new games are only in the lab, never in matches or training, and nothing you play there touches your career, your coins or your saves.
+### Matches, extra time and penalties
+- **Key moments:** every position draws from a wide pool: the original 16 match games plus 21 that started in the lab (volley, bicycle kick, chip, lob, top bins, bend it, flick penalty, through ball, switch the play, corner, through the gap, one-two, skill combo, race to the ball, dribble drag, air duel, shield the ball, offside trap, clear the cross, block it, fingertips), each played once in a match. Nothing repeats within a match until the pool's used up, and recent ones are less likely next time.
+- **Set pieces:** now and then a penalty (strikers and tens) or a free kick (wide men and midfielders).
+- **Injury time:** late moments can come in stoppage time (90+3').
+- **Extra time and penalties:** a knockout tie level after 90 (or on aggregate) goes to extra time, with one more moment of yours, then a penalty shootout. Play either or sim it. In the shootout you take your side's kicks and go in goal for theirs; *Sim the rest* finishes it. Cups, Europe and international tournaments.
 
-It's hidden from players. To show it on a phone, open the Account menu and tap the *Game version* line at the bottom five times (or open the game once with `?dev` at the end of its address): a **Development** section appears in the menu with *Open the mini-game lab*. *Hide this section* (or five more taps) hides it again.
+### Training ground
+- Once a week: the **drill** for your training focus, and one **Arcade** session: keepy-uppy, flick-ups, crossbar challenge, target practice, dribble slalom, pass golf or rondo. Each grows an attribute (passing, finishing or pace), a bit less than a drill.
 
-- Pick **Easy**, **Normal** or **Hard** at the top, and filter by *In matches*, *Training*, *New*, *Drag* or *Full match*.
-- **In matches:** every key-moment game, with the shots and saves split up, 16 in all: one-on-ones, shots in the box and from range, free kicks, headers, passes, the attacking move, take-ons, crosses, tackles, blocks, interceptions, saves, penalty saves, claiming crosses and rushing out.
-- **Training:** the sprint-start and beep-test drills.
-- **New, lab only:** 20 games that aren't in matches yet: penalty shootout, keepy-uppy, crossbar challenge, nutmeg, target practice, dribble slalom, volley, through ball, switch the play, one-two, bicycle kick, chip the keeper, skill combo, race to the ball, offside trap, clear the cross, rondo, shield the ball, bend it (swipe a curling free kick) and air duel.
-- **Drag, lab only:** 10 games played by dragging the ball or a player:
-  - *Top bins:* drag onto a target in the goal and let go with the power in the green.
-  - *Corner kick:* swipe a curling corner onto the free man's head, round the defender at the near post.
-  - *Dribble drag:* drag your man past chasing defenders into the box.
-  - *Through the gap:* drag a pass through a sliding back line.
-  - *Fingertips:* drag yourself across the goal to save.
-  - *Flick-ups:* keepy-uppy by swiping, steering the ball with each swipe.
-  - *Chip it:* pull back like a slingshot to lob the keeper.
-  - *Flick penalty:* the direction of your flick is the aim, its speed the height, with a Panenka.
-  - *Block it:* drag into the line of a shot.
-  - *Pass golf:* roll the ball round cones to a teammate in as few passes as you can.
+### The mini-game lab
+The **mini-game lab** is a development area for trying out mini-games: every one in one place, to play as often as you like.
 
+It's hidden from players. To show it on a phone, open the Account menu and tap the *Game version* line at the bottom five times (or open the game once with `?dev` at the end of its address).
+
+- Pick **Easy**, **Normal** or **Hard** at the top, and filter by *In matches*, *Training*, *Arcade* or *Full match*. Lab games play their full sessions here (three or five goes); in matches they're a single go.
 - **Full match, lab only: Play the 90.** A whole match, 11 against 11, played in 3, 5 or 8 real minutes and seen as on television:
   - **The camera** sits behind your goal looking up the pitch and follows the ball, pulling back when play nears your goal so it stays in view and tilting down near the far end.
   - **The pitch** is in perspective, with mowing stripes, markings that thin into the distance, goals and nets, advertising boards, and a stand of supporters (some in your colours) under floodlights.

@@ -1,14 +1,19 @@
-/* ================= NEW MINI-GAMES (in development) =================
-   Games for the mini-game lab (lab.js) only: they're never used in matches and never touch the career. Each takes
+/* ================= MORE MINI-GAMES =================
+   Built in the mini-game lab (lab.js). Most are now match moments too, played once (lvGameLab in moments.js, with
+   st.lab.match and st.lab.once); the arcade ones (LG_ARCADE) are the training ground's (drills.js). Each takes
    the lab's pretend match (st, with st.lab: the difficulty is st.lab.ease, from +0.25 on easy to -0.25 on hard)
    and resolves a result {ok, big, small, score} or "skip" when you leave. They're drawn and moved with the match
    games' tools (moments.js). Loaded after moments.js and drills.js, before lab.js. */
 const LAB_NEW = [];
-const lgAdd = (g, help) => { LAB_NEW.push({cat:"new", help:`lg_${g.id}`, ...g}); LV_HELP[`lg_${g.id}`] = help; };
+// the arcade: games for the training ground (drills.js), not matches. Everything else is a match moment now (LV_LABM)
+const LG_ARCADE = ["keepy", "crossbar", "targets", "slalom", "flickups", "golf", "rondo"];
+const lgAdd = (g, help) => { LAB_NEW.push({help:`lg_${g.id}`, ...g, cat:LG_ARCADE.includes(g.id) ? "arcade" : g.id==="shootout" ? "match" : LV_LABM[g.id] ? "match" : g.cat || "new"}); LV_HELP[`lg_${g.id}`] = help; };
 
 /* ---------- shared pieces ---------- */
 // a new game's screen: the lab's scoreboard, the title, how to play in a line, the stage and its controls
-function lgShow(st, t, s, scene, ctl = ""){ if (st.lab.quit) throw "lab-quit"; lvShow(`${lvHead(st)}<h2 class="lv-t">${t}</h2><p class="lv-s">${s}</p><div class="lv-stage">${scene}</div>${ctl}`); }
+function lgShow(st, t, s, scene, ctl = ""){ if (st.lab.quit) throw "lab-quit";
+  if (st.lab.once){ s = s.replace(/^Go \d+ of \d+[.:]?\s*/, ""); scene = scene.replace(/<div class="lg-hud"[\s\S]*?<\/div>/, ""); }
+  lvShow(`${lvHead(st)}<h2 class="lv-t">${t}</h2><p class="lv-s">${s}</p><div class="lv-stage">${scene}</div>${ctl}`); }
 // the score in the corner of the stage
 const lgHud = (n, label) => `<div class="lg-hud" aria-live="polite"><b>${n}</b><small>${label}</small></div>`;
 function lgSetHud(n){ const b = lv$(".lg-hud b"); if (b){ b.textContent = n; b.classList.remove("bump"); void b.offsetWidth; b.classList.add("bump"); } }
@@ -180,6 +185,7 @@ function lgCrossbar(st){
     lvKey = k=>{ if (k==="go") go(); };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${hits} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:hits>=1, big:hits ? `${hits} of 3` : "No hits", small:hits ? "Off the bar" : "So close", score:`${hits} crossbar${hits===1 ? "" : "s"}`};
   })();
@@ -187,48 +193,6 @@ function lgCrossbar(st){
 lgAdd({id:"crossbar", t:"Crossbar challenge", d:"Three goes to hit the bar: pick your spot, then judge the power.", ic:"bar", run:lgCrossbar},
   {t:"Crossbar challenge", steps:["Hit the crossbar from the edge of the box. Three goes.", "First a marker slides along the bar: tap to pick <b>where</b>. Off the end is the post or wide.",
     "Then stop the power bar in the <b>green</b>. Too soft and it's in the net, which doesn't count; too hard and it's over."]});
-
-/* ---------- 4. Nutmeg: through his legs while they're open ---------- */
-function lgNutmeg(st){
-  const kit = lvKits(st), e = st.lab.ease; let got = 0;
-  const one = k => new Promise(res=>{
-    const per = clamp(1250*(1 + e*.6) - k*170, 650, 1800), snaps = e<0 || k===2, need = .66 - e*.25;
-    st.lab.tally = `${got} of 3`;
-    lgShow(st, "Nutmeg", `Go ${k+1} of 3. Tap so the ball gets to him while his legs are wide open.`,
-      lvGoalSvg(kit.them, null, false, {empty:true, extra:`<g id="lgD">${lvMan(0, 0, kit.them, {s:2.5})}</g>`}) + lgHud(got, "nutmegs"),
-      `<button type="button" class="btn primary big lv-act">Nutmeg!</button>`);
-    const fin = r => res(r); lvSkippable(fin);
-    lvMove("#lgD", 150, 150); lvBallAt("#lvBall", 150, 172, 1);
-    const l1 = lv$("#lgD .lv-l1"), l2 = lv$("#lgD .lv-l2"), A = 30, t0 = performance.now();
-    let snapAt = snaps ? t0 + per*(1.3 + Math.random()*1.6) : Infinity, done = false, open = 0;
-    // how open his legs are at time t (0 shut to 1 wide), shutting fast now and then
-    const openAt = t => { const base = .5 - .5*Math.cos(2*Math.PI*(t - t0)/per); return t>snapAt && t<snapAt + 260 ? base*.15 : base; };
-    lvLoop(now=>{
-      if (done) return false;
-      if (now>snapAt + 260) snapAt = snaps ? now + per*(1.2 + Math.random()*1.8) : Infinity;
-      open = openAt(now); l1.setAttribute("transform", `rotate(${(A*open).toFixed(1)} -3.8 -12)`); l2.setAttribute("transform", `rotate(${(-A*open).toFixed(1)} 3.8 -12)`);
-    });
-    const go = async () => {
-      if (done) return; done = true; lv$(".lv-act").disabled = true;
-      const T = 300, arrive = performance.now() + T;
-      // he keeps moving while the ball's on its way
-      lvLoop(now=>{ if (now>arrive + 400) return false; const o = openAt(now); l1.setAttribute("transform", `rotate(${(A*o).toFixed(1)} -3.8 -12)`); l2.setAttribute("transform", `rotate(${(-A*o).toFixed(1)} 3.8 -12)`); });
-      await lvFly("#lvBall", [150, 172], [150, 152], T, {s0:1, s1:.85, ease:k=>k, spin:1});
-      const ok = openAt(arrive) >= need;
-      if (ok){ got++; lgSetHud(got); await lvFly("#lvBall", [150, 152], [150, 118], 300, {s0:.85, s1:.6, ease:k=>k, spin:1}); cancelAnimationFrame(lvRaf); return fin({ok:true, big:"Nutmeg!", small:"Right through his legs"}); }
-      await lvFly("#lvBall", [150, 152], [150 + (Math.random()<.5 ? -40 : 40), 168], 320, {s0:.85, s1:1, h:8, spin:-1}); cancelAnimationFrame(lvRaf);
-      fin({ok:false, big:"Blocked", small:openAt(arrive)>.35 ? "Just closing: go a touch earlier" : "His legs were shut"});
-    };
-    lvTap(lv$(".lv-act"), go); lvTap(lv$(".lv-stage"), go); lvKey = k=>{ if (k==="go") go(); };
-  });
-  return (async ()=>{
-    for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
-    return {ok:got>=2, big:got>=2 ? `${got} nutmegs` : got ? "Just the one" : "None", small:got===3 ? "He'll be hearing about that" : "He gets quicker each time", score:`${got} of 3`};
-  })();
-}
-lgAdd({id:"nutmeg", t:"Nutmeg", d:"Time the ball through the defender's legs as they open. He gets quicker.", ic:"legs", run:lgNutmeg},
-  {t:"Nutmeg", steps:["The defender's legs open and close as he jockeys you.", "Tap <b>Nutmeg!</b> so the ball reaches him while his legs are <b>wide open</b>. It takes a moment to get there, so go a touch early.",
-    "Three goes, and he gets quicker. On hard he sometimes snaps them shut."]});
 
 /* ---------- 5. Target practice: hit the targets as they pop up, with a wobbly aim ---------- */
 function lgTargets(st){
@@ -355,6 +319,7 @@ function lgVolley(st){
     lvTap(lv$(".lv-act"), ()=>go(false)); lvTap(lv$(".lv-stage"), ()=>go(false)); lvKey = k=>{ if (k==="go") go(false); };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Sweetly struck" : "Keep your eye on it", score:`${got} volley${got===1 ? "" : "s"} scored`};
   })();
@@ -400,6 +365,7 @@ function lgThrough(st){
     lv$(".lg-aimpad").addEventListener("pointerdown", ev=>{ const r = stage.getBoundingClientRect(); pass([clamp((ev.clientX - r.left)/r.width*300, 20, 280), clamp((ev.clientY - r.top)/r.height*180, 10, 150)]); });
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "A proper playmaker" : "Lead him a bit more", score:`${got} assist${got===1 ? "" : "s"}`};
   })();
@@ -442,6 +408,7 @@ function lgSwitch(st){
     lgHoldOn(lv$(".lv-act"), press); lgHoldOn(lv$(".lv-stage"), press);
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Raking passes" : "Lead him into space", score:`${got} switch${got===1 ? "" : "es"} found`};
   })();
@@ -489,6 +456,7 @@ function lgOneTwo(st){
     lvTap(act, go); lvKey = k2=>{ if (k2==="go") go(); };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Give and go" : "Wait for him to turn his head", score:`${got} one-two${got===1 ? "" : "s"}`};
   })();
@@ -557,6 +525,7 @@ function lgBicycle(st){
     lvTap(lv$(".lv-act"), tap); lvTap(lv$(".lv-stage"), tap); lvKey = k2=>{ if (k2==="go") tap(); };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=1, big:`${got} of 3`, small:got ? "Highlight reel" : "Harder than it looks", score:`${got} overhead goal${got===1 ? "" : "s"}`};
   })();
@@ -600,6 +569,7 @@ function lgChip(st){
     lgHoldOn(lv$(".lv-act"), press); lgHoldOn(lv$(".lv-stage"), press);
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Cheeky" : "Watch the green move", score:`${got} chip${got===1 ? "" : "s"} scored`};
   })();
@@ -642,6 +612,7 @@ function lgSkills(st){
     pads.forEach(b=>lvTap(b, ()=>input(b.dataset.m)));
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${beat} of 3`; await lgFlash(r.ok, r.big, r.small); if (!r.ok) break; }
     return {ok:beat===3, big:beat===3 ? "Beat all three" : `${beat} beaten`, small:beat===3 ? "Showboat" : "Watch the sequence closely", score:`${beat} of 3 defenders`};
   })();
@@ -738,6 +709,7 @@ function lgOffside(st){
     lvTap(lv$(".lv-act"), go); lvTap(lv$(".lv-stage"), go); lvKey = k2=>{ if (k2==="go") go(); };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Well drilled" : "Watch for his wind-up", score:`${got} caught offside`};
   })();
@@ -797,6 +769,7 @@ function lgClear(st){
     lv$(".lg-aimpad").addEventListener("pointerdown", ev=>{ if (done) return; const p = lgAt(ev, stage); tgt = [clamp(p[0], 20, 280), clamp(p[1], 60, 172)]; lgImpact(tgt[0], tgt[1], "#F5C542", 5); });
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${won} of 5`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:won>=goal, big:`${won} of 5`, small:won>=goal ? "Dominant in the air" : `You needed ${goal}`, score:`${won} cleared`};
   })();
@@ -960,6 +933,7 @@ function lgBend(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Dead-ball specialist" : "Swipe a bigger curve", score:`${got} free kick${got===1 ? "" : "s"} scored`};
   })();
@@ -1006,6 +980,7 @@ function lgAirDuel(st){
     lvTap(lv$(".lv-act"), jump); lvTap(lv$(".lv-stage"), jump); lvKey = k2=>{ if (k2==="go") jump(); };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${won} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:won>=2, big:`${won} of 3`, small:won>=2 ? "Dominant in the air" : "Jump a fraction before the ball arrives", score:`${won} header${won===1 ? "" : "s"} won`};
   })();
@@ -1061,6 +1036,7 @@ function lgTopBins(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 5`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "Picked them out" : "Line the spot up, then wait for the green", score:`${got} target${got===1 ? "" : "s"} hit`};
   })();
@@ -1104,6 +1080,7 @@ function lgCorner(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "A set-piece specialist" : "Find the free man, and bend it", score:`${got} headed goal${got===1 ? "" : "s"}`};
   })();
@@ -1145,6 +1122,7 @@ function lgDribble(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<3;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 3`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=2, big:`${got} of 3`, small:got>=2 ? "Slippery" : "Use the space they leave", score:`${got} run${got===1 ? "" : "s"} into the box`};
   })();
@@ -1183,6 +1161,7 @@ function lgGap(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 5`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "Eye of a needle" : "Time it with the gaps", score:`${got} of 5 threaded`};
   })();
@@ -1229,6 +1208,7 @@ function lgFingertips(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<6;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 6`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=4, big:`${got} of 6`, small:got>=4 ? "Safe hands" : "Move as soon as it's struck", score:`${got} save${got===1 ? "" : "s"}`};
   })();
@@ -1321,6 +1301,7 @@ function lgLob(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 5`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "Cheeky" : "Find how far to pull back", score:`${got} chip${got===1 ? "" : "s"} in`};
   })();
@@ -1361,6 +1342,7 @@ function lgFlickPen(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 5`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "Ice cold" : "Flick it fast into the top corners", score:`${got} of 5 scored`};
   })();
@@ -1415,6 +1397,7 @@ function lgBlockIt(st){
     };
   });
   return (async ()=>{
+    if (st.lab.once) return one(0);
     for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 5`; await lgFlash(r.ok, r.big, r.small); }
     return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "A brick wall" : "Cover the side the keeper can't", score:`${got} shot${got===1 ? "" : "s"} stopped`};
   })();

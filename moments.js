@@ -8,17 +8,24 @@
    skill, scaled by chance quality), so the score always includes what you did. Each mini-game (LV_GAMES) resolves to
    a result R that lvApply turns into goals, assists, own goals, goals conceded and a rating bonus. */
 const LV_POOL = {
-  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross"], def:["intercept","tackle"]},
-  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone"], def:["intercept","tackle"]},
-  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone"], def:["intercept","tackle"]},
-  CAM:{att:["shot:box","shot:long","pass","move","takeon","shot:freekick","shot:oneonone"], def:["intercept","tackle"]},
-  CM:{att:["pass","move","shot:long","shot:box","takeon"], def:["intercept","tackle","block"]},
-  CDM:{att:["pass","shot:long","move","takeon"], def:["intercept","tackle","block","header:def"]},
-  LB:{att:["cross","takeon","pass","move","shot:long"], def:["tackle","intercept","block","header:def"]},
-  RB:{att:["cross","takeon","pass","move","shot:long"], def:["tackle","intercept","block","header:def"]},
-  CB:{att:["header","pass","shot:long"], def:["tackle","block","intercept","header:def"]},
-  GK:{att:[], def:["save","save","claim","rush"]}
+  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross","lab:volley","lab:bicycle","lab:chip","lab:topbins","lab:race","lab:airduel","lab:dribble","lab:lob","lab:shield"], def:["intercept","tackle"]},
+  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:topbins","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
+  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:topbins","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
+  CAM:{att:["shot:box","shot:long","pass","move","takeon","shot:freekick","shot:oneonone","lab:through","lab:onetwo","lab:skills","lab:bendit","lab:volley","lab:chip","lab:gap"], def:["intercept","tackle"]},
+  CM:{att:["pass","move","shot:long","shot:box","takeon","lab:through","lab:switch","lab:onetwo","lab:gap","lab:shield","lab:volley"], def:["intercept","tackle","block","lab:blockit"]},
+  CDM:{att:["pass","shot:long","move","takeon","lab:switch","lab:gap","lab:shield"], def:["intercept","tackle","block","header:def","lab:offside","lab:blockit"]},
+  LB:{att:["cross","takeon","pass","move","shot:long","lab:corner","lab:race","lab:switch","lab:dribble"], def:["tackle","intercept","block","header:def","lab:blockit","lab:clear"]},
+  RB:{att:["cross","takeon","pass","move","shot:long","lab:corner","lab:race","lab:switch","lab:dribble"], def:["tackle","intercept","block","header:def","lab:blockit","lab:clear"]},
+  CB:{att:["header","pass","shot:long","lab:switch","lab:airduel"], def:["tackle","block","intercept","header:def","lab:offside","lab:clear","lab:blockit"]},
+  GK:{att:[], def:["save","save","claim","rush","lab:fingertips","lab:fingertips"]}
 };
+// the games that started in the lab (labgames.js), played once as a match moment: what a success is worth, and the
+// attribute that makes it easier. goal = you score; assist = you set one up (usually); chance = beat your man and
+// it often ends in a goal or an assist; keep = keep the ball; def and save = stop them scoring; pen = a penalty
+const LV_LABM = {volley:["goal","fin"], bicycle:["goal","fin"], chip:["goal","fin"], lob:["goal","fin"], topbins:["goal","fin"], bendit:["goal","fin"], flickpen:["pen","fin"],
+  through:["assist","pas"], switch:["assist","pas"], corner:["assist","pas"], gap:["assist","pas"],
+  onetwo:["chance","pas"], skills:["chance","pac"], race:["chance","pac"], dribble:["chance","pac"], airduel:["chance","def"], shield:["keep","sta"],
+  offside:["def","def"], clear:["def","def"], blockit:["def","def"], fingertips:["save","def"]};
 // the set piece a match sometimes hands you instead of one of your moments: who takes it, and how often
 const LV_SETPIECE = {ST:["shot:pen",.14], LW:["shot:freekick",.12], RW:["shot:freekick",.12], CAM:["shot:pen",.12], CM:["shot:freekick",.1], CDM:["shot:freekick",.06], LB:["shot:freekick",.05], RB:["shot:freekick",.05], CB:["header",.12]};
 // and keepers face the odd penalty
@@ -26,6 +33,7 @@ const LV_SETPIECE = {ST:["shot:pen",.14], LW:["shot:freekick",.12], RW:["shot:fr
 const LV_EV = {"shot:oneonone":.45, "shot:box":.34, "shot:long":.13, "shot:freekick":.17, "shot:pen":.76, header:.26, pass:.18, move:.3, takeon:.24, cross:.16,
   intercept:.1, tackle:.2, block:.28, "header:def":.22, save:.36, "save:pen":.6, claim:.14, rush:.3};
 // the share of the goals your team concedes that a position's defending moments can stand for
+Object.entries(LV_LABM).forEach(([id, [k]])=>{ LV_EV["lab:" + id] = {goal:id==="bicycle" ? .15 : id==="bendit" ? .17 : .3, pen:.76, assist:.16, chance:.2, keep:.05, def:.2, save:.36}[k]; });
 const LV_DSHARE = {GK:.75, CB:.4, LB:.3, RB:.3, CDM:.25, CM:.15};
 const LV_COLS = {l:75, c:150, r:225}, LV_ROWS = {t:50, b:98};
 let lvEl = null, lvRaf = 0, lvKey = null;
@@ -280,13 +288,16 @@ const lvBarHTML = (mid, zone) => `<div class="lv-bar" aria-hidden="true"><span c
 function lvBarSet(p, lo, hi){ const m = lv$(".lv-mark"); if (!m) return; m.style.transform = `translateX(${(p*100).toFixed(2)}%)`; m.parentNode.classList.toggle("in", p>=lo && p<=hi); }
 
 /* ---------- the match ---------- */
+// 92 is "90+2'" in normal time; in extra time the clock just runs on to 120
+const lvMinTxt = (st, min) => min>90 && !st.et ? `90+${min - 90}'` : min>120 ? `120+${min - 120}'` : `${min}'`;
 function lvScore(st, min){ let f = 0, a = 0; st.ev.forEach(e=>{ if (e.min<min){ if (e.us) f++; else a++; } }); return [f, a]; }
 function lvHead(st, min, step){
-  if (st.lab) return labHead(st, step);   // the mini-game lab (lab.js) has its own
+  if (st.lab && !st.lab.match) return labHead(st, step);   // the mini-game lab (lab.js) has its own
+  if (st.lab && min==null) min = st.lab.min;   // a lab game played as a match moment (lvGameLab)
   if (st.drill) return drHead(st);   // a training drill (drills.js) has its own scoreboard
   const [f, a] = lvScore(st, min), left = st.f.home || st.f.neutral, us = lvAbbr(left ? lvUs(st) : st.f.opp), them = lvAbbr(left ? st.f.opp : lvUs(st));
   const [l, r] = left ? [f, a] : [a, f];
-  return `<div class="lv-top"><span class="lv-sc"><b>${esc(us)}</b> ${l}–${r} <b>${esc(them)}</b></span><span>${min}'</span>
+  return `<div class="lv-top"><span class="lv-sc"><b>${esc(us)}</b> ${l}–${r} <b>${esc(them)}</b></span><span>${lvMinTxt(st, min)}</span>
     ${step ? `<span class="lv-steps-dots" aria-label="Step ${step[0]} of ${step[1]}">${[...Array(step[1])].map((_,i)=>`<i class="${i<step[0]?"on":""}"></i>`).join("")}</span>` : ""}
     ${st.left>1 || step ? `<button type="button" class="lv-skip" data-lv-skip>Sim the rest</button>` : ""}</div>`;
 }
@@ -312,11 +323,11 @@ function lvPlan(f, X){
   const list = [...Array(n)].map(()=>{ const side = Math.random()<pAtt ? "att" : "def"; return {side, id:draw(side)}; });
   // a set piece now and then: a penalty for the strikers and tens, a free kick for the wide men and midfielders
   const sp = LV_SETPIECE[pos], spare = list.filter(m=>m.side==="att" && m.id!==sp?.[0]);
-  if (sp && spare.length && Math.random()<sp[1]) pick(spare).id = sp[0];
+  if (sp && spare.length && Math.random()<sp[1]) pick(spare).id = sp[0]==="shot:pen" && Math.random()<.4 ? "lab:flickpen" : sp[0]==="shot:freekick" && Math.random()<.5 ? "lab:bendit" : sp[0];
   if (pos==="GK" && Math.random()<.15){ const s = list.find(m=>m.id==="save"); if (s) s.id = "save:pen"; }
   if (typeof S!=="undefined" && S && !f.lab){ S.lvRecent = [...recent, ...list.map(m=>m.id)].slice(-14); }
   const from = me.st==="sub" ? 92-me.mins : 3, to = me.st==="sub" ? 89 : Math.max(12, me.mins-2);
-  list.forEach(m=>{ [m.g, m.v] = m.id.split(":"); m.min = from + Math.floor(Math.random()*(to-from+1)); });
+  list.forEach(m=>{ [m.g, m.v] = m.id.split(":"); m.min = from + Math.floor(Math.random()*(to-from+1)); if (m.min>=85 && me.mins>=85 && Math.random()<.4) m.min = 91 + Math.floor(Math.random()*5); });
   // together your moments can't stand for more than your position's share of the match (mcXg's pG and pA): a striker
   // is in on about a third of his team's goals, a centre-back on very few. Played averagely (lvAuto) they give about
   // what the simulation would; playing them well is how you beat it
@@ -339,7 +350,8 @@ function lvAuto(st, m){
   const p = LV_EV[m.id]*m.q;
   if (m.side==="att"){
     if (Math.random()>=p) return {ok:false, big:"Simmed", small:"No end product", bonus:-.03};
-    const g = ["shot","header"].includes(m.g) || (["move","takeon"].includes(m.g) && Math.random()<.6);
+    const lk = m.g==="lab" ? LV_LABM[m.v][0] : null;
+    const g = lk ? lk==="goal" || lk==="pen" || (lk==="chance" && Math.random()<.6) : ["shot","header"].includes(m.g) || (["move","takeon"].includes(m.g) && Math.random()<.6);
     return g ? {ok:true, big:"Simmed", small:"You scored", g:1} : {ok:true, big:"Simmed", small:"You set one up", a:1};
   }
   if (Math.random()>=p) return {ok:true, big:"Simmed", small:"Dealt with", bonus:.2};
@@ -482,25 +494,81 @@ async function lvPlayMatch(f, w){
       for (const m of plan.list){
         let R = null;
         if (!auto){
-          if (!lvSeen()[m.g]) await lvHelp([m.g], true);
+          if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true);
           R = await LV_GAMES[m.g](st, m);
           if (R==="skip") auto = true;
         }
         if (auto){ lvApply(st, m, lvAuto(st, m)); st.left--; continue; }
         lvApply(st, m, R); await lvOutcome(st, R); st.left--;
       }
-      mcResolve(f, w, {gf:ev.filter(e=>e.us).length, ga:ev.filter(e=>!e.us).length, g:st.g, a:st.a, og:st.og, bonus:st.bonus, ev});
+      const D = mcKoLevel(f, ev) ? await lvDecider(st, P => mcKoLevel(f, st.ev)) : {};
+      mcResolve(f, w, {gf:ev.filter(e=>e.us).length, ga:ev.filter(e=>!e.us).length, g:st.g, a:st.a, og:st.og, bonus:st.bonus, ev, et:D.et, pens:D.pens});
       f.coins = lvCoins(f).total; Account.addCoins(f.coins); save();
       if (!lvSeen().coins) await lvHelp(["coins"], true);
     } else mcResolve(f, w);
     await lvFullTime(st, home, away);
   } finally { lvClose(); }
 }
+/* ---------- level after 90 in a knockout: extra time, then penalties, each played or simmed ----------
+   level(st) says whether it's still level (counting a first leg). Resolves {et, pens} for the result. */
+async function lvDecider(st, level){
+  const f = st.f, X = st.X, P = LV_POOL[lvPos(st)] || LV_POOL.CM, [g0, a0] = lvScore(st, 999);
+  const go = await lvAsk(`<div class="lv-card"><div class="lv-eye">${esc(f.round || "Knockout")} · 90 minutes</div><h2 class="lv-t">Extra time</h2>
+    <p>Level at ${g0}–${a0}${f.leg===2 ? " on aggregate" : ""}. Thirty more minutes, then penalties if nobody wins it.</p>
+    <div class="lv-row"><button type="button" class="btn primary big" data-lv="play" data-lv-focus>Play extra time</button><button type="button" class="btn" data-lv="sim">Sim it</button></div></div>`);
+  st.et = true;
+  // the goals your moment doesn't stand for, and one moment of your own
+  const side = !P.att.length ? "def" : !P.def.length ? "att" : Math.random()<.6 ? "att" : "def", id = pick(P[side]), [g, v] = id.split(":");
+  const m = {side, id, g, v, min:95 + Math.floor(Math.random()*24), q:.85};
+  for (let i=0, n=mcPoisson(Math.max(0, X.lf*.25 - (side==="att" ? .15 : 0))); i<n; i++) st.ev.push({min:91 + Math.floor(Math.random()*29), us:true});
+  for (let i=0, n=mcPoisson(Math.max(0, X.la*.25 - (side==="def" ? .15 : 0))); i<n; i++) st.ev.push({min:91 + Math.floor(Math.random()*29), us:false});
+  st.left = 1;
+  if (go==="play"){
+    if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true);
+    const R = await LV_GAMES[m.g](st, m);
+    if (R==="skip") lvApply(st, m, lvAuto(st, m)); else { lvApply(st, m, R); await lvOutcome(st, R); }
+  } else lvApply(st, m, lvAuto(st, m));
+  if (!level(st)) return {et:true};
+  // penalties
+  const [g1, a1] = lvScore(st, 999);
+  const pk = await lvAsk(`<div class="lv-card"><div class="lv-eye">${esc(f.round || "Knockout")} · after extra time</div><h2 class="lv-t">Penalties!</h2>
+    <p>Still ${g1}–${a1}${f.leg===2 ? " on aggregate" : ""}. Five each, then sudden death. Take them all yourself, and go in goal for theirs.</p>
+    <div class="lv-row"><button type="button" class="btn primary big" data-lv="play" data-lv-focus>Take the shootout</button><button type="button" class="btn" data-lv="sim">Sim it</button></div></div>`);
+  const odds = logistic((X.base - f.oppStr)/12 + (st.f.me && st.f.me.mins ? (mcOvr() - X.base)/40 : 0));
+  if (pk!=="play") return {et:true, pens:Math.random()<odds ? "won" : "lost"};
+  return {et:true, pens:await lvShootout(st)};
+}
+// the shootout: your penalty, then theirs with you in goal, five each and sudden death. "Sim the rest" finishes it
+async function lvShootout(st){
+  const me = [], them = [], n = a => a.filter(Boolean).length, left = st.f.home || st.f.neutral;
+  const us = lvAbbr(lvUs(st)), op = lvAbbr(st.f.opp), [g, a] = lvScore(st, 999);
+  const decided = () => { const x = n(me), y = n(them), nx = me.length, ny = them.length;
+    if (nx<=5 && ny<=5) return x + (5 - nx) < y || y + (5 - ny) < x;
+    return nx===ny && x!==y; };
+  const head = () => `<div class="lv-top"><span class="lv-sc"><b>${esc(left ? us : op)}</b> ${left ? g : a}–${left ? a : g} <b>${esc(left ? op : us)}</b></span><span>Pens ${left ? n(me) : n(them)}–${left ? n(them) : n(me)}</span>
+    <button type="button" class="lv-skip" data-lv-skip>Sim the rest</button></div>`;
+  const simTo = () => { while (!decided() && me.length<30){ if (me.length===them.length) me.push(Math.random()<.76); else them.push(Math.random()<.74); } };
+  for (let r=0; r<30 && !decided(); r++){
+    const sh = await lvShotCore(st, {q:1}, "pen", head(), r<5 ? `Your penalty · ${r + 1} of 5` : "Sudden death: your penalty");
+    if (sh==="skip"){ simTo(); break; }
+    me.push(sh.goal); await lgFlash(sh.goal, sh.goal ? "Scored!" : sh.big, `Pens ${n(me)}–${n(them)}`);
+    if (decided()) break;
+    const sv = await lvGameSave(st, {q:1, v:"pen", g:"save", head:head(), title:r<5 ? `Their penalty · ${r + 1} of 5` : "Sudden death: their penalty"});
+    if (sv==="skip"){ them.push(Math.random()<.74); simTo(); break; }
+    them.push(!sv.ok); await lgFlash(sv.ok, sv.ok ? "Saved!" : "They score", `Pens ${n(me)}–${n(them)}`);
+  }
+  const won = n(me)>n(them);
+  st.pens = [n(me), n(them)];
+  await lvAsk(`<div class="lv-card"><div class="lv-eye">Penalties</div><h2 class="lv-t">${won ? "You win the shootout!" : "Beaten on penalties"}</h2>
+    <p class="lab-score">You ${me.map(x=>x ? "●" : "○").join(" ")}<br>Them ${them.map(x=>x ? "●" : "○").join(" ")}</p><p>${n(me)}–${n(them)} on penalties.</p>
+    <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Full time</button></div>`);
+  return won ? "won" : "lost";
+}
 async function lvFullTime(st, home, away){
   const f = st.f, me = f.me, [l, r] = f.home || f.neutral ? [f.res.gf, f.res.ga] : [f.res.ga, f.res.gf];
   const bits = [me.g ? `${me.g} goal${me.g>1?"s":""}` : "", me.a ? `${me.a} assist${me.a>1?"s":""}` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : ""].filter(Boolean);
   const html = `<div class="lv-card lv-ftc">
-      <div class="lv-eye">Full time${f.res.pens ? ` · ${f.res.pens==="won"?"won":"lost"} on penalties` : f.agg ? ` · ${f.agg[0]}–${f.agg[1]} on aggregate` : ""}</div>
+      <div class="lv-eye">Full time${f.res.pens ? ` · ${f.res.pens==="won"?"won":"lost"} on penalties` : f.res.et ? " · after extra time" : ""}${f.agg && !f.res.pens ? ` · ${f.agg[0]}–${f.agg[1]} on aggregate` : ""}</div>
       <div class="lv-ft"><span>${clubBadge(home, 44)}<em>${esc(home)}</em></span><b>${l}–${r}</b><span>${clubBadge(away, 44)}<em>${esc(away)}</em></span></div>
       ${sqScorers(f)}
       <div class="lv-rate"><span class="label">Your rating</span><b class="${me.r>=7.5?"hi":me.r<6?"lo":""}">${me.r ?? "–"}</b><span>${bits.join(" · ") || (me.mins ? "No goal involvement" : "")}</span></div>
@@ -952,7 +1020,7 @@ function lvGameSave(st, m){
   const T = pen ? {t:"Penalty!", s:"Watch the ball and dive the right way: tap that side of the goal."}
     : pick([{t:"One-on-one!", s:"He's through. Watch the ball and dive the right way."}, {t:"Shot from the edge of the box", s:"Watch the ball and dive the right way: tap that side of the goal."}]);
   return new Promise(res=>{
-    lvShow(`${lvHead(st, m.min)}<h2 class="lv-t">${T.t}</h2><p class="lv-s">${T.s}</p>
+    lvShow(`${m.head || lvHead(st, m.min)}<h2 class="lv-t">${m.title || T.t}</h2><p class="lv-s">${T.s}</p>
       <div class="lv-stage">${lvGoalSvg(kit.us, null, true)}
         <div class="lv-thirds">${["l","c","r"].map(z=>`<button type="button" class="lv-tap" data-z="${z}" aria-label="Dive ${{l:"left",c:"centre",r:"right"}[z]}"></button>`).join("")}</div>
         <span class="lv-cue">${pen ? "Penalty" : "Here he comes"}…</span></div>
@@ -1024,5 +1092,24 @@ function lvGameRush(st, m){
   });
 }
 
+/* ---------- the lab's games as match moments: one go, against this opponent, with your attributes ---------- */
+const lvHelpKey = m => m.g==="lab" ? "lg_" + m.v : m.g;
+async function lvGameLab(st, m){
+  const g = (typeof LAB_NEW!=="undefined" ? LAB_NEW : []).find(x=>x.id===m.v), K = LV_LABM[m.v];
+  if (!g || !K) return lvAuto(st, m);
+  const a = lvAttr(st), kits = lvKits(st), GK = lvKeeper(st, a.fin);
+  const lab = {match:true, once:true, min:m.min, a, ease:lvEase(st, a[K[1]]), kr:GK.r, pos:lvPos(st), game:g, next:"Next moment",
+    kits:{us:kits.us, them:kits.them, usTrim:LV_TRIM[kits.us] || "#FFFFFF", themTrim:LV_TRIM[kits.them] || "#FFFFFF"}, cols:lvCols(st)};
+  const R = await g.run({...st, lab}).catch(e=>{ if (e==="lab-quit") return "skip"; throw e; });
+  if (!R || R==="skip") return "skip";
+  const ok = !!R.ok, conv = p => Math.random() < p*m.q, small = R.small || "";
+  switch (K[0]){
+    case "goal": case "pen": return ok ? {ok, big:"Goal!", small, g:1} : {ok:false, big:R.big, small, bonus:-.06};
+    case "assist": return !ok ? {ok:false, big:R.big, small, bonus:-.05} : conv(.62) ? {ok, big:"Assist!", small, a:1} : {ok, big:R.big, small:"The chance went begging", bonus:.15};
+    case "chance": return !ok ? {ok:false, big:R.big, small, bonus:-.05} : conv(.4) ? {ok, big:"Goal!", small:"…and you finished it", g:1} : conv(.35) ? {ok, big:"Assist!", small:"…and you set it up", a:1} : {ok, big:R.big, small, bonus:.15};
+    case "keep": return ok ? {ok, big:R.big, small, bonus:.2} : {ok:false, big:R.big, small, bonus:-.1};
+    default: return ok ? {ok, big:R.big, small, bonus:.3} : conv(K[0]==="save" ? .6 : .4) ? {ok:false, big:"They score", small, ga:1, bonus:-.3} : {ok:false, big:R.big, small, bonus:-.1};
+  }
+}
 const LV_GAMES = {shot:lvGameShot, header:lvGameHeader, pass:lvGamePass, move:lvGameMove, takeon:lvGameTakeon, cross:lvGameCross,
-  tackle:lvGameTiming, block:lvGameTiming, intercept:lvGameIntercept, save:lvGameSave, claim:lvGameClaim, rush:lvGameRush};
+  tackle:lvGameTiming, block:lvGameTiming, intercept:lvGameIntercept, save:lvGameSave, claim:lvGameClaim, rush:lvGameRush, lab:lvGameLab};

@@ -1097,8 +1097,8 @@ details.nego-d[open] summary{margin-bottom:8px}
 .lab-ic.big{width:56px;height:56px;border-radius:14px}
 .lab-ic.big svg{width:34px;height:34px}
 .lab-card.new .lab-ic{background:linear-gradient(145deg,rgba(45,212,191,.25),rgba(45,212,191,.06));color:#5EEAD4;box-shadow:inset 0 0 0 1px rgba(45,212,191,.4)}
-.lab-card.drag .lab-tag{background:#C4B5FD;color:#1E1240}
-.lab-card.drag .lab-ic{background:linear-gradient(145deg,rgba(167,139,250,.28),rgba(167,139,250,.06));color:#C4B5FD;box-shadow:inset 0 0 0 1px rgba(167,139,250,.45)}
+.lab-card.arcade .lab-tag,.lab-card.drag .lab-tag{background:#C4B5FD;color:#1E1240}
+.lab-card.arcade .lab-ic,.lab-card.drag .lab-ic{background:linear-gradient(145deg,rgba(167,139,250,.28),rgba(167,139,250,.06));color:#C4B5FD;box-shadow:inset 0 0 0 1px rgba(167,139,250,.45)}
 .lab-pre-h{display:flex;align-items:center;gap:14px}
 .lab-pre-h .lv-t{margin:0}
 .lab-guide summary{cursor:pointer;font-family:var(--f-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:13px;color:#F5C542;padding:4px 0}
@@ -1274,3 +1274,8 @@ small.boot{display:inline-flex;align-items:center}
 .me .me-name,.lv .me .me-name{color:var(--accent-ink);animation-name:meGlowOn}
 @keyframes meGlowOn{0%,100%{text-shadow:0 0 4px rgba(255,255,255,.55)}50%{text-shadow:0 0 11px rgba(255,255,255,1),0 0 2px #fff}}
 @media (prefers-reduced-motion: reduce){ .me .me-name,.lv .me .me-name{text-shadow:0 0 8px rgba(255,255,255,.9)} }
+
+/* the arcade at the training ground: a row of sessions under the week's drill */
+.mc-drill.dr-arcade{flex-direction:column;align-items:stretch;gap:10px}
+.dr-arc-btns{display:flex;flex-wrap:wrap;gap:8px}
+.dr-arc-btns .chip small{opacity:.65;margin-left:4px;font-size:11px}

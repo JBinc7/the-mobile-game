@@ -44,6 +44,49 @@ function drPanel(){
   const up = k==="prep" ? "up to +12 sharpness" : `up to +${drGain(k, 1).toFixed(2)} ${esc(mcAttrName(k))}`;
   return `<div class="mc-drill"><span><b>${esc(D.t)}</b> · ${D.n ? `${D.n} ${D.unit}` : "as long as you last"} · ${up}</span><button type="button" class="btn small primary" data-act="mc-drill">Start drill</button></div>`;
 }
+/* ---------- the arcade: the training ground's extra sessions ----------
+   Once a week, on top of the drill, you can do one arcade session (labgames.js's LG_ARCADE games, played in full).
+   It grows the attribute it works, a little less than a drill: up to about half a normal week's growth again. */
+const DR_ARCADE = {keepy:["pas", "Keepy-uppy"], flickups:["pas", "Flick-ups"], crossbar:["fin", "Crossbar challenge"], targets:["fin", "Target practice"],
+  slalom:["pac", "Dribble slalom"], golf:["pas", "Pass golf"], rondo:["pas", "Rondo"]};
+const drArcadeGain = (k, score) => +(drGain(k, score)*.55).toFixed(2);
+function drArcadePanel(){
+  const wk = drWeek(); if (!wk) return "";
+  if (wk.arcade){ const d = wk.arcade; return `<div class="mc-drill done dr-arcade"><span>✓ Arcade · <b>${esc(d.t)}</b>: ${esc(d.res)} · <b>${esc(mcAttrName(d.k))} +${d.gain.toFixed(2)}</b></span></div>`; }
+  if (mcInjury(mcFrac(S.mc.wi))) return "";
+  return `<div class="mc-drill dr-arcade"><span><b>Arcade</b> · one extra session this week, for a little more growth</span>
+    <div class="dr-arc-btns">${Object.entries(DR_ARCADE).map(([id, [k, t]])=>`<button type="button" class="chip" data-act="mc-arcade" data-k="${id}">${esc(t)} <small>${esc(mcAttrName(k))}</small></button>`).join("")}</div></div>`;
+}
+async function drArcade(id){
+  const wk = drWeek(), A = DR_ARCADE[id], g = (typeof LAB_NEW!=="undefined" ? LAB_NEW : []).find(x=>x.id===id);
+  if (!wk || wk.arcade || !A || !g || mcInjury(mcFrac(S.mc.wi))) return;
+  const [k, t] = A, a = mcA(), club = meta(S.mc.club), bib = lvNear(club.c1, "#F97316") ? "#0EA5E9" : "#F97316";
+  const st = {f:{opp:"Training", oppStr:a[k] - 12, home:true}, X:{base:strOf(S.mc.club)}, ev:[], g:0, a:0, og:0, bonus:0, left:1, log:[],
+    lab:{train:true, a, ease:clamp((a[k] - 62)/80, -.2, .3), kr:Math.max(45, strOf(S.mc.club) - 10), pos:S.player.pos, game:g, next:"Finish",
+      kits:{us:club.c1, them:bib, usTrim:club.c2 || "#FFFFFF", themTrim:"#FFFFFF"}, cols:[club.c1, club.c2 || "#FFFFFF", "#F5C542", "#FFFFFF"]}};
+  lvOpen("Training ground");
+  try{
+    if (!lvSeen()[g.help]) await lvHelp([g.help], true);
+    const go = await lvAsk(`<div class="lv-card"><div class="lv-eye">Arcade · ${esc(mcDate(S.mc.wi))}</div><h2 class="lv-t">${esc(t)}</h2><p>${esc(g.d)} The better you do, the more your ${esc(mcAttrName(k))} grows.</p>
+      <div class="lv-row"><button type="button" class="btn primary big" data-lv="go" data-lv-focus>Start</button><button type="button" class="btn" data-lv="no">Not now</button></div></div>`);
+    if (go!=="go") return;
+    let quit; const q = new Promise(r=>{ quit = r; }), box = lvEl;
+    const onExit = e=>{ if (e.target.closest("[data-lv-skip]")){ st.lab.quit = true; quit("skip"); } };
+    box.addEventListener("click", onExit);
+    const R = await Promise.race([g.run(st).catch(e=>{ if (e==="lab-quit") return "skip"; throw e; }), q]).finally(()=>box.removeEventListener("click", onExit));
+    if (!R || R==="skip") return;
+    // how well it went: a pass is most of it, the rest from how far past the target you got
+    const nums = String(R.big + " " + (R.score || "")).match(/\d+/g) || [], score = R.ok ? (id==="golf" ? .85 : clamp(.75 + .05*(+nums[0] || 0)/2, .75, 1)) : .3;
+    const gain = drArcadeGain(k, score);
+    S.attr[k] = +clamp(S.attr[k] + gain, 20, 99).toFixed(2);
+    wk.arcade = {id, k, t, res:`${R.big}${R.small ? " · " + R.small : ""}`, gain};
+    save();
+    await lvAsk(`<div class="lv-card"><div class="lv-eye">Arcade · ${esc(t)}</div><h2 class="lv-t">${R.ok ? "Nailed it" : "Not this time"}</h2>
+      <p>${esc(R.big)}${R.small ? `. ${esc(R.small)}` : ""}.</p>
+      <div class="dr-gain"><span>${esc(mcAttrName(k))}</span><b>+${gain.toFixed(2)}</b><small>Now ${Math.round(S.attr[k])}</small></div>
+      <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Back to the match centre</button></div>`);
+  } finally { lvClose(); render(); }
+}
 // the drill's scoreboard: which rep you're on, how each went, and a way out
 function drHead(st){
   if (st.lab) return labHead(st);   // a drill tried in the mini-game lab (lab.js)

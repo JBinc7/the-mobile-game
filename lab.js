@@ -83,7 +83,7 @@ const LAB_GAMES = [
   ...(typeof LAB_NEW!=="undefined" ? LAB_NEW : []),
   ...(typeof LAB_P90!=="undefined" ? LAB_P90 : [])
 ];
-const LAB_CATS = {match:"In matches", drill:"Training", new:"New · lab only", drag:"Drag · lab only", full:"Full match · lab only"};
+const LAB_CATS = {match:"In matches", drill:"Training", arcade:"Arcade · training ground", new:"New · lab only", full:"Full match · lab only"};
 
 /* ---------- the sandbox ---------- */
 // a pretend match for one game: attributes and ease from the difficulty, your club's kit if you have a career
@@ -98,10 +98,10 @@ function labCtx(g){
 }
 // the lab's scoreboard: which game, the difficulty, any steps, and the way out
 function labHead(st, step){
-  const g = st.lab.game;
-  return `<div class="lv-top lab-top"><span class="lv-sc"><b>Lab</b> · ${esc(g.t)}</span>
+  const g = st.lab.game, train = st.lab.train;   // an arcade session at the training ground (drills.js) wears the same scoreboard
+  return `<div class="lv-top lab-top"><span class="lv-sc"><b>${train ? "Arcade" : "Lab"}</b> · ${esc(g.t)}</span>
     ${step ? `<span class="lv-steps-dots" aria-label="Step ${step[0]} of ${step[1]}">${[...Array(step[1])].map((_,i)=>`<i class="${i<step[0]?"on":""}"></i>`).join("")}</span>` : ""}
-    ${st.lab.tally ? `<span class="lab-tally">${st.lab.tally}</span>` : ""}<span class="lab-diff-pill">${LAB_DIFF[labDiff].t}</span><button type="button" class="lv-skip" data-lv-skip>Exit</button></div>`;
+    ${st.lab.tally ? `<span class="lab-tally">${st.lab.tally}</span>` : ""}${train ? "" : `<span class="lab-diff-pill">${LAB_DIFF[labDiff].t}</span>`}<button type="button" class="lv-skip" data-lv-skip>${train ? "End session" : "Exit"}</button></div>`;
 }
 // a game's guide, straight from its help card (without ticking it off as seen)
 function labGuide(g){
@@ -117,11 +117,11 @@ function labHome(){
     <p class="lab-intro">Every mini-game in the game, to try out as often as you like. <b>Nothing here touches your career</b>: no coins, no stats, no training, no saves. The new games aren't used in matches.</p>
     <div class="lab-bar">
       <div class="lab-seg" role="group" aria-label="Difficulty">${Object.entries(LAB_DIFF).map(([k,D])=>`<button type="button" data-lab="diff" data-k="${k}" aria-pressed="${k===labDiff}">${D.t}</button>`).join("")}</div>
-      <div class="chips lab-cats" role="group" aria-label="Show">${["all","match","drill","new","drag","full"].map(c=>`<button type="button" class="chip ${c===labCat?"on":""}" data-lab="cat" data-k="${c}" aria-pressed="${c===labCat}">${c==="all" ? "All" : LAB_CATS[c].split(" ·")[0]} <small>${n(c)}</small></button>`).join("")}</div>
+      <div class="chips lab-cats" role="group" aria-label="Show">${["all","match","drill","arcade","new","full"].filter(c=>n(c)).map(c=>`<button type="button" class="chip ${c===labCat?"on":""}" data-lab="cat" data-k="${c}" aria-pressed="${c===labCat}">${c==="all" ? "All" : LAB_CATS[c].split(" ·")[0]} <small>${n(c)}</small></button>`).join("")}</div>
     </div>
     <div class="lab-grid">${list.map(g=>`<button type="button" class="lab-card ${g.cat}" data-lab="play" data-k="${g.id}">
       <span class="lab-ic">${labIcon(g.ic)}</span><span class="lab-txt"><b>${esc(g.t)}</b><small>${esc(g.d)}</small></span>
-      <span class="lab-tag">${{new:"New", drag:"Drag", drill:"Drill", full:"90'"}[g.cat] || "Match"}</span></button>`).join("")}</div>
+      <span class="lab-tag">${{new:"New", drag:"Drag", drill:"Drill", arcade:"Arcade", full:"90'"}[g.cat] || "Match"}</span></button>`).join("")}</div>
   </div>`;
 }
 // the lab's front page: resolves the button pressed, as [action, key]

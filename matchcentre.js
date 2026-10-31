@@ -277,16 +277,27 @@ function mcXg(f){
 }
 function mcPlay(f, w, specs){ if (mcSetup(f, w, specs)) mcResolve(f, w); }
 // the result, simulated or (live) built from the key moments you played
+// whether a knockout tie is level (st.ev from the moments, or the score): extra time and maybe penalties follow
+function mcKoLevel(f, ev, gf, ga){
+  if (f.code==="league" || (f.eu && f.ri===-1) || f.gi!=null || f.leg===1) return false;
+  if (ev){ gf = ev.filter(e=>e.us).length; ga = ev.filter(e=>!e.us).length; }
+  const rec = mcRec(S.mc.club), r = f.eu ? rec.eu : rec.cups[f.code], t = f.leg===2 && r && r.tie ? r.tie : {gf:0, ga:0};
+  return gf + t.gf === ga + t.ga;
+}
 function mcResolve(f, w, live){
   const our = S.mc.club, rec = mcRec(our), pos = S.player.pos, a = S.attr, c = S.cond, me = f.me, X = mcXg(f), t = X.t;
   const r = f.code==="league" ? null : f.eu ? rec.eu : rec.cups[f.code];
-  let gf, ga;
+  let gf, ga, et = false;
   if (live){ gf = live.gf; ga = live.ga; me.g = live.g; me.a = live.a; me.og = live.og || 0; f.live = true; }
   else {
     gf = mcPoisson(X.lf); ga = mcPoisson(X.la);
+    // level in a knockout: thirty minutes of extra time (penalties, if it's still level, come in mcAfter)
+    if (mcKoLevel(f, null, gf, ga)){ gf += mcPoisson(X.lf*.3); ga += mcPoisson(X.la*.3); et = true; }
     if (me.mins) for (let i=0;i<gf;i++){ const x = Math.random(); if (x<X.pG) me.g++; else if (x<X.pG+X.pA) me.a++; }
   }
   f.res = {gf, ga};
+  if (live ? live.et : et) f.res.et = true;
+  if (live && live.pens) f.res.pens = live.pens;
   if (me.mins){
     me.cs = me.mins>=60 && ga===0;
     const d = DEF.includes(pos) || pos==="CDM", win = gf>ga, loss = gf<ga;
@@ -320,7 +331,7 @@ function mcAfter(f, r, rec, base){
   if (f.leg===1){ r.tie = {i:f.ri, opp:f.opp, str:f.oppStr, gf, ga, home:f.home}; return; }
   let F = gf, A = ga; if (f.leg===2){ F += r.tie.gf; A += r.tie.ga; f.agg = [F, A]; }
   let through = F>A;
-  if (F===A){ through = Math.random() < logistic((base - f.oppStr)/12); f.res.pens = through ? "won" : "lost"; }
+  if (F===A){ through = f.res.pens ? f.res.pens==="won" : Math.random() < logistic((base - f.oppStr)/12); f.res.pens = through ? "won" : "lost"; }
   r.tie = null;
   if (!through){ mcOut(r, f.round, f.opp, f.ri); return; }
   r.beaten.push(f.opp); r.next++;
@@ -485,7 +496,7 @@ function mcPanel(){
         <button type="button" class="btn small" data-shop="open"><i class="coin" aria-hidden="true"></i> Shop</button></div>
       <div class="chips mc-chips" role="group" aria-label="Training focus">${MC_TRAIN.map(([k])=>`<button type="button" class="chip ${T.focus===k?"on":""}" data-act="mc-focus" data-k="${k}" aria-pressed="${T.focus===k}">${esc(mcAttrName(k))}</button>`).join("")}</div>
       <p class="hint">${hint}${S.boost && S.boost.double>0 ? ` <span class="pill gold">Double training · ${S.boost.double} week${S.boost.double===1?"":"s"} left</span>` : ""}</p>
-      ${drPanel()}
+      ${drPanel()}${drArcadePanel()}
       <p class="hint mc-imp"><b>${mcTrainLabel(mcTrainImp())}.</b> Good drills and hard sessions get you more game time.</p>
     </div>`}
     ${subTabs("season", [
@@ -511,6 +522,7 @@ function mcAction(a, b){
   else if (a==="mc-half") mcAdvance("half");
   else if (a==="mc-finish") mcFinishHalf();
   else if (a==="mc-drill") drPlay();
+  else if (a==="mc-arcade") drArcade(k);
   else if (a==="mc-focus"){ S.train.focus = k; save(); render(); }
   else if (a==="mc-hard"){ S.train.hard = k==="1"; save(); render(); }
   else if (a==="mc-mode"){
