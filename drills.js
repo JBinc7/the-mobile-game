@@ -49,17 +49,58 @@ function drPanel(){
    It grows the attribute it works, a little less than a drill: up to about half a normal week's growth again. */
 const DR_ARCADE = {keepy:["pas", "Keepy-uppy"], flickups:["pas", "Flick-ups"], crossbar:["fin", "Crossbar challenge"], targets:["fin", "Target practice"],
   slalom:["pac", "Dribble slalom"], golf:["pas", "Pass golf"], rondo:["pas", "Rondo"]};
-const drArcadeGain = (k, score) => +(drGain(k, score)*.55).toFixed(2);
-function drArcadePanel(){
-  const wk = drWeek(); if (!wk) return "";
-  if (wk.arcade){ const d = wk.arcade; return `<div class="mc-drill done dr-arcade"><span>✓ Arcade · <b>${esc(d.t)}</b>: ${esc(d.res)} · <b>${esc(mcAttrName(d.k))} +${d.gain.toFixed(2)}</b></span></div>`; }
-  if (mcInjury(mcFrac(S.mc.wi))) return "";
-  return `<div class="mc-drill dr-arcade"><span><b>Arcade</b> · one extra session this week, for a little more growth</span>
-    <div class="dr-arc-btns">${Object.entries(DR_ARCADE).map(([id, [k, t]])=>`<button type="button" class="chip" data-act="mc-arcade" data-k="${id}">${esc(t)} <small>${esc(mcAttrName(k))}</small></button>`).join("")}</div></div>`;
+const drArcadeGain = (k, score) => +(drGain(k, score)*.4).toFixed(2);
+/* ---------- the week's session: four exercises, and double training growth when they're all done ----------
+   Two drills (your training focus and one other) and two arcade games, picked fresh each week and kept on the week
+   (S.mc.weeks[w].sess). Each adds a little on its own; finish all four before you play the week and mcTrain counts
+   that week's training twice. */
+function drSess(wk){
+  if (wk.sess) return wk.sess;
+  const gk = S.player.pos==="GK", f = S.train.focus, mine = f==="rest" ? null : f==="def" && gk ? "def" : f;
+  const others = shuffle(["fin","pas","pac","def","sta"].filter(k=>k!==mine && !(gk && k==="fin")));
+  const arc = shuffle(Object.keys(DR_ARCADE)).slice(0, 2);
+  return wk.sess = {items:[{t:"drill", k:mine || others[1]}, {t:"drill", k:others[0]}, ...arc.map(id=>({t:"arcade", id}))], done:{}};
 }
-async function drArcade(id){
+const drSessDone = wk => !!wk && !!wk.sess && wk.sess.items.every((_, i)=>wk.sess.done[i]);
+const drSessCount = wk => wk && wk.sess ? Object.keys(wk.sess.done).length : 0;
+function drSessLine(wk){ const n = drSessCount(wk); return `<p class="dr-sessline">${n>=4 ? "<b>Session complete:</b> this week's training counts double (2×)." : `<b>${n} of 4</b> done this week. Finish all four for <b>2× training growth</b>.`}</p>`; }
+const DR_IC = {fin:"goal", pas:"pass", pac:"lights", def:"tackle", sta:"shuttle", prep:"wall", gk:"glove"};
+// the match centre's line about it, pointing at the Training tab
+function drPanel(){
+  const wk = drWeek(); if (!wk) return "";
+  if (S.train.focus==="rest") return "";
+  const n = drSessCount(wk), sess = drSess(wk);
+  return `<div class="mc-drill ${n>=4 ? "done" : ""}"><span>${n>=4 ? "✓ <b>Training done</b>: this week counts double (2×)" : `<b>Weekly training</b> · ${n} of ${sess.items.length} done · finish it for <b>2× growth</b>`}</span>
+    ${n>=4 ? "" : `<button type="button" class="btn small primary" data-act="tab" data-k="training">Train</button>`}</div>`;
+}
+// the Training tab
+function trainingBody(){
+  const wk = S.phase==="stats" && seasonMode()==="centre" ? drWeek() : null;
+  const intro = `<p class="hint">Every week there's a <b>training session</b> of four exercises: two drills and two from the arcade. Finish all four before you play the week and <b>your attributes grow twice as fast that week (2×)</b>. Each exercise also adds a little on its own, more the better you do.</p>`;
+  if (!wk) return `<section class="panel"><h2>Training</h2>${intro}<p>Sessions run week by week while your season's on in the match centre.</p></section>`;
+  if (S.train.focus==="rest") return `<section class="panel"><h2>Training</h2>${intro}<p>This is a <b>rest week</b> (your training focus is Rest), so there's no session. Pick a focus in the Season tab to train.</p></section>`;
+  const sess = drSess(wk), n = drSessCount(wk), hurt = mcInjury(mcFrac(S.mc.wi));
+  const name = it => it.t==="drill" ? drInfo(it.k).t : DR_ARCADE[it.id][1];
+  const attr = it => it.t==="drill" ? (it.k==="prep" ? "Sharpness" : mcAttrName(it.k)) : mcAttrName(DR_ARCADE[it.id][0]);
+  const ic = it => labIcon(it.t==="drill" ? DR_IC[it.k==="def" && S.player.pos==="GK" ? "gk" : it.k] : (LAB_NEW.find(g=>g.id===it.id) || {}).ic);
+  return `<section class="panel tr-panel">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">This week's training</h2><span class="pill ${n>=4 ? "gold" : ""}">${esc(mcDate(S.mc.wi))}</span></div>
+    ${intro}
+    <div class="tr-boost ${n>=4 ? "on" : ""}"><b>2×</b><span>${n>=4 ? "<b>Session complete:</b> this week's training counts double when you play it." : `Finish all four for double training growth this week · <b>${n} of 4</b> done`}</span><i style="--p:${n/4}"></i></div>
+    ${hurt ? `<p class="ref">You're injured: no training until you're fit.</p>` : ""}
+    <div class="tr-list">${sess.items.map((it, i)=>{ const d = sess.done[i];
+      return `<div class="tr-item ${d ? "done" : ""}"><span class="lab-ic">${ic(it)}</span><div class="tr-txt"><b>${esc(name(it))}</b><small>${it.t==="drill" ? "Drill" : "Arcade"} · ${esc(attr(it))}${d ? ` · ${esc(d.res)} · +${typeof d.gain==="number" && it.k!=="prep" ? d.gain.toFixed(2) : d.gain}` : ""}</small></div>
+        ${d ? `<span class="tr-tick" aria-label="Done">✓</span>` : `<button type="button" class="btn small primary" data-act="tr-play" data-k="${i}" ${hurt ? "disabled" : ""}>Play</button>`}</div>`; }).join("")}</div>
+    <p class="hint" style="margin-top:12px">Your training focus (${esc(S.train.focus==="prep" ? "Match prep" : mcAttrName(S.train.focus))}) and Normal or Hard intensity are set in the Season tab. A new session comes with each new week.</p>
+  </section>`;
+}
+function trPlay(i){
+  const wk = drWeek(); if (!wk) return; const it = drSess(wk).items[+i]; if (!it) return;
+  if (it.t==="drill") drPlay(it.k, +i); else drArcade(it.id, +i);
+}
+async function drArcade(id, idx){
   const wk = drWeek(), A = DR_ARCADE[id], g = (typeof LAB_NEW!=="undefined" ? LAB_NEW : []).find(x=>x.id===id);
-  if (!wk || wk.arcade || !A || !g || mcInjury(mcFrac(S.mc.wi))) return;
+  if (!wk || !A || !g || mcInjury(mcFrac(S.mc.wi)) || drSess(wk).done[idx]) return;
   const [k, t] = A, a = mcA(), club = meta(S.mc.club), bib = lvNear(club.c1, "#F97316") ? "#0EA5E9" : "#F97316";
   const st = {f:{opp:"Training", oppStr:a[k] - 12, home:true}, X:{base:strOf(S.mc.club)}, ev:[], g:0, a:0, og:0, bonus:0, left:1, log:[],
     lab:{train:true, a, ease:clamp((a[k] - 62)/80, -.2, .3), kr:Math.max(45, strOf(S.mc.club) - 10), pos:S.player.pos, game:g, next:"Finish",
@@ -79,12 +120,13 @@ async function drArcade(id){
     const nums = String(R.big + " " + (R.score || "")).match(/\d+/g) || [], score = R.ok ? (id==="golf" ? .85 : clamp(.75 + .05*(+nums[0] || 0)/2, .75, 1)) : .3;
     const gain = drArcadeGain(k, score);
     S.attr[k] = +clamp(S.attr[k] + gain, 20, 99).toFixed(2);
-    wk.arcade = {id, k, t, res:`${R.big}${R.small ? " · " + R.small : ""}`, gain};
+    drSess(wk).done[idx] = {res:`${R.big}${R.small ? " · " + R.small : ""}`, gain, k};
     save();
     await lvAsk(`<div class="lv-card"><div class="lv-eye">Arcade · ${esc(t)}</div><h2 class="lv-t">${R.ok ? "Nailed it" : "Not this time"}</h2>
       <p>${esc(R.big)}${R.small ? `. ${esc(R.small)}` : ""}.</p>
       <div class="dr-gain"><span>${esc(mcAttrName(k))}</span><b>+${gain.toFixed(2)}</b><small>Now ${Math.round(S.attr[k])}</small></div>
-      <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Back to the match centre</button></div>`);
+      ${drSessLine(wk)}
+      <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Back to training</button></div>`);
   } finally { lvClose(); render(); }
 }
 // the drill's scoreboard: which rep you're on, how each went, and a way out
@@ -204,9 +246,9 @@ async function drSession(st, k){
   const tot = st.got.reduce((s,x)=>s+x, 0);
   return {score:tot/D.n, res:k==="pac" ? `${st.got.filter(x=>x>=.6).length} good starts out of ${D.n}` : `${tot} of ${D.n} ${D.unit}`};
 }
-async function drPlay(){
-  const wk = drWeek(), k = S.train.focus, D = drInfo(k);
-  if (!wk || wk.drill || !D || mcInjury(mcFrac(S.mc.wi))) return;
+async function drPlay(k = S.train.focus, idx = null){
+  const wk = drWeek(), D = drInfo(k);
+  if (!wk || !D || mcInjury(mcFrac(S.mc.wi)) || (idx!=null ? drSess(wk).done[idx] : wk.drill)) return;
   const attr = k==="prep" ? mcA().fin : mcA()[k];
   const st = {drill:D, f:{opp:"Training", oppStr:attr - 16, home:true}, X:{base:strOf(S.mc.club)}, ev:[], left:1, i:0, got:[], lvl:0, log:[]};
   lvOpen();
@@ -218,17 +260,19 @@ async function drPlay(){
       <div class="lv-row"><button type="button" class="btn primary big" data-lv="go" data-lv-focus>Start</button><button type="button" class="btn" data-lv="no">Not now</button></div></div>`);
     if (go!=="go") return;
     const {score, res} = await drSession(st, k);
-    const gain = k==="prep" ? Math.round(12*score) : drGain(k, score);
+    // in the week's session each exercise adds half a drill's growth; finishing all four doubles the week (mcTrain)
+    const gain = k==="prep" ? Math.round(12*score*(idx!=null ? .5 : 1)) : +(drGain(k, score)*(idx!=null ? .5 : 1)).toFixed(2);
     if (k==="prep") S.cond.sharp = Math.min(100, S.cond.sharp + gain);
     else S.attr[k] = +clamp(S.attr[k] + gain, 20, 99).toFixed(2);
-    wk.drill = {k, t:D.t, res, score:+score.toFixed(2), gain};
-    mcTrainNote(score);   // the manager saw it: good training gets you more game time
+    if (!wk.drill){ wk.drill = {k, t:D.t, res, score:+score.toFixed(2), gain}; mcTrainNote(score); }   // the manager saw it: good training gets you more game time
+    if (idx!=null) drSess(wk).done[idx] = {res, gain, k};
     save();
     await lvAsk(`<div class="lv-card"><div class="lv-eye">Training · ${esc(D.t)}</div>
       <h2 class="lv-t">${score>=.8 ? "Great session" : score>=.5 ? "Good session" : score>0 ? "Tough session" : "One to forget"}</h2>
       <p>${esc(res.charAt(0).toUpperCase() + res.slice(1))}.</p>
       <div class="dr-gain"><span>${k==="prep" ? "Sharpness" : esc(mcAttrName(k))}</span><b>+${k==="prep" ? gain : gain.toFixed(2)}</b><small>${k==="prep" ? `Now ${Math.round(S.cond.sharp)}` : `Now ${Math.round(S.attr[k])}, on top of this week's training`}</small></div>
       <p class="dr-imp">${esc(mcTrainLabel(mcTrainImp()))}: your chance of starting is now <b>${Math.round(mcStartChance()*100)}%</b>.</p>
-      <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Back to the match centre</button></div>`);
+      ${idx!=null ? drSessLine(wk) : ""}
+      <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Back to training</button></div>`);
   } finally { lvClose(); render(); }
 }

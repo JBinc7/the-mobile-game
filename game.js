@@ -2841,9 +2841,9 @@ function renderCareer(){
   const action = (S.phase==="preview"||S.phase==="stats")?statsPanel():S.phase==="winter"?winterPanel():S.phase==="tournament"?tournamentPanel():S.phase==="window"?windowPanel():retiredPanel();
   S.notes ||= []; S.notesSeen ??= 0;
   const unread = S.notes.length - S.notesSeen;
-  if (!["season","inbox","stats","club","cabinet","legacy"].includes(tab)) tab = {review:"inbox", leagues:"club", career:"stats"}[tab] || "season";
-  const tabs = [["season","Season","Season"],["inbox","Inbox","Inbox"],["stats","Statistics","Stats"],["club","Club & leagues","Club"],["lab","Mini-game lab","Lab"],["cabinet","Trophies","Trophies"],["legacy","Legacy","Legacy"]];
-  const body = tab==="season" ? action : tab==="inbox" ? inboxPanel() : tab==="stats" ? statsBody() : tab==="club" ? clubBody(t) : tab==="legacy" ? boardPanel() : cabinetPanel();
+  if (!["season","inbox","stats","club","training","cabinet","legacy"].includes(tab)) tab = {review:"inbox", leagues:"club", career:"stats"}[tab] || "season";
+  const tabs = [["season","Season","Season"],["inbox","Inbox","Inbox"],["stats","Statistics","Stats"],["club","Club & leagues","Club"],["training","Training","Training"],["cabinet","Trophies","Trophies"],["legacy","Legacy","Legacy"]];
+  const body = tab==="season" ? action : tab==="inbox" ? inboxPanel() : tab==="stats" ? statsBody() : tab==="club" ? clubBody(t) : tab==="training" ? trainingBody() : tab==="legacy" ? boardPanel() : cabinetPanel();
   if (tab==="inbox" && unread>0){ setTimeout(()=>{ S.notesSeen = S.notes.length; save(); }, 0); }
   $("#app").innerHTML = `
   ${flash?`<p class="ref" role="status" style="margin:0 0 18px">${esc(flash)}</p>`:""}
@@ -2896,6 +2896,7 @@ const TAB_IC = (()=>{ const w = d => `<svg viewBox="0 0 24 24" fill="none" strok
     club: w('<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M12 7v10"/>'),
     cabinet: w('<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a2.5 2.5 0 0 0 3 4M16 6h3a2.5 2.5 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/>'),
     legacy: w('<path d="M4 17l1.5-9 4.5 4 2-6 2 6 4.5-4 1.5 9z"/><path d="M4 20h16"/>'),
+    training: w('<path d="M12 3.5 6.5 19h11z"/><path d="M8.6 13.3h6.8M10.2 8.8h3.6M4 19.5h16"/>'),
     lab: w('<path d="M9.5 3h5M10.5 3v5.5L5 18.2A1.9 1.9 0 0 0 6.7 21h10.6a1.9 1.9 0 0 0 1.7-2.8L13.5 8.5V3"/><path d="M7.4 14h9.2"/>')
   };
 })();
@@ -2959,6 +2960,7 @@ document.addEventListener("click", e=>{
   if (a==="tour-play" || a==="tour-simgame"){ if (S && S.tourney) tPlay(a==="tour-play"); return; }
   if (a==="tour-done"){ if (S && S.tourney) tDone(); return; }
   if (a==="tab" && b.dataset.k==="lab"){ labOpen(); return; }
+  if (a==="tr-play"){ trPlay(b.dataset.k); return; }
   if (a==="tab"){ tab = b.dataset.k; render(); uiEnter(document.getElementById("tabBody")); if (matchMedia("(max-width:720px)").matches){ const tb = document.getElementById("tabBody"); if (tb) window.scrollTo({top: tb.getBoundingClientRect().top + scrollY - 12}); } }
   else if (a==="backup-export"){ exportBackup(); }
   else if (a==="intl-yes" || a==="intl-no"){ const n = (S.notes||[]).find(x=>x.ask && x.ask.id===b.dataset.k); if (n){ n.ask.answer = a==="intl-yes"; save(); render(); } }

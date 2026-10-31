@@ -1275,7 +1275,16 @@ small.boot{display:inline-flex;align-items:center}
 @keyframes meGlowOn{0%,100%{text-shadow:0 0 4px rgba(255,255,255,.55)}50%{text-shadow:0 0 11px rgba(255,255,255,1),0 0 2px #fff}}
 @media (prefers-reduced-motion: reduce){ .me .me-name,.lv .me .me-name{text-shadow:0 0 8px rgba(255,255,255,.9)} }
 
-/* the arcade at the training ground: a row of sessions under the week's drill */
-.mc-drill.dr-arcade{flex-direction:column;align-items:stretch;gap:10px}
-.dr-arc-btns{display:flex;flex-wrap:wrap;gap:8px}
-.dr-arc-btns .chip small{opacity:.65;margin-left:4px;font-size:11px}
+/* the Training tab: the week's four exercises and the 2x bar */
+.tr-boost{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px;margin:14px 0;border-radius:14px;overflow:hidden;border:1px solid color-mix(in srgb,var(--accent) 55%,var(--line));background:var(--surface-2)}
+.tr-boost>b{font-family:var(--f-display);font-weight:900;font-size:30px;color:var(--accent);line-height:1;white-space:nowrap}
+.tr-boost span{font-size:14px;position:relative;flex:1;min-width:0}
+.tr-boost i{position:absolute;left:0;bottom:0;height:4px;width:calc(var(--p)*100%);background:var(--accent);transition:width .3s}
+.tr-boost.on{background:color-mix(in srgb,var(--accent) 18%,var(--surface));box-shadow:0 0 26px -8px var(--accent)}
+.tr-list{display:grid;gap:10px}
+.tr-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:var(--surface-2)}
+.tr-item .tr-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.tr-item .tr-txt small{color:var(--muted);font-size:13px}
+.tr-item.done{opacity:.85;border-color:color-mix(in srgb,var(--up) 50%,var(--line))}
+.tr-tick{font-size:22px;color:var(--up);font-weight:900;padding:0 6px}
+.dr-sessline{font-size:14px;margin:10px 0}

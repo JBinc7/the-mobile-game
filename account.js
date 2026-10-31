@@ -6,7 +6,7 @@
    calls Account.boot(start) once it has loaded, and this file calls back into the game (render, exportBackup…)
    only after that. */
 const Account = (() => {
-  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.34";
+  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.35";
   const OLD = {career:"efp-career-v1", hall:"efp-hall-v1"};   // where saves lived before accounts existed
   const $id = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -200,7 +200,7 @@ const Account = (() => {
           <label class="btn small" for="acctBackupFile" style="display:inline-flex;align-items:center">Load backup</label><input id="acctBackupFile" type="file" accept="application/json,.json" hidden></div>
         ${S ? `<label class="chk"><input type="checkbox" id="acctReplace"> Loading a backup also replaces my current career</label>` : ""}
       </section>
-      ${devOn() ? `<section><h3>Development</h3><p class="hint">Only on this phone: try every mini-game, including 20 new ones that aren't in the game. Nothing you play there affects your career or your coins.</p>
+      ${devOn() ? `<section><h3>Development</h3><p class="hint">Only on this phone: try every mini-game in one place, at any difficulty. Nothing you play there affects your career or your coins.</p>
         <div class="row"><button type="button" class="btn small primary" data-acct="lab">Open the mini-game lab</button><button type="button" class="btn small" data-acct="dev-off">Hide this section</button></div></section>` : ""}
       <section><h3>Get the app</h3><div data-install>${installHTML()}</div></section>
       <details class="dlg-more"><summary>Change password</summary>

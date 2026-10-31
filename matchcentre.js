@@ -210,7 +210,8 @@ function mcTrain(w){
   if (mcInjury(mcFrac(w))){ c.fat = Math.max(0, c.fat-20); c.sharp = Math.max(20, c.sharp-6); }   // rehab
   else if (T.focus==="rest"){ c.fat = Math.max(0, c.fat-35); c.sharp = Math.max(20, c.sharp-5); }
   else {
-    const m = (T.hard ? 1.6 : 1)*(S.boost && S.boost.double>0 ? 2 : 1);   // double training from the shop
+    // double training from the shop, and double again for a finished weekly session (drills.js)
+    const m = (T.hard ? 1.6 : 1)*(S.boost && S.boost.double>0 ? 2 : 1)*(typeof drSessDone==="function" && drSessDone(S.mc.weeks[w]) ? 2 : 1);
     MC_ATTR.forEach(([k])=>{ a[k] += g*m*(k===T.focus ? 1 : T.focus==="prep" ? .1 : .2)*mcRoom(k); });
     if (T.focus==="prep") c.sharp = Math.min(100, c.sharp + (T.hard ? 10 : 7));
     c.fat = clamp(c.fat - (T.hard ? 5 : 15), 0, 100); c.sharp = Math.max(20, c.sharp-3);
@@ -496,7 +497,7 @@ function mcPanel(){
         <button type="button" class="btn small" data-shop="open"><i class="coin" aria-hidden="true"></i> Shop</button></div>
       <div class="chips mc-chips" role="group" aria-label="Training focus">${MC_TRAIN.map(([k])=>`<button type="button" class="chip ${T.focus===k?"on":""}" data-act="mc-focus" data-k="${k}" aria-pressed="${T.focus===k}">${esc(mcAttrName(k))}</button>`).join("")}</div>
       <p class="hint">${hint}${S.boost && S.boost.double>0 ? ` <span class="pill gold">Double training · ${S.boost.double} week${S.boost.double===1?"":"s"} left</span>` : ""}</p>
-      ${drPanel()}${drArcadePanel()}
+      ${drPanel()}
       <p class="hint mc-imp"><b>${mcTrainLabel(mcTrainImp())}.</b> Good drills and hard sessions get you more game time.</p>
     </div>`}
     ${subTabs("season", [
@@ -522,7 +523,6 @@ function mcAction(a, b){
   else if (a==="mc-half") mcAdvance("half");
   else if (a==="mc-finish") mcFinishHalf();
   else if (a==="mc-drill") drPlay();
-  else if (a==="mc-arcade") drArcade(k);
   else if (a==="mc-focus"){ S.train.focus = k; save(); render(); }
   else if (a==="mc-hard"){ S.train.hard = k==="1"; save(); render(); }
   else if (a==="mc-mode"){

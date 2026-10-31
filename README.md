@@ -104,7 +104,7 @@ The Season screen keeps it short: this week's match (both badges, the competitio
 - **Extra time and penalties:** a knockout tie level after 90 (or on aggregate) goes to extra time, with one more moment of yours, then a penalty shootout. Play either or sim it. In the shootout you take your side's kicks and go in goal for theirs; *Sim the rest* finishes it. Cups, Europe and international tournaments.
 
 ### Training ground
-- Once a week: the **drill** for your training focus, and one **Arcade** session: keepy-uppy, flick-ups, crossbar challenge, target practice, dribble slalom, pass golf or rondo. Each grows an attribute (passing, finishing or pace), a bit less than a drill.
+- The **Training** tab (where the Lab tab was): each week a session of four exercises, two drills (your focus and one other) and two arcade games (keepy-uppy, flick-ups, crossbar challenge, target practice, dribble slalom, pass golf, rondo). Each adds a little growth; finish all four before you play the week and that week's training counts double (2×). The mini-game lab is now only in the Account menu's Development section.
 
 ### The mini-game lab
 The **mini-game lab** is a development area for trying out mini-games: every one in one place, to play as often as you like.
