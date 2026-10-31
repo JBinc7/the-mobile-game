@@ -8,20 +8,23 @@
    skill, scaled by chance quality), so the score always includes what you did. Each mini-game (LV_GAMES) resolves to
    a result R that lvApply turns into goals, assists, own goals, goals conceded and a rating bonus. */
 const LV_POOL = {
-  ST:{att:["shot:oneonone","shot:box","header","move","takeon","pass"], def:["intercept"]},
-  LW:{att:["shot:box","takeon","cross","move","pass"], def:["intercept","tackle"]},
-  RW:{att:["shot:box","takeon","cross","move","pass"], def:["intercept","tackle"]},
-  CAM:{att:["shot:box","pass","move","takeon","pass","shot:freekick"], def:["intercept"]},
-  CM:{att:["pass","move","shot:long"], def:["intercept","tackle"]},
-  CDM:{att:["pass","shot:long"], def:["intercept","tackle","block"]},
-  LB:{att:["cross","takeon","pass"], def:["tackle","intercept","block"]},
-  RB:{att:["cross","takeon","pass"], def:["tackle","intercept","block"]},
-  CB:{att:["header"], def:["tackle","block","intercept"]},
-  GK:{att:[], def:["save","save","save","claim","rush"]}
+  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross"], def:["intercept","tackle"]},
+  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone"], def:["intercept","tackle"]},
+  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone"], def:["intercept","tackle"]},
+  CAM:{att:["shot:box","shot:long","pass","move","takeon","shot:freekick","shot:oneonone"], def:["intercept","tackle"]},
+  CM:{att:["pass","move","shot:long","shot:box","takeon"], def:["intercept","tackle","block"]},
+  CDM:{att:["pass","shot:long","move","takeon"], def:["intercept","tackle","block","header:def"]},
+  LB:{att:["cross","takeon","pass","move","shot:long"], def:["tackle","intercept","block","header:def"]},
+  RB:{att:["cross","takeon","pass","move","shot:long"], def:["tackle","intercept","block","header:def"]},
+  CB:{att:["header","pass","shot:long"], def:["tackle","block","intercept","header:def"]},
+  GK:{att:[], def:["save","save","claim","rush"]}
 };
+// the set piece a match sometimes hands you instead of one of your moments: who takes it, and how often
+const LV_SETPIECE = {ST:["shot:pen",.14], LW:["shot:freekick",.12], RW:["shot:freekick",.12], CAM:["shot:pen",.12], CM:["shot:freekick",.1], CDM:["shot:freekick",.06], LB:["shot:freekick",.05], RB:["shot:freekick",.05], CB:["header",.12]};
+// and keepers face the odd penalty
 // expected goals each moment stands for at average skill: scored (attacking) or conceded (defending)
-const LV_EV = {"shot:oneonone":.45, "shot:box":.34, "shot:long":.13, "shot:freekick":.17, header:.26, pass:.18, move:.3, takeon:.24, cross:.16,
-  intercept:.1, tackle:.2, block:.28, save:.36, "save:pen":.6, claim:.14, rush:.3};
+const LV_EV = {"shot:oneonone":.45, "shot:box":.34, "shot:long":.13, "shot:freekick":.17, "shot:pen":.76, header:.26, pass:.18, move:.3, takeon:.24, cross:.16,
+  intercept:.1, tackle:.2, block:.28, "header:def":.22, save:.36, "save:pen":.6, claim:.14, rush:.3};
 // the share of the goals your team concedes that a position's defending moments can stand for
 const LV_DSHARE = {GK:.75, CB:.4, LB:.3, RB:.3, CDM:.25, CM:.15};
 const LV_COLS = {l:75, c:150, r:225}, LV_ROWS = {t:50, b:98};
@@ -296,9 +299,22 @@ function lvPlan(f, X){
   const pAtt = !P.att.length ? 0 : !P.def.length ? 1 : clamp((MC_ATT[pos] ?? .5) + (dom-.5)*.7, .1, .92);
   const edge = pos==="GK" ? (.5-dom)*5 - tf*.6 : (dom-.5)*5 + tf*.9;
   const n = me.st==="sub" ? (me.mins>=30 ? 2 : 1) : clamp(Math.round(4 + edge + Math.random() - .5), 2, 6), bag = {att:[], def:[]};
-  const draw = side => { if (!bag[side].length) bag[side] = shuffle(P[side]); return bag[side].pop(); };
+  // every match a bit different: within a match no mini-game repeats until the pool's used up, and across matches
+  // the ones you've had lately are less likely (S.lvRecent remembers your last dozen or so)
+  const recent = (typeof S!=="undefined" && S && S.lvRecent) || [];
+  const weight = id => 1/(1 + 2.2*recent.filter(x=>x===id).length + (recent.slice(-4).includes(id) ? 1.5 : 0));
+  const draw = side => {
+    if (!bag[side].length) bag[side] = P[side].slice();
+    const w = bag[side].map(weight), tot = w.reduce((a,b)=>a+b, 0); let r = Math.random()*tot, i = 0;
+    while (i<w.length-1 && (r -= w[i])>0) i++;
+    return bag[side].splice(i, 1)[0];
+  };
   const list = [...Array(n)].map(()=>{ const side = Math.random()<pAtt ? "att" : "def"; return {side, id:draw(side)}; });
-  if (pos==="GK" && Math.random()<.15){ const s = list.find(m=>m.id==="save"); if (s) s.id = "save:pen"; }   // the odd penalty
+  // a set piece now and then: a penalty for the strikers and tens, a free kick for the wide men and midfielders
+  const sp = LV_SETPIECE[pos], spare = list.filter(m=>m.side==="att" && m.id!==sp?.[0]);
+  if (sp && spare.length && Math.random()<sp[1]) pick(spare).id = sp[0];
+  if (pos==="GK" && Math.random()<.15){ const s = list.find(m=>m.id==="save"); if (s) s.id = "save:pen"; }
+  if (typeof S!=="undefined" && S && !f.lab){ S.lvRecent = [...recent, ...list.map(m=>m.id)].slice(-14); }
   const from = me.st==="sub" ? 92-me.mins : 3, to = me.st==="sub" ? 89 : Math.max(12, me.mins-2);
   list.forEach(m=>{ [m.g, m.v] = m.id.split(":"); m.min = from + Math.floor(Math.random()*(to-from+1)); });
   // together your moments can't stand for more than your position's share of the match (mcXg's pG and pA): a striker
@@ -625,6 +641,7 @@ function lvRing(st, o){
   });
 }
 async function lvGameHeader(st, m){
+  if (m.v==="def") return lvGameClear(st, m);
   const kit = lvKits(st), a = lvAttr(st), GK = lvKeeper(st, a.fin), kq = GK.q;
   const r = await lvRing(st, {head:lvHead(st, m.min), title:"Cross coming in", sub:"Tap Head it! when the closing ring meets the gold one.", btn:"Head it!",
     attr:a.fin*.6 + a.def*.4, x:112, y:104, scene:lvGoalSvg(kit.them) + lvKeeperTag(GK), ball:["#lvBall", 112, 104, .85]});
@@ -637,6 +654,16 @@ async function lvGameHeader(st, m){
   await Promise.all([lvFly("#lvBall", [112, 104], [tx, ty], 380, {s0:.85, s1:.6, spin:1.4}), on ? lvTween(300, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (ky-84)*q, rot*q); }) : null]);
   if (goal){ lvRipple(tx, ty); await lvWait(160); return {ok:true, big:"Goal!", small: perfect ? "A bullet header" : "Glanced in", g:1}; }
   return {ok:false, big: on ? "Saved" : "Over the bar", small: on ? (perfect ? "Somehow he kept it out" : "Straight at the keeper") : r.d<r.tol*2 ? "Just mistimed it" : "Way off", bonus:-.08};
+}
+// a cross into your own box: meet it first and head it clear
+async function lvGameClear(st, m){
+  const kit = lvKits(st), a = lvAttr(st);
+  const r = await lvRing(st, {head:lvHead(st, m.min), title:"Defend the cross", sub:"Tap Clear it! when the closing ring meets the gold one, and win the header before their striker.", btn:"Clear it!",
+    attr:a.def*.7 + a.sta*.3, x:150, y:110, scene:lvField("bottom", `${lvMan(150,124,kit.us,{ring:"#F5C542"})}${lvMan(166,112,kit.them)}${lvMan(98,128,kit.them)}${lvMan(214,120,kit.us)}${lvBallSvg("lvB",150,110,4)}`), ball:["#lvB", 150, 110, 1]});
+  if (r==="skip") return r;
+  if (r.d < r.tol*.6) return {ok:true, big:"Cleared!", small:"Up and away: big header", bonus:.3};
+  if (r.d < r.tol) return {ok:true, big:"Cleared", small:"Only to the edge of the box, but it's gone", bonus:.12};
+  return Math.random() < .5*m.q ? {ok:false, big:"They score", small:"Their striker got there first", ga:1, bonus:-.3} : {ok:false, big:"Lost the header", small:"Their header flew over", bonus:-.1};
 }
 async function lvGameClaim(st, m){
   const kit = lvKits(st), a = lvAttr(st);
