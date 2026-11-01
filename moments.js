@@ -113,45 +113,60 @@ function lvMan(x, y, kit, o={}){
   const v = (Math.imul(Math.round(x*10) + 7, 73856093) ^ Math.imul(Math.round(y*10) + 3, 19349663) ^ Math.imul((+o.num || 0) + 11, 83492791) ^ Math.imul(parseInt(String(kit).slice(1, 7), 16) || 5, 2654435761)) >>> 0, me = !!(o.ring || o.you), you = me && typeof S!=="undefined" && S && S.player;
   const skin = o.skin || (you ? LV_SKIN[S.player.skin ?? 1] : LV_SKIN[v % LV_SKIN.length]) || LV_SKIN[1];
   const hair = you ? (S.player.hair==="none" ? null : HAIRC[S.player.hairColour] || LV_HAIR[0]) : LV_HAIR[(v >>> 4) % LV_HAIR.length];
-  // human proportions: a head about a sixth of his height, long legs, shoulders wider than the waist
+  // drawn from athletes' proportions: a head about a sixth of his height, tapered thighs and calves, a V from shoulders
+  // to waist, arms that narrow to the wrist, a jaw. Light from the top left: a highlight on that side, shade on the other
   const style = you ? (S.player.hair || "short") : ["short","fade","curly","buzz","short","long","fade","curly","short","buzz","none","fade"][(v >>> 7) % 12];
-  const ink = lvLight(kit) ? "#15171A" : "#FFFFFF", shade = "rgba(0,0,0,.16)";
-  const leg = (sx, b) => `<g class="lv-l${b}"><path d="M${sx} -13.2V-3.4" stroke="${skin}" stroke-width="2.7" stroke-linecap="round"/>
-    <path d="M${sx} -8.6V-2.6" stroke="${kit}" stroke-width="3.1" stroke-linecap="round"/><path d="M${(sx - 1.4).toFixed(1)} -8.4h2.8" stroke="${trim}" stroke-width="1"/>
-    <path d="M${sx<0 ? (sx - 2.6).toFixed(1) : (sx - 1.2).toFixed(1)} -1.9q0-1.5 1.9-1.6h1.6q1.3.3 1.6 1.6l.3.9h-5.4z" fill="#0E1012"/><path d="M${sx<0 ? (sx - 2.4).toFixed(1) : (sx - 1).toFixed(1)} -.9h4.9" stroke="#3B3F45" stroke-width=".5"/></g>`;
-  // an arm: a short sleeve, a bare forearm and a hand, swung from the shoulder when running and raised to celebrate
-  const arm = (d, b) => `<g class="lv-a${b}"><path d="M${6.9*d} -30.2L${9.1*d} -24.6" stroke="${kit}" stroke-width="3.4" stroke-linecap="round"/>
-    <path d="M${8.7*d} -25.4l${.5*d} 1.2" stroke="${trim}" stroke-width="3.5"/><path d="M${9.3*d} -24.2L${10.1*d} -18.6" stroke="${skin}" stroke-width="2.2" stroke-linecap="round"/>
-    <circle cx="${10.2*d}" cy="-17.6" r="1.35" fill="${skin}"/></g>`;
-  const H = -36.6, hairD = {
-    short:o.back ? `<path d="M-3.4 ${H}a3.4 3.9 0 0 1 6.8 0v1.6q-3.4 1.8-6.8 0z" fill="${hair}"/>` : `<path d="M-3.45 ${H - .3}a3.45 3.9 0 0 1 6.9 0q-.9-1.5-3.45-1.6q-2.6.1-3.45 1.6z" fill="${hair}"/>`,
-    fade:o.back ? `<path d="M-3.4 ${H}a3.4 3.9 0 0 1 6.8 0v1q-3.4 1.2-6.8 0z" fill="${hair}" opacity=".85"/><path d="M-2.6 ${H - 3.1}q2.6-1.6 5.2 0" stroke="${hair}" stroke-width="1.6" fill="none"/>` : `<path d="M-3.3 ${H - .6}a3.3 3.6 0 0 1 6.6 0q-1-.9-3.3-.9t-3.3.9z" fill="${hair}" opacity=".7"/><path d="M-2.7 ${H - 3.3}q2.7-1.9 5.4 0l-.3 1q-2.4-.9-4.8 0z" fill="${hair}"/>`,
-    curly:`<g fill="${hair}">${[[-2.6,-1.6],[0,-2.6],[2.6,-1.6],[-3.3,.4],[3.3,.4],[-1.3,-3.1],[1.3,-3.1]].map(([cx, cy])=>`<circle cx="${cx}" cy="${(H + cy).toFixed(1)}" r="1.55"/>`).join("")}</g>`,
-    buzz:`<path d="M-3.4 ${H - .2}a3.4 3.85 0 0 1 6.8 0q-1-1.2-3.4-1.3q-2.4.1-3.4 1.3z" fill="${hair}" opacity=".55"/>`,
-    long:`<path d="M-3.6 ${H}a3.6 4 0 0 1 7.2 0v${o.back ? 5 : 3.4}q-.9 1-1.4 0v-2.4q-2.2-1.6-4.4 0v2.4q-.5 1-1.4 0z" fill="${hair}"/>`,
+  const ink = lvLight(kit) ? "#15171A" : "#FFFFFF", boot = ["#0E1012","#0E1012","#F4F4F5","#0E1012","#1E3A8A","#0E1012","#B91C1C","#0E1012"][(v >>> 11) % 8];
+  const f = n => n.toFixed(2);
+  const leg = (sx, b) => { const d = sx<0 ? -1 : 1;
+    return `<g class="lv-l${b}"><path d="M${f(sx-1.95)} -19.6H${f(sx+1.95)}L${f(sx+1.3)} -10.7Q${f(sx+1.75)} -7.6 ${f(sx+.9)} -2.7H${f(sx-.9)}Q${f(sx-1.75)} -7.6 ${f(sx-1.3)} -10.7Z" fill="${skin}"/>
+      <path d="M${f(sx+.2*d)} -11.6q${f(.6*d)} .5 0 1.3" stroke="#000" stroke-opacity=".18" stroke-width=".35" fill="none"/>
+      <path d="M${f(sx-1.6)} -8.9H${f(sx+1.6)}Q${f(sx+1.5)} -5.1 ${f(sx+1)} -2.3H${f(sx-1)}Q${f(sx-1.5)} -5.1 ${f(sx-1.6)} -8.9Z" fill="${kit}"/><path d="M${f(sx-1.6)} -8.3H${f(sx+1.6)}" stroke="${trim}" stroke-width=".75"/>
+      <path d="M${f(sx+.35*d)} -8.9H${f(sx+1.6*d)}Q${f(sx+1.5*d)} -5.1 ${f(sx+d)} -2.3H${f(sx+.3*d)}z" fill="#000" opacity=".14"/>
+      <path d="M${f(sx-1.15)} -2.8H${f(sx+1.15)}L${f(sx+1.25+.5*d)} -1.2Q${f(sx+(d>0 ? 3.6 : 1.4))} -.9 ${f(sx+(d>0 ? 3.5 : 1.3))} 0H${f(sx-(d>0 ? 1.3 : 3.5))}Q${f(sx-(d>0 ? 1.4 : 3.6))} -.9 ${f(sx-1.25+.5*d)} -1.2Z" fill="${boot}"/>
+      <path d="M${f(sx-(d>0 ? 1.2 : 3.2))} -.35H${f(sx+(d>0 ? 3.2 : 1.2))}" stroke="${boot==="#F4F4F5" ? "#9CA3AF" : "#3B3F45"}" stroke-width=".45"/></g>`; };
+  // an arm: a shoulder, a short sleeve, a bicep, a forearm that narrows to the wrist, and a hand
+  const arm = (d, b) => `<g class="lv-a${b}"><path d="M${f(5.9*d)} -33L${f(8.3*d)} -31.8Q${f(9.2*d)} -29.6 ${f(8.9*d)} -27.4L${f(6.2*d)} -27.9Z" fill="${kit}"/>
+    <path d="M${f(6.4*d)} -27.8L${f(8.9*d)} -27.4" stroke="${trim}" stroke-width=".9"/>
+    <path d="M${f(7.75*d)} -27.4Q${f(9.5*d)} -25.9 ${f(9.05*d)} -23.7L${f(9.6*d)} -18.9" stroke="${skin}" stroke-width="2.05" stroke-linecap="round" fill="none"/>
+    <path d="M${f(8.2*d)} -27.2Q${f(9.9*d)} -25.6 ${f(9.4*d)} -23.6" stroke="#000" stroke-opacity="${d>0 ? .16 : .06}" stroke-width=".7" fill="none"/>
+    <ellipse cx="${f(9.75*d)}" cy="-17.9" rx="1.05" ry="1.3" fill="${skin}"/></g>`;
+  const H = -37.2, head = `M-3.15 ${f(H - .7)}Q-3.25 ${f(H - 4)} 0 ${f(H - 4.15)}Q3.25 ${f(H - 4)} 3.15 ${f(H - .7)}Q3 ${f(H + 2.3)} 1.2 ${f(H + 3.2)}Q0 ${f(H + 3.6)} -1.2 ${f(H + 3.2)}Q-3 ${f(H + 2.3)} -3.15 ${f(H - .7)}Z`;
+  const hairD = {
+    short:o.back ? `<path d="M-3.25 ${f(H - .4)}Q-3.3 ${f(H - 4.3)} 0 ${f(H - 4.45)}Q3.3 ${f(H - 4.3)} 3.25 ${f(H - .4)}V${f(H + 1.4)}Q0 ${f(H + 2.6)} -3.25 ${f(H + 1.4)}Z" fill="${hair}"/>` : `<path d="M-3.25 ${f(H - .9)}Q-3.3 ${f(H - 4.4)} 0 ${f(H - 4.5)}Q3.3 ${f(H - 4.4)} 3.25 ${f(H - .9)}Q2.6 ${f(H - 2.7)} .4 ${f(H - 2.9)}Q-2.4 ${f(H - 2.8)} -3.25 ${f(H - .9)}Z" fill="${hair}"/>`,
+    fade:`<path d="M-3.15 ${f(H - .6)}Q-3.2 ${f(H - 3.9)} 0 ${f(H - 4.05)}Q3.2 ${f(H - 3.9)} 3.15 ${f(H - .6)}${o.back ? `V${f(H + 1)}Q0 ${f(H + 1.9)} -3.15 ${f(H + 1)}Z` : `Q1.6 ${f(H - 2.2)} 0 ${f(H - 2.3)}Q-1.6 ${f(H - 2.2)} -3.15 ${f(H - .6)}Z`}" fill="${hair}" opacity=".55"/><path d="M-2.6 ${f(H - 3.5)}Q0 ${f(H - 5.6)} 2.6 ${f(H - 3.5)}Q0 ${f(H - 4.2)} -2.6 ${f(H - 3.5)}Z" fill="${hair}"/>`,
+    curly:`<g fill="${hair}">${[[-2.5,-2.4],[0,-3.4],[2.5,-2.4],[-3.2,-.6],[3.2,-.6],[-1.3,-3.9],[1.3,-3.9],...(o.back ? [[-2.2,.9],[0,1.4],[2.2,.9]] : [])].map(([cx, cy])=>`<circle cx="${cx}" cy="${f(H + cy)}" r="1.5"/>`).join("")}</g>`,
+    buzz:`<path d="M-3.15 ${f(H - .8)}Q-3.2 ${f(H - 4)} 0 ${f(H - 4.15)}Q3.2 ${f(H - 4)} 3.15 ${f(H - .8)}${o.back ? `V${f(H + 1)}Q0 ${f(H + 1.9)} -3.15 ${f(H + 1)}Z` : `Q1.6 ${f(H - 2.6)} 0 ${f(H - 2.7)}Q-1.6 ${f(H - 2.6)} -3.15 ${f(H - .8)}Z`}" fill="${hair}" opacity=".5"/>`,
+    long:`<path d="M-3.45 ${f(H - .4)}Q-3.5 ${f(H - 4.5)} 0 ${f(H - 4.6)}Q3.5 ${f(H - 4.5)} 3.45 ${f(H - .4)}L3.6 ${f(H + (o.back ? 5.4 : 3.6))}Q2.9 ${f(H + 4.3)} 2.4 ${f(H + 3)}${o.back ? "" : `L2.6 ${f(H - 1.4)}Q0 ${f(H - 3.2)} -2.6 ${f(H - 1.4)}L-2.4 ${f(H + 3)}`}Q-2.9 ${f(H + 4.3)} -3.6 ${f(H + (o.back ? 5.4 : 3.6))}Z" fill="${hair}"/>`,
     none:""
   };
-  const face = o.back ? "" : `<g fill="#1B1410"><circle cx="-1.25" cy="${H - .1}" r=".42"/><circle cx="1.25" cy="${H - .1}" r=".42"/></g>
-    <path d="M-1.9 ${H - 1}h1.2M.7 ${H - 1}h1.2" stroke="${hair || "#3A2A20"}" stroke-width=".45" opacity=".8"/><path d="M-.75 ${H + 2.1}q.75.45 1.5 0" stroke="#7A4A3A" stroke-width=".4" fill="none" opacity=".7"/>`;
+  const face = o.back ? "" : `<path d="M-2.05 ${f(H - .75)}h1.2a.6.38 0 0 1-1.2 0zM.85 ${f(H - .75)}h1.2a.6.38 0 0 1-1.2 0z" fill="#fff" opacity=".85"/>
+    <circle cx="-1.45" cy="${f(H - .62)}" r=".33" fill="#1B1410"/><circle cx="1.45" cy="${f(H - .62)}" r=".33" fill="#1B1410"/>
+    <path d="M-2.2 ${f(H - 1.6)}q.7-.35 1.4-.05M.8 ${f(H - 1.65)}q.7-.3 1.4.05" stroke="${hair || "#3A2A20"}" stroke-width=".42" stroke-linecap="round" fill="none"/>
+    <path d="M.15 ${f(H - .4)}L.55 ${f(H + .9)}L-.05 ${f(H + 1)}" stroke="#000" stroke-opacity=".22" stroke-width=".32" fill="none"/>
+    <path d="M-.85 ${f(H + 1.85)}q.85.35 1.7 0" stroke="#6B3B2E" stroke-width=".38" fill="none" opacity=".75"/>`;
   return `<g ${o.id?`id="${o.id}"`:""} class="lv-man${me ? " lv-you" : ""}" transform="translate(${x} ${y}) scale(${o.s||1})">
-    ${o.noShadow ? "" : `<ellipse cy="1" rx="9" ry="2.8" fill="rgba(0,0,0,.35)"/>`}
-    ${o.ring ? `<circle cy="-19" r="21" fill="none" stroke="${o.ring}" stroke-width="2.5" opacity=".9"/><circle cy="-19" r="21" fill="${o.ring}" opacity=".08"/>` : ""}
+    ${o.noShadow ? "" : `<ellipse cy="1" rx="8.6" ry="2.6" fill="rgba(0,0,0,.35)"/>`}
+    ${o.ring ? `<circle cy="-20" r="22" fill="none" stroke="${o.ring}" stroke-width="2.5" opacity=".9"/><circle cy="-20" r="22" fill="${o.ring}" opacity=".08"/>` : ""}
     <g class="lv-fig">
-    <g class="lv-legs${o.run ? " run" : ""}">${leg(-2.6, 1)}${leg(2.6, 2)}</g>
+    <g class="lv-legs${o.run ? " run" : ""}">${leg(-2.5, 1)}${leg(2.5, 2)}</g>
     <g class="lv-body">
-    <path d="M-6.6 -20h13.2l1.1 7.2h-6.2l-1.5-1.8-1.5 1.8h-6.2z" fill="${trim}" stroke="rgba(0,0,0,.22)" stroke-width=".5"/>
+    <path d="M-5.9 -20.8H5.9L7.1 -13.4H1.5L0 -15.4L-1.5 -13.4H-7.1Z" fill="${trim}"/><path d="M1.6 -20.8H5.9L7.1 -13.4H2.6Z" fill="#000" opacity=".12"/><path d="M0 -20.6V-15.6" stroke="#000" stroke-opacity=".12" stroke-width=".4"/>
     ${arm(-1, 1)}${arm(1, 2)}
-    <path d="M-7.4 -30.4q0-1.4 1.5-1.8l2.9-.9q3 1.7 6 0l2.9.9q1.5.4 1.5 1.8l-1.3 10.6h-12.2z" fill="${kit}" stroke="rgba(0,0,0,.3)" stroke-width=".6"/>
-    <path d="M2.4 -32.4l3.5 1.1q1.5.4 1.5 1.8l-1.3 10.6h-3.7z" fill="${shade}"/><path d="M-7.4 -30.4q0-1.4 1.5-1.8l.8-.2v12.6h-1z" fill="#fff" opacity=".07"/>
-    <rect x="-1.2" y="-34.3" width="2.4" height="2.8" rx=".8" fill="${skin}"/><path d="M-1.2 -32.6h2.4" stroke="#000" stroke-opacity=".15" stroke-width=".8"/>
-    ${o.back ? `<path d="M-2.6 -32.6h5.2" stroke="${trim}" stroke-width="1.1"/>` : `<path d="M-2.4 -32.7l2.4 2l2.4-2" fill="none" stroke="${trim}" stroke-width="1.1" stroke-linejoin="round"/>`}
-    <ellipse cx="-3.35" cy="${H + .2}" rx=".7" ry="1.05" fill="${skin}"/><ellipse cx="3.35" cy="${H + .2}" rx=".7" ry="1.05" fill="${skin}"/>
-    <ellipse cy="${H}" rx="3.3" ry="3.85" fill="${skin}"/><path d="M1.2 ${H - 3.6}a3.3 3.85 0 0 1 0 7.4a3.3 3.85 0 0 0 0-7.4z" fill="#000" opacity=".1"/>
+    <path d="M-6.9 -31.4Q-7.3 -32.7 -5.6 -33.1L-2.6 -33.8Q0 -32.4 2.6 -33.8L5.6 -33.1Q7.3 -32.7 6.9 -31.4L6.1 -28.3L5.3 -20.3H-5.3L-6.1 -28.3Z" fill="${kit}"/>
+    <path d="M2.2 -33.6L5.6 -33.1Q7.3 -32.7 6.9 -31.4L6.1 -28.3L5.3 -20.3H2.4Q3.4 -26 2.2 -33.6Z" fill="#000" opacity=".15"/>
+    <path d="M-6.9 -31.4Q-7.3 -32.7 -5.6 -33.1L-3.9 -33.5Q-5.6 -30 -5.1 -26.4L-6.1 -28.3Z" fill="#fff" opacity=".1"/>
+    <path d="M-3.4 -27.2Q-1.6 -26.2 0 -27M3.2 -24.4Q1.8 -23.4 .6 -24" stroke="#000" stroke-opacity=".1" stroke-width=".4" fill="none"/>
+    <path d="M-5.3 -20.3H5.3" stroke="#000" stroke-opacity=".2" stroke-width=".5"/>
+    <path d="M-1.55 -35.2H1.55L2 -33.2Q0 -32.2 -2 -33.2Z" fill="${skin}"/><path d="M.6 -35.2H1.55L2 -33.2Q1.2 -32.8.9 -32.9Z" fill="#000" opacity=".16"/>
+    ${o.back ? `<path d="M-2.6 -33.5Q0 -32.9 2.6 -33.5" stroke="${trim}" stroke-width=".9" fill="none"/>` : `<path d="M-2.4 -33.6L0 -31.7L2.4 -33.6" fill="none" stroke="${trim}" stroke-width=".9" stroke-linejoin="round"/>`}
+    <ellipse cx="-3.2" cy="${f(H - .2)}" rx=".62" ry="1" fill="${skin}"/><ellipse cx="3.2" cy="${f(H - .2)}" rx=".62" ry="1" fill="${skin}"/>
+    <path d="${head}" fill="${skin}"/><path d="M1.4 ${f(H - 3.9)}Q3.25 ${f(H - 3.4)} 3.15 ${f(H - .7)}Q3 ${f(H + 2.3)} 1.2 ${f(H + 3.2)}Q2.2 ${f(H + .6)} 1.4 ${f(H - 3.9)}Z" fill="#000" opacity=".12"/>
     ${face}${hair ? (hairD[style] ?? hairD.short) : ""}
-    ${o.num!=null ? `<text y="${o.back ? -21.6 : -22.4}" text-anchor="middle" font-size="${o.back ? 8 : 6}" font-weight="800" fill="${ink}" font-family="Barlow Condensed,sans-serif">${o.num}</text>` : ""}
+    ${o.num!=null ? `<text y="${o.back ? -23.4 : -24.4}" text-anchor="middle" font-size="${o.back ? 7.6 : 5.6}" font-weight="800" fill="${ink}" font-family="Barlow Condensed,sans-serif">${o.num}</text>` : ""}
     </g></g>
-    ${o.mark ? `<path class="lv-mark-you" d="M-4.5 -51h9l-4.5 5.5z" fill="#F5C542" stroke="rgba(0,0,0,.4)" stroke-width=".6"/>` : ""}
-    ${o.label ? `<text y="-46" text-anchor="middle" font-size="9" font-weight="700" fill="#FFE9A8" font-family="Barlow Condensed,sans-serif" letter-spacing=".5">${o.label}</text>` : ""}
+    ${o.mark ? `<path class="lv-mark-you" d="M-4.5 -53h9l-4.5 5.5z" fill="#F5C542" stroke="rgba(0,0,0,.4)" stroke-width=".6"/>` : ""}
+    ${o.label ? `<text y="-48" text-anchor="middle" font-size="9" font-weight="700" fill="#FFE9A8" font-family="Barlow Condensed,sans-serif" letter-spacing=".5">${o.label}</text>` : ""}
   </g>`;
 }
 // shading for the ball, shared by every scene
