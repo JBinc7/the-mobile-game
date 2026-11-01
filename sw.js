@@ -2,11 +2,11 @@
    The game's own files are fetched fresh when the network answers quickly (so updates arrive on their own),
    and come from the phone's copy when it doesn't. Fonts and icons never change, so they always come from the copy.
    Bump CACHE when files are renamed or removed, so phones drop the old copy. */
-const CACHE = "pyramid-v48";
+const CACHE = "pyramid-v49";
 const FONTS = ["barlow-condensed-latin-500", "barlow-condensed-latin-600", "barlow-condensed-latin-700", "barlow-condensed-latin-ext-500", "barlow-condensed-latin-ext-600", "barlow-condensed-latin-ext-700",
   "barlow-latin-400", "barlow-latin-500", "barlow-latin-600", "barlow-latin-700", "barlow-latin-ext-400", "barlow-latin-ext-500", "barlow-latin-ext-600", "barlow-latin-ext-700",
   "big-shoulders-display-latin", "big-shoulders-display-latin-ext"].map(f => `fonts/${f}.woff2`);
-const FILES = ["./", "index.html", "game.css", "game.js", "account.js", "matchcentre.js", "moments.js", "targets.js", "shop.js", "squads.js", "league.js", "cups.js", "europe.js", "tournament.js", "drills.js", "labgames.js", "p90.js", "lab.js", "crests.js", "manifest.webmanifest", "fonts/fonts.css",
+const FILES = ["./", "index.html", "game.css", "game.js", "account.js", "matchcentre.js", "moments.js", "targets.js", "shop.js", "squads.js", "league.js", "cups.js", "europe.js", "tournament.js", "drills.js", "labgames.js", "p90.js", "lab.js", "crests.js", "g3d.js", "vendor/three.min.js", "manifest.webmanifest", "fonts/fonts.css",
   "icons/favicon-64.png", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png", ...FONTS];
 
 self.addEventListener("install", e => {

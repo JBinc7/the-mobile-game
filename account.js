@@ -6,7 +6,7 @@
    calls Account.boot(start) once it has loaded, and this file calls back into the game (render, exportBackup…)
    only after that. */
 const Account = (() => {
-  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.47";
+  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.48";
   const OLD = {career:"efp-career-v1", hall:"efp-hall-v1"};   // where saves lived before accounts existed
   const $id = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -202,6 +202,9 @@ const Account = (() => {
       </section>
       ${devOn() ? `<section><h3>Development</h3><p class="hint">Only on this phone: try every mini-game in one place, at any difficulty. Nothing you play there affects your career or your coins.</p>
         <div class="row"><button type="button" class="btn small primary" data-acct="lab">Open the mini-game lab</button><button type="button" class="btn small" data-acct="dev-off">Hide this section</button></div></section>` : ""}
+      ${typeof G3!=="undefined" && G3.glOK() ? `<section><h3>Graphics</h3>
+        <label class="chk"><input type="checkbox" data-acct="g3" ${G3.on() ? "checked" : ""}> 3D graphics: your player on the home screen, and shots and penalties</label>
+        <p class="hint">Turn it off to save battery on an older phone.</p></section>` : ""}
       <section><h3>Get the app</h3><div data-install>${installHTML()}</div></section>
       <details class="dlg-more"><summary>Change password</summary>
         <form id="pwForm" class="acct-form">
@@ -235,6 +238,7 @@ const Account = (() => {
     if (a==="mode"){ mode = b.dataset.v; gateNote = ""; nameVal = $id("a-name")?.value || nameVal; gate(); }
     else if (a==="pick"){ nameVal = b.dataset.v; gateNote = ""; gate(); $id("a-pw")?.focus(); }
     else if (a==="open") openMenu();
+    else if (a==="g3") G3.set(b.checked);
     else if (a==="close") closeMenu();
     else if (a==="signout") signOut();
     else if (a==="update"){ b.textContent = "Checking…"; try{ const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); }catch(err){} location.reload(); }

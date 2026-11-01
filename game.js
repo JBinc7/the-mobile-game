@@ -798,6 +798,7 @@ function portrait(pl, club, num){
   <path d="M44 24 L4 140 L84 140Z M156 24 L196 140 L116 140Z" fill="#FFF1C2" opacity=".045"/>
   ${bokeh}${lights(52)}${lights(148)}
   <ellipse cx="100" cy="190" rx="92" ry="10" fill="#000" opacity=".35"/>
+  <g class="pt-fig">
   <path d="M17 162 C16 170 15 180 14 190 L40 190 L42 170Z" fill="${skin}"/><path d="M183 162 C184 170 185 180 186 190 L160 190 L158 170Z" fill="${skin}"/>
   <path d="M17 162 C16 170 15 180 14 190 L22 190 C22 178 23 170 26 164Z M183 162 C184 170 185 180 186 190 L178 190 C178 178 177 170 174 164Z" fill="#000" opacity=".22"/>
   <path d="M83 92 C83 102 80 108.5 70 114.5 L130 114.5 C120 108.5 117 102 117 92Z" fill="${skin}"/><path d="M83 92 C83 102 80 108.5 70 114.5 L130 114.5 C120 108.5 117 102 117 92Z" fill="url(#${id}nk2)"/>
@@ -831,6 +832,7 @@ function portrait(pl, club, num){
   <path d="M74.2 74 C74.6 81 76.4 87 79.5 91.5 M125.8 74 C125.4 81 123.6 87 120.5 91.5" stroke="#000" stroke-opacity=".14" stroke-width="1.6" fill="none"/>
   <path d="M30 125 C40 116 58 114 75 112 M170 125 C160 116 142 114 125 112" stroke="#FFE9B0" stroke-opacity=".6" stroke-width="1.6" fill="none" stroke-linecap="round"/>
   <path d="M17.5 160 C19 146 23 133 30 125 M182.5 160 C181 146 177 133 170 125" stroke="#FFE9B0" stroke-opacity=".25" stroke-width="1.2" fill="none"/>
+  </g>
   </g>
   </svg>`;
 }
@@ -2965,6 +2967,7 @@ const TAB_IC = (()=>{ const w = d => `<svg viewBox="0 0 24 24" fill="none" strok
 let showBoard = false;
 function render(){
   renderInner(); flash = "";
+  if (typeof G3!=="undefined" && G3.ready()) G3.cardNow();
   document.documentElement.dataset.window = (!showBoard && S && !S.newing) ? (S.phase==="winter" ? "winter" : S.phase==="tournament" ? "tourney" : S.phase==="window" ? "summer" : "") : "";
 }
 function renderInner(){

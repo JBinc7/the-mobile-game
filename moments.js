@@ -715,6 +715,18 @@ function lvKeeper(st, fin){
   return {name, r:Math.round(r), q:clamp(.5 + (r - 75)/80 + (r - fin)/80, .1, .88)};
 }
 // a tag on the goal saying who's in it and how good he is
+// who's in the 3D shot (g3d.js): you in your kit, their keeper in his, their players in a free kick's wall
+function lv3dLooks(st, kit, v){
+  const you = typeof S!=="undefined" && S && S.player && !S.newing ? S.player : null;
+  const tr = c => LV_TRIM[c] || (lvLight(c) ? "#1F2937" : "#FFFFFF");
+  const gk = ["#65A30D", "#F97316", "#111827", "#7C3AED"].find(c=>!lvNear(c, kit.them) && !lvNear(c, kit.us)) || "#65A30D";
+  const R = seeded(hashStr(String(st.f && st.f.opp || "x")));
+  const them = n => ({skin:LV_SKIN[Math.floor(R()*LV_SKIN.length)], hair:["short","buzz","curly","none"][Math.floor(R()*4)], hairCol:LV_HAIR[Math.floor(R()*LV_HAIR.length)], c1:kit.them, c2:tr(kit.them), num:n, name:""});
+  return {v, crowd:kit.us,
+    me:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:10, name:"You"}, kit.us, tr(kit.us), {shorts:tr(kit.us)==="#FFFFFF" ? "#F4F4F5" : tr(kit.us), socks:kit.us}),
+    keeper:{...them(1), c1:gk, c2:lvLight(gk) ? "#111827" : "#F4F4F5", gk:true, gloves:"#C8F04A", shorts:"#111827", socks:gk},
+    wall:them(4)};
+}
 const lvKeeperTag = GK => `<span class="lv-gk ${GK.r>=85 ? "elite" : GK.r<65 ? "weak" : ""}" aria-label="Their keeper${GK.name ? `, ${esc(GK.name)}` : ""}, rated ${GK.r}">GK${GK.name ? ` · ${esc(GK.name)}` : ""} <b>${GK.r}</b></span>`;
 // the shot itself, also used at the end of a take-on and an attacking move: resolves {goal, big, small} or "skip"
 function lvShotCore(st, m, v, head, title, o = {}){
@@ -728,6 +740,7 @@ function lvShotCore(st, m, v, head, title, o = {}){
     lvSkippable(res);
     let done = false, pts = [], p = 0, t0 = 0;
     const stage = lv$(".lv-stage");
+    const g3 = typeof G3!=="undefined" ? G3.shot(stage, lv3dLooks(st, kit, v)) : null;   // in 3D, when it's on
     // as the old shot: put your finger on the ball and the power starts to build and swing; flick while it's in the green
     // the power locks the moment the flick starts, so you start it in the green
     let locked = false;
@@ -758,12 +771,16 @@ function lvShotCore(st, m, v, head, title, o = {}){
       if (goal && !green && Math.random()>m.q){ goal = false; tip = true; }   // in a match that's going against you, chances are harder
       const wx = wall ? clamp(x, 128, 172) : x, ty = wall ? 140 : y;
       const [kx, ky, rot] = lvKeeperTo(clamp(wx, 36, 264), clamp(ty, 30, 116), !goal && !over && !wide && !wood && !wall ? "save" : green ? "wrong" : "near", kcol);
-      await lvStrike(st);
-      await Promise.all([
-        lvFly("#lvBall", [150, 166], [clamp(wx, -10, 310), ty], green ? 330 : short ? 700 - p*300 : 460, {s0:1, s1:wall ? .85 : .6, h:over ? 26 : y<72 ? 14 : 4, curve:(col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6), spin:green ? 2.4 : 1.4}),
-        lvTween(330 + (1 - kq)*110, k=>{ const q2 = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q2, 84 + (ky-84)*q2, rot*q2, 1 + .06*q2); })
-      ]);
-      if (goal){ lvRipple(wx, ty); await lvWait(160); }
+      const ms = green ? 330 : short ? 700 - p*300 : 460, h = over ? 26 : y<72 ? 14 : 4, curve = (col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6), kms = 330 + (1 - kq)*110;
+      if (g3) await g3.play({wx:clamp(wx, -10, 310), ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall});
+      else {
+        await lvStrike(st);
+        await Promise.all([
+          lvFly("#lvBall", [150, 166], [clamp(wx, -10, 310), ty], ms, {s0:1, s1:wall ? .85 : .6, h, curve, spin:green ? 2.4 : 1.4}),
+          lvTween(kms, k=>{ const q2 = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q2, 84 + (ky-84)*q2, rot*q2, 1 + .06*q2); })
+        ]);
+        if (goal){ lvRipple(wx, ty); await lvWait(160); }
+      }
       res({goal, big: goal ? "Goal!" : over ? "Over the bar" : wide ? "Wide" : wood ? "Off the woodwork" : wall ? "Hit the wall" : "Saved",
         small: green ? "Hit it in the green" : goal ? (kcol===col ? "Past the keeper's hands" : "Sent him the wrong way") : over ? "Too much power: flick in the green" : wide ? "Flick it straighter"
           : wood ? "Inches away" : wall ? "Not enough on it to clear the wall" : tip ? "Fingertip save" : short ? "Not enough power: wait for the green" : "Too much on it: he got a hand to it"});
