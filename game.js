@@ -2734,7 +2734,8 @@ function statsTab(part){
       <div class="total big"><div class="label">Assists</div><div class="v">${total.a}</div></div>
       ${showCS?`<div class="total big"><div class="label">Clean sheets</div><div class="v">${total.cs}</div></div>`:""}
       <div class="total"><div class="label">G+A a game</div><div class="v">${per90}</div></div>
-      <div class="total"><div class="label">Minutes a season</div><div class="v">${minsAvg}</div></div>
+      <div class="total"><div class="label">Minutes played</div><div class="v">${S.history.reduce((n,h)=>n + (h.tot.mins||0), 0).toLocaleString("en-GB")}</div></div>
+      <div class="total"><div class="label">Share of minutes</div><div class="v">${minsAvg}</div></div>
       <div class="total"><div class="label">Avg rating</div><div class="v">${(r => r ? r.toFixed(2) : "–")(avgRating(S.history.reduce((t,h)=>({rs:t.rs + (h.tot.rs||0), rn:t.rn + (h.tot.rn||0)}), {rs:0, rn:0})))}</div></div>
       <div class="total"><div class="label">Player of the Match</div><div class="v">${S.history.reduce((n,h)=>n + (h.tot.potm||0), 0)}</div></div>
       <div class="total"><div class="label">Clubs</div><div class="v">${clubs.length}</div></div>
@@ -2842,7 +2843,7 @@ function renderCareer(){
   S.notes ||= []; S.notesSeen ??= 0;
   const unread = S.notes.length - S.notesSeen;
   if (!["season","inbox","stats","club","training","cabinet","legacy"].includes(tab)) tab = {review:"inbox", leagues:"club", career:"stats"}[tab] || "season";
-  const tabs = [["season","Season","Season"],["inbox","Inbox","Inbox"],["stats","Statistics","Stats"],["club","Club & leagues","Club"],["training","Training","Training"],["cabinet","Trophies","Trophies"],["legacy","Legacy","Legacy"]];
+  const tabs = [["season","Season","Season"],["inbox","Inbox","Inbox"],["stats","Statistics","Stats"],["club","Club & leagues","Club"],["training","Training","Training"],["lab","Mini-game lab","Lab"],["cabinet","Trophies","Trophies"],["legacy","Legacy","Legacy"]];
   const body = tab==="season" ? action : tab==="inbox" ? inboxPanel() : tab==="stats" ? statsBody() : tab==="club" ? clubBody(t) : tab==="training" ? trainingBody() : tab==="legacy" ? boardPanel() : cabinetPanel();
   if (tab==="inbox" && unread>0){ setTimeout(()=>{ S.notesSeen = S.notes.length; save(); }, 0); }
   $("#app").innerHTML = `

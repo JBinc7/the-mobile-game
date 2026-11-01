@@ -195,8 +195,17 @@ function mcFormLabel(v){ return !S.cond.form.length ? "No games yet" : v>=7.4 ? 
 function mcStartChance(f){
   const c = S.cond, our = S.mc.club;
   let p = selectShare(our) * logistic((mcOvr() - strOf(our))/3.5 + 1.2) + (mcFormAvg()-6.6)*.25 + (mcTrainImp()-.5)*.4 - (c.fat>75 ? .25 : c.fat>60 ? .1 : 0) + (f && f.cup && !f.big ? .1 : 0);
+  // a youngster who's been good off the bench earns the odd start
+  if (S.age<=20 && c.form.length>=2 && mcFormAvg()>=7.1) p += .12;
   if (S.loan) p = Math.max(p, .8);
   return clamp(p, .02, .97);
+}
+// your minutes this season: the first half (S.h1) and the weeks played so far
+function mcSeasonMins(){
+  const o = {mins:0, apps:0, starts:0};
+  if (S.h1 && S.h1.comps) Object.values(S.h1.comps).forEach(c=>{ o.mins += c.mins || 0; o.apps += c.apps || 0; o.starts += c.starts || 0; });
+  if (S.mc && S.mc.key===mcKey() && !(S.h1 && S.mc.half===1)) S.mc.weeks.forEach(w=>w.fx.forEach(f=>{ if (f.res && f.me && f.me.mins){ o.mins += f.me.mins; o.apps++; if (f.me.st==="start") o.starts++; } }));
+  return o;
 }
 function mcStartLabel(p){ return p>=.85 ? "Nailed-on starter" : p>=.6 ? "Usually starts" : p>=.35 ? "In and out of the side" : p>=.15 ? "Mostly on the bench" : "Out of the picture"; }
 function mcHurt(w){
@@ -229,9 +238,18 @@ function mcSelect(f, w){
   const inj = mcInjury(mcFrac(w));
   if (inj) return {st:"inj", mins:0, why:inj.name};
   if (w < S.mc.intlTo) return {st:"intl", mins:0};
-  if (Math.random() < mcStartChance(f)) return {st:"start", mins: S.cond.fat>85 || Math.random()<.18 ? 60 + Math.floor(Math.random()*25) : 90};
-  // keepers almost never come off the bench
-  return Math.random() < (S.player.pos==="GK" ? .03 : .55 + (mcTrainImp()-.5)*.4) ? {st:"sub", mins:10 + Math.floor(Math.random()*30)} : {st:"bench", mins:0};
+  const young = S.age<=19, form = mcFormAvg(), fat = S.cond.fat;
+  if (Math.random() < mcStartChance(f)){
+    // the more tired you are, the earlier you come off (and the fewer moments come your way); now and then a tactical change
+    let mins = 90;
+    if (fat>55) mins = Math.round(90 - (fat - 55)*1.15 - Math.random()*8);
+    else if (Math.random()<.15) mins = 62 + Math.floor(Math.random()*24);
+    if (S.player.pos==="GK") mins = 90;   // keepers play the whole game
+    return {st:"start", mins:clamp(mins, 46, 90)};
+  }
+  // proving yourself: teenagers get plenty of cameos, and good form earns longer ones. Keepers almost never come off the bench
+  const subP = S.player.pos==="GK" ? .03 : clamp(.55 + (mcTrainImp()-.5)*.4 + (young ? .25 : 0) + (form - 6.6)*.1, .1, .92);
+  return Math.random() < subP ? {st:"sub", mins:clamp(Math.round(10 + Math.random()*25 + (form - 6.6)*8 + (young ? 5 : 0)), 5, 45)} : {st:"bench", mins:0};
 }
 function mcPoisson(l){ let k = 0, p = 1; const L = Math.exp(-l); do { k++; p *= Math.random(); } while (p>L); return k-1; }
 function mcTieOn(f, r){
@@ -383,7 +401,7 @@ function mcFinishHalf(){
     const o = comps[f.code] ||= blank(f.code);
     o.of += 90;
     if (!f.me.mins) return;
-    o.apps++; o.g += f.me.g; o.a += f.me.a; if (f.me.cs) o.cs++; o.mins += f.me.mins;
+    o.apps++; o.g += f.me.g; o.a += f.me.a; if (f.me.cs) o.cs++; o.mins += f.me.mins; if (f.me.st==="start") o.starts = (o.starts || 0) + 1;
     if (f.me.r!=null){ o.rs = +(o.rs + f.me.r).toFixed(1); o.rn++; } if (f.potm) o.potm++;
   }));
   M.finished = true;
@@ -494,6 +512,7 @@ function mcPanel(){
       ${stat("Sharp", Math.round(c.sharp), c.sharp>=75 ? "Match sharp" : c.sharp>=50 ? "Getting there" : "Rusty", c.sharp)}
       ${stat("Fitness", Math.round(100-c.fat), c.fat>75 ? "Exhausted" : c.fat>55 ? "Tired" : "Fresh", 100-c.fat, "trust")}${stat("Picked", Math.round(pS*100)+"%", mcStartLabel(pS), pS*100)}
     </div>
+    ${(m => `<p class="mc-mins">Minutes this season: <b>${m.mins.toLocaleString("en-GB")}</b> in ${m.apps} game${m.apps===1 ? "" : "s"}${m.apps ? ` · ${m.starts} start${m.starts===1 ? "" : "s"}, ${m.apps - m.starts} off the bench` : ""}</p>`)(mcSeasonMins())}
     ${M.done ? "" : `<div class="mc-train">
       <div class="mc-train-h"><span class="label">Training</span>
         ${T.focus!=="rest" ? `<div class="seg2 mc-int" role="group" aria-label="Intensity"><button type="button" data-act="mc-hard" data-k="0" aria-pressed="${!T.hard}">Normal</button><button type="button" data-act="mc-hard" data-k="1" aria-pressed="${!!T.hard}">Hard</button></div>` : ""}

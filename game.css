@@ -1304,3 +1304,10 @@ small.boot{display:inline-flex;align-items:center}
 .lv-pow.miss::after{color:#FCA5A5}
 .lv-pow.hit .lv-bar{box-shadow:0 0 18px rgba(74,222,128,.9)}
 .lv-flick .lv-fhint{bottom:auto;top:61%;font-size:12px}
+
+/* minutes: under the match centre's numbers, and on the full-time card */
+.mc-mins{margin:10px 2px 0;font-size:14px;color:var(--muted)}
+.mc-mins b{color:var(--ink);font-family:var(--f-display);font-size:18px}
+.lv-mins{margin:-4px 0 6px;font-size:14px;color:rgba(242,246,243,.75)}
+.lv-mins b{color:#FFE9A8}
+.lv-pow.locked .lv-bar{outline:2px solid #FFE9A8;outline-offset:1px}

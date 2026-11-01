@@ -310,7 +310,8 @@ function lvPlan(f, X){
   const pos = S.player.pos, me = f.me, P = LV_POOL[pos] || LV_POOL.CM, dom = X.lf/(X.lf + X.la), tf = X.tf || 0;
   const pAtt = !P.att.length ? 0 : !P.def.length ? 1 : clamp((MC_ATT[pos] ?? .5) + (dom-.5)*.7, .1, .92);
   const edge = pos==="GK" ? (.5-dom)*5 - tf*.6 : (dom-.5)*5 + tf*.9;
-  const n = me.st==="sub" ? (me.mins>=30 ? 2 : 1) : clamp(Math.round(4 + edge + Math.random() - .5), 2, 6), bag = {att:[], def:[]};
+  // fewer moments the less you play: a tired starter subbed on the hour gets about two-thirds of a full game's
+  const n = me.st==="sub" ? (me.mins>=30 ? 2 : 1) : clamp(Math.round((4 + edge + Math.random() - .5)*Math.min(1, me.mins/86)), 1, 6), bag = {att:[], def:[]};
   // every match a bit different: within a match no mini-game repeats until the pool's used up, and across matches
   // the ones you've had lately are less likely (S.lvRecent remembers your last dozen or so)
   const recent = (typeof S!=="undefined" && S && S.lvRecent) || [];
@@ -483,7 +484,7 @@ async function lvPlayMatch(f, w){
         <div class="lv-teams"><span>${clubBadge(home, 34)}${esc(home)}</span><i>v</i><span>${clubBadge(away, 34)}${esc(away)}</span></div>
         ${sqLineups(f)}
         <div class="lv-forms">${[[S.mc.club, "Your team"], [f.opp, f.opp]].map(([n, l])=>`<div class="lv-form"><span>${esc(l)}</span>${mcFormPills(mcTeamForm(n).L)}</div>`).join("")}</div>
-        <p>${me.st==="start" ? "You're in the starting line-up." : `You start on the bench and come on around the ${ord(90-me.mins)} minute.`}
+        <p>${me.st==="start" ? `You're in the starting line-up.${me.mins<90 ? (S.cond.fat>55 ? ` You're tired, so expect to come off around the ${ord(me.mins)} minute.` : ` The manager plans to bring you off around the ${ord(me.mins)} minute.`) : ""}` : `You start on the bench and come on around the ${ord(90-me.mins)} minute.`}
           ${plan.list.length} key moment${plan.list.length===1?"":"s"} will come your way${me.st!=="start" ? "" : plan.list.length>=5 ? ": a big chance to shine" : plan.list.length<=3 ? ": a tough one, make them count" : ""}.</p>
         <div class="lv-row"><button type="button" class="btn primary big" data-lv="play" data-lv-focus>Play key moments</button><button type="button" class="btn" data-lv="sim">Sim the match</button></div>
         <button type="button" class="lv-skip" data-lv="help" style="justify-self:start">How to play</button>
@@ -563,6 +564,8 @@ async function lvShootout(st){
     <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Full time</button></div>`);
   return won ? "won" : "lost";
 }
+// how long you played: "90 minutes", "Started, off on 68' (68 minutes)", "On at 71' (19 minutes)"
+const lvMinsLine = me => me.st==="start" ? (me.mins>=90 ? "Played the full <b>90 minutes</b>" : `Started, off on ${me.mins}' · <b>${me.mins} minutes</b>`) : `On at ${90 - me.mins}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>`;
 async function lvFullTime(st, home, away){
   const f = st.f, me = f.me, [l, r] = f.home || f.neutral ? [f.res.gf, f.res.ga] : [f.res.ga, f.res.gf];
   const bits = [me.g ? `${me.g} goal${me.g>1?"s":""}` : "", me.a ? `${me.a} assist${me.a>1?"s":""}` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : ""].filter(Boolean);
@@ -571,6 +574,7 @@ async function lvFullTime(st, home, away){
       <div class="lv-ft"><span>${clubBadge(home, 44)}<em>${esc(home)}</em></span><b>${l}–${r}</b><span>${clubBadge(away, 44)}<em>${esc(away)}</em></span></div>
       ${sqScorers(f)}
       <div class="lv-rate"><span class="label">Your rating</span><b class="${me.r>=7.5?"hi":me.r<6?"lo":""}">${me.r ?? "–"}</b><span>${bits.join(" · ") || (me.mins ? "No goal involvement" : "")}</span></div>
+      ${me.mins ? `<p class="lv-mins">${lvMinsLine(me)}</p>` : ""}
       ${me.r!=null ? `<p class="lv-rate-sub"><b>${mcRateLabel(me.r)}.</b> Season average <b>${mcSeasonRating().toFixed(2)}</b>.</p>` : ""}
       ${f.potm ? `<div class="lv-potm">★ Player of the Match</div>` : f.potmBy ? `<p class="lv-potm-by">Player of the Match: <b>${esc(f.potmBy.n)}</b> (${esc(f.potmBy.c)}), ${f.potmBy.r.toFixed(1)}</p>` : ""}
       ${f.coins!=null ? (()=>{ const C = lvCoins(f); return `<div class="lv-coins"><i class="coin" aria-hidden="true"></i><b>${C.total>=0?"+":""}${C.total}</b><span>${C.parts.map(([l,n])=>`${esc(l)} ${n>=0?"+":""}${n}`).join(" · ")}</span></div>`; })()
@@ -634,13 +638,15 @@ function lvShotCore(st, m, v, head, title, o = {}){
     let done = false, pts = [], p = 0, t0 = 0;
     const stage = lv$(".lv-stage");
     // as the old shot: put your finger on the ball and the power starts to build and swing; flick while it's in the green
-    const startBar = () => { t0 = performance.now(); lvLoop(now=>{ if (done || !t0) return false; p = (1 - Math.cos(2*Math.PI*(now - t0)/per))/2; lvBarSet(p, lo, hi); }); };
+    // the power locks the moment the flick starts, so you start it in the green
+    let locked = false;
+    const startBar = () => { t0 = performance.now(); locked = false; lv$(".lv-pow")?.classList.remove("locked"); lvLoop(now=>{ if (done || !t0 || locked) return false; p = (1 - Math.cos(2*Math.PI*(now - t0)/per))/2; lvBarSet(p, lo, hi); }); };
     lvBarSet(0, lo, hi);
     lvDrag(stage, {from:[150, 166], ok:()=>!done, line:q=>q,
       start:q=>{ pts = [q]; startBar(); const h = lv$(".lv-fhint"); if (h) h.textContent = "Flick it in the green"; },
       cancel:()=>{ t0 = 0; p = 0; lvBarSet(0, lo, hi); },
       // it goes the moment the flick's long enough: no waiting for your finger to lift
-      move:q=>{ pts.push(q); if (!done && pts[0][1] - q[1]>=55) take(q); },
+      move:q=>{ pts.push(q); if (!locked && Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1])>=8){ locked = true; lv$(".lv-pow")?.classList.add("locked"); } if (!done && pts[0][1] - q[1]>=55) take(q); },
       end:(q, d, tap)=>{ if (done) return; if (tap || pts.length<2 || pts[0][1] - q[1]<26){ pts = []; t0 = 0; p = 0; cancelAnimationFrame(lvRaf); lvBarSet(0, lo, hi); const h = lv$(".lv-fhint"); if (h){ h.textContent = "Flick up, towards the goal"; h.classList.remove("pop"); void h.offsetWidth; h.classList.add("pop"); } return; } take(q); }});
     const take = async q => {
       done = true; cancelAnimationFrame(lvRaf); lv$(".lv-fhint")?.remove();

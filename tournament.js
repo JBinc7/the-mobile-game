@@ -248,6 +248,7 @@ async function tPlayLive(P, f){
       <div class="lv-eye">Full time${f.res.pens ? ` · ${f.res.pens==="won" ? "won" : "lost"} on penalties` : ""} · ${esc(f.round)}</div>
       <div class="lv-ft"><span>${clubBadge(home, 44)}<em>${esc(home)}</em></span><b>${l}–${r}</b><span>${clubBadge(away, 44)}<em>${esc(away)}</em></span></div>
       ${me.mins ? `<div class="lv-rate"><span class="label">Your rating</span><b class="${me.r>=7.5 ? "hi" : me.r<6 ? "lo" : ""}">${me.r}</b><span>${bits.join(" · ") || "No goal involvement"}</span></div>` : ""}
+      ${me.mins ? `<p class="lv-mins">${lvMinsLine(me)}</p>` : ""}
       ${f.coins!=null ? `<div class="lv-coins"><i class="coin" aria-hidden="true"></i><b>${f.coins>=0 ? "+" : ""}${f.coins}</b><span>${lvCoins(f).parts.map(([t, n])=>`${esc(t)} ${n>=0 ? "+" : ""}${n}`).join(" · ")}</span></div>` : ""}
       ${next ? `<p class="lv-potm-by"><b>${next}</b></p>` : ""}
       <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Continue</button></div>`);

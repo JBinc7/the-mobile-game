@@ -7,7 +7,7 @@
 const LAB_NEW = [];
 // the arcade: games for the training ground (drills.js), not matches. Everything else is a match moment now (LV_LABM)
 const LG_ARCADE = ["keepy", "crossbar", "targets", "slalom", "flickups", "golf", "rondo"];
-const lgAdd = (g, help) => { LAB_NEW.push({help:`lg_${g.id}`, ...g, cat:LG_ARCADE.includes(g.id) ? "arcade" : g.id==="shootout" ? "match" : LV_LABM[g.id] ? "match" : g.cat || "new"}); LV_HELP[`lg_${g.id}`] = help; };
+const lgAdd = (g, help) => { LAB_NEW.push({help:`lg_${g.id}`, ...g, cat:LG_ARCADE.includes(g.id) ? "arcade" : g.id==="shootout" ? "match" : LV_LABM[g.id] ? "match" : "new"}); LV_HELP[`lg_${g.id}`] = help; };
 
 /* ---------- shared pieces ---------- */
 // a new game's screen: the lab's scoreboard, the title, how to play in a line, the stage and its controls
@@ -1352,6 +1352,66 @@ function lgFlickPen(st){
 lgDragAdd({id:"flickpen", t:"Flick penalty", d:"Flick the ball at the goal: the way you flick is where it goes, how fast is how high.", ic:"spot", run:lgFlickPen},
   {t:"Flick penalty", steps:["A penalty, taken with one flick of your finger.", "<b>Flick up from the ball</b> towards the goal. The direction of your flick is where it goes; the <b>faster</b> you flick, the <b>higher</b> it goes. Too fast and it's over the bar.",
     "The keeper dives as you strike, so the top corners are safest. Flick slowly down the middle for a Panenka: brilliant if he dives, embarrassing if he doesn't."]});
+
+/* ---------- D8b. Finesse shot: curl it round the keeper into the far corner ---------- */
+// hold the ball and the power builds, as in a match shot; swipe up with a curve and the ball bends the way your finger
+// does. In the green, curled enough and inside the post, it's in: the keeper's covering the near side
+function lgFinesse(st){
+  const kit = lvKits(st), e = st.lab.ease; let got = 0;
+  const one = k => new Promise(res=>{
+    st.lab.tally = `${got} of 5`;
+    const side = Math.random()<.5 ? "l" : "r", zone = clamp(.13*(1 + e*1.3), .07, .22), mid = .7, lo = mid - zone/2, hi = mid + zone/2, per = 1500, need = clamp(14*(1 - e*.5), 9, 18);
+    lgShow(st, "Finesse shot", `Shot ${k+1} of 5. He's covering the ${side==="l" ? "right" : "left"} side: hold the ball, then swipe up with a curve to bend it into the far ${side==="l" ? "left" : "right"} corner, with the power in the green.`,
+      lvGoalSvg(kit.them, null, false) + lgHud(got, "scored") + `<div class="lv-pow"><span class="lv-pow-l">Power</span>${lvBarHTML(mid, zone)}</div>`);
+    const fin = r => { done = true; res(r); }; lvSkippable(fin);
+    const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
+    svg.insertAdjacentHTML("beforeend", `<path id="lgSw" fill="none" stroke="#F5C542" stroke-width="3" stroke-linecap="round" opacity=".9"/>`);
+    // the keeper starts on the near side, a step off his line
+    const K0 = [side==="l" ? 178 : 122, 84]; lvMove("#lvKp", K0[0], K0[1]);
+    let done = false, down = false, pts = [], t0 = 0, p = 0, locked = false;
+    const draw = () => lv$("#lgSw")?.setAttribute("d", pts.length ? "M" + pts.map(q=>q.map(v=>v.toFixed(1)).join(" ")).join("L") : "");
+    stage.addEventListener("pointerdown", ev=>{ if (done) return; ev.preventDefault(); stage.setPointerCapture?.(ev.pointerId); down = true; pts = [lgAt(ev, stage)]; draw(); t0 = performance.now();
+      locked = false; lvLoop(now=>{ if (done || !down || locked) return false; p = (1 - Math.cos(2*Math.PI*(now - t0)/per))/2; lvBarSet(p, lo, hi); }); });
+    // the power locks the moment the swipe starts: start it in the green, then take your time over the curl
+    stage.addEventListener("pointermove", ev=>{ if (!down || done) return; const q = lgAt(ev, stage), l = pts[pts.length - 1]; if (!locked && Math.hypot(q[0] - pts[0][0], q[1] - pts[0][1])>=8){ locked = true; lv$(".lv-pow")?.classList.add("locked"); } if (Math.hypot(q[0] - l[0], q[1] - l[1])>2.5){ pts.push(q); draw(); } });
+    stage.addEventListener("pointerup", ()=>{ if (!down || done) return; down = false; shoot(); });
+    stage.addEventListener("pointercancel", ()=>{ down = false; pts = []; draw(); lvBarSet(0, lo, hi); });
+    const shoot = async () => {
+      const S0 = pts[0], S1 = pts[pts.length - 1];
+      if (pts.length<4 || S0[1] - S1[1]<35){ pts = []; draw(); locked = false; lv$(".lv-pow")?.classList.remove("locked"); cancelAnimationFrame(lvRaf); lvBarSet(0, lo, hi); lgPop("Hold, then swipe up with a curve", false, 50, 62); return; }
+      done = true; cancelAnimationFrame(lvRaf);
+      // your swipe from the ball: where it ends is where it's going, how far it bows out is the curl (and which way)
+      const A = [150, 166], o = [A[0] - S0[0], A[1] - S0[1]], B = [clamp(S1[0] + o[0], -20, 320), clamp(S1[1] + o[1], 10, 150)];
+      let L = 0; const acc = pts.slice(1).map((q, i)=>L += Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]));
+      const mi = Math.max(0, acc.findIndex(x=>x>=L/2)), M = [pts[mi + 1][0] + o[0], pts[mi + 1][1] + o[1]];
+      const dev = [M[0] - (A[0] + B[0])/2, M[1] - (A[1] + B[1])/2], C = [(A[0] + B[0])/2 + dev[0]*2.4, (A[1] + B[1])/2 + dev[1]*2.4];
+      // it curls the right way when the bow is away from the corner it's heading for (round the outside of the keeper)
+      const curl = Math.abs(dev[0]), rightWay = side==="l" ? dev[0]>0 : dev[0]<0, far = side==="l" ? B[0]<112 : B[0]>188;
+      const green = p>=lo && p<=hi, wide = B[0]<30 || B[0]>270, over = B[1]<20 || p>hi + .07, post = !wide && !over && (B[0]<34 || B[0]>266);
+      const goal = green && far && rightWay && curl>=need && !wide && !over && !post;
+      const pw = lv$(".lv-pow"); if (pw){ pw.dataset.res = green ? "Perfect strike" : p<lo ? "Not enough" : "Too much"; pw.classList.add(green ? "hit" : "miss"); }
+      const Pq = u => { const q = 1 - u; return [q*q*A[0] + 2*q*u*C[0] + u*u*B[0], q*q*A[1] + 2*q*u*C[1] + u*u*B[1]]; };
+      // the keeper dives for it: he gets there if it didn't bend enough
+      const reach = !goal && !wide && !over && !post;
+      lv$("#lgSw").setAttribute("opacity", ".25");
+      await lvStrike(st); if (st.lab.quit) return;
+      const KT = reach ? [clamp(B[0], 80, 220), clamp(B[1], 40, 110)] : [K0[0] + (side==="l" ? -46 : 46), 92];
+      await Promise.all([lvTween(green ? 560 : 760, kk=>{ const u = lvEaseOut(kk), [x, y] = Pq(u); lvBallAt("#lvBall", x, over ? y - 30*u : y, 1 - .42*u, 0, kk*900, kk<1); }),
+        lvTween(380, kk=>{ const q = lvEaseOut(kk); lvMove("#lvKp", K0[0] + (KT[0] - K0[0])*q, K0[1] + (KT[1] - K0[1])*q, (KT[0]<K0[0] ? -1 : 1)*58*q, 1 + .06*q); })]);
+      if (goal){ got++; lgSetHud(got); lvRipple(B[0], B[1]); await lvWait(200); return fin({ok:true, big:"Finesse!", small:"Curled round him into the far corner"}); }
+      fin({ok:false, big:wide ? "Wide" : over ? "Over the bar" : post ? "Off the post" : reach ? "Saved" : "Saved",
+        small:wide ? "Bend it back inside the post" : over ? "Too much power" : post ? "Inches away" : !green ? (p<lo ? "Not enough power: wait for the green" : "Too much on it") : !far ? `Aim for the far ${side==="l" ? "left" : "right"} corner` : curl<need ? "Not enough curl: bow your swipe out more" : !rightWay ? "Curl it the other way, round the outside of him" : "He got across to it"});
+    };
+  });
+  return (async ()=>{
+    if (st.lab.once) return one(0);
+    for (let k=0;k<5;k++){ const r = await one(k); if (r==="skip") return r; st.lab.tally = `${got} of 5`; await lgFlash(r.ok, r.big, r.small); }
+    return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "Silky" : "Bow your swipe out, away from the corner", score:`${got} of 5 curled in`};
+  })();
+}
+lgDragAdd({id:"finesse", t:"Finesse shot", d:"Hold the ball for the power, then swipe a curve to bend it round the keeper into the far corner.", ic:"bend", run:lgFinesse},
+  {t:"Finesse shot", steps:["The keeper's covering the near side, so the far corner is open, if you can bend it there.", "<b>Put your finger on the ball</b>: the power bar starts to build. <b>Swipe up with a curve</b> towards the far corner, letting go with the power <b>in the green</b>.",
+    "Bow your swipe out, away from the corner, and the ball curls back in round him. Not enough curl and he gets to it."]});
 
 /* ---------- D9. Block it: get in the way of the shot before he hits it ---------- */
 // how far p is from the line from a to b
