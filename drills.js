@@ -7,18 +7,18 @@
    opponent set well below you, so every mini-game is at its most forgiving. A week's drill is kept on its week
    (S.mc.weeks[w].drill), so it can't be repeated. Loaded before game.js; only called once the game is running. */
 const DR = {
-  fin:{t:"Shooting practice", n:5, unit:"shots", help:"flick"},
+  fin:{t:"Shooting practice", n:5, unit:"shots", help:"flick2"},
   pas:{t:"Passing drill", n:5, unit:"passes", help:"pass"},
   pac:{t:"Sprint starts", n:5, unit:"sprints", help:"sprint"},
   def:{t:"Tackling drill", n:5, unit:"tackles", help:"tackle"},
   gk:{t:"Shot-stopping drill", n:5, unit:"shots to save", help:"save"},
   sta:{t:"Beep test", n:0, unit:"levels", help:"beep"},
-  prep:{t:"Free kicks", n:3, unit:"free kicks", help:"flick"}
+  prep:{t:"Free kicks", n:3, unit:"free kicks", help:"flick2"}
 };
 const DR_BEEP_MAX = 16;   // shuttles in a perfect beep test
 
 Object.assign(LV_HELP, {
-  flick:LV_HELP.shot,
+  flick:LV_HELP.shot, flick2:LV_HELP.shot,
   drills:{t:"Training drills", steps:["Once a week you can do a <b>drill</b> for your training focus: a quicker, easier version of a match mini-game.",
     "The better the session, the more that attribute grows on top of the week's training. A perfect score adds about the same again.",
     "Drills are optional. Rest weeks have none, and you can't do one while you're injured."]},
