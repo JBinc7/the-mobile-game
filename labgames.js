@@ -12,7 +12,7 @@ const lgAdd = (g, help) => { LAB_NEW.push({help:`lg_${g.id}`, ...g, cat:LG_ARCAD
 /* ---------- shared pieces ---------- */
 // a new game's screen: the lab's scoreboard, the title, how to play in a line, the stage and its controls
 function lgShow(st, t, s, scene, ctl = ""){ if (st.lab.quit) throw "lab-quit";
-  if (st.lab.once){ s = s.replace(/^Go \d+ of \d+[.:]?\s*/, ""); scene = scene.replace(/<div class="lg-hud"[\s\S]*?<\/div>/, ""); }
+  if (st.lab.once){ s = s.replace(/^(Go|Shot|Pass|Cross|Corner|Run|Chip|Penalty|Duel|Defender|Volley|Go) \d+ of \d+[.:]?\s*/, ""); scene = scene.replace(/<div class="lg-hud"[\s\S]*?<\/div>/, ""); }
   lvShow(`${lvHead(st)}<h2 class="lv-t">${t}</h2><p class="lv-s">${s}</p><div class="lv-stage">${scene}</div>${ctl}`); }
 // the score in the corner of the stage
 const lgHud = (n, label) => `<div class="lg-hud" aria-live="polite"><b>${n}</b><small>${label}</small></div>`;

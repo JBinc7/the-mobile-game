@@ -8,9 +8,9 @@
    skill, scaled by chance quality), so the score always includes what you did. Each mini-game (LV_GAMES) resolves to
    a result R that lvApply turns into goals, assists, own goals, goals conceded and a rating bonus. */
 const LV_POOL = {
-  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross","lab:volley","lab:bicycle","lab:chip","lab:topbins","lab:race","lab:airduel","lab:dribble","lab:lob","lab:shield"], def:["intercept","tackle"]},
-  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:topbins","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
-  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:topbins","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
+  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross","lab:volley","lab:bicycle","lab:chip","lab:race","lab:airduel","lab:dribble","lab:lob","lab:shield"], def:["intercept","tackle"]},
+  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
+  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
   CAM:{att:["shot:box","shot:long","pass","move","takeon","shot:freekick","shot:oneonone","lab:through","lab:onetwo","lab:skills","lab:bendit","lab:volley","lab:chip","lab:gap"], def:["intercept","tackle"]},
   CM:{att:["pass","move","shot:long","shot:box","takeon","lab:through","lab:switch","lab:onetwo","lab:gap","lab:shield","lab:volley"], def:["intercept","tackle","block","lab:blockit"]},
   CDM:{att:["pass","shot:long","move","takeon","lab:switch","lab:gap","lab:shield"], def:["intercept","tackle","block","header:def","lab:offside","lab:blockit"]},
@@ -53,7 +53,7 @@ function lvClose(){ cancelAnimationFrame(lvRaf); lvKey = null; lvEl?.remove(); l
 function lvShow(html){
   cancelAnimationFrame(lvRaf); lvKey = null; lvEl.innerHTML = `<div class="lv-in enter">${html}</div>`; lvEl.scrollTop = 0;
   const box = lvEl.firstElementChild; setTimeout(()=>box.classList.remove("enter"), 450);
-  (lvEl.querySelector("[data-lv-focus]") || lvEl.querySelector("button"))?.focus({preventScroll:true});
+  (lvEl.querySelector("[data-lv-focus]") || lvEl.querySelector("button:not([data-lv-skip]):not(.lv-tap)"))?.focus({preventScroll:true});   // never "Sim the rest" or a tap zone: an outline there looks like a hint
 }
 const lv$ = s => lvEl.querySelector(s);
 // a screen whose buttons (data-lv="value") answer it
@@ -88,7 +88,8 @@ const lvCols = st => { if (st.lab) return st.lab.cols; const k = meta(lvUs(st));
 const lvPct = (x, y) => `left:${(x/3).toFixed(2)}%;top:${(y/1.8).toFixed(2)}%`;
 // how much easier your attribute makes a moment against this opponent, with sharpness and form: about −0.35 to +0.35
 // (in the lab, the difficulty you picked)
-const lvEase = (st, attr) => st.lab ? st.lab.ease : clamp((attr - st.f.oppStr)/40 + (S.cond.sharp-60)/400 + (mcFormAvg()-6.6)/10, -.35, .35);
+// mostly your own attribute (so a better finisher always gets a bigger green), a little the opponent, sharpness and form
+const lvEase = (st, attr) => st.lab ? st.lab.ease : clamp((attr - 66)/55 + (attr - st.f.oppStr)/160 + (S.cond.sharp-60)/500 + (mcFormAvg()-6.6)/14, -.32, .4);
 // light kit? (this file loads before game.js, so it can't use isLight while drawing the instruction diagrams)
 function lvLight(hex){ const h = s => parseInt(String(hex).slice(s, s+2), 16) || 0; return (h(1)*299 + h(3)*587 + h(5)*114)/1000 > 150; }
 function lvNear(x, y){ const h = s => [1,3,5].map(i=>parseInt(String(s).slice(i,i+2),16)||0), a = h(x), b = h(y); return Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]) < 110; }
@@ -641,12 +642,14 @@ function lvShotCore(st, m, v, head, title, o = {}){
     lvDrag(stage, {from:[150, 166], ok:()=>!done, line:q=>q,
       start:q=>{ pts = [q]; ts = [performance.now()]; },
       // it goes the moment the flick's long enough: no waiting for your finger to lift
-      move:q=>{ pts.push(q); ts.push(performance.now()); if (!done && pts[0][1] - q[1]>=70) take(q); },
+      move:q=>{ pts.push(q); ts.push(performance.now()); if (!done && pts[0][1] - q[1]>=80) take(q); },
       end:(q, d, tap)=>{ if (done) return; if (tap || pts.length<3 || pts[0][1] - q[1]<26){ pts = []; const h = lv$(".lv-fhint"); if (h){ h.textContent = "Flick up, towards the goal"; h.classList.remove("pop"); void h.offsetWidth; h.classList.add("pop"); } return; } take(q); }});
     const take = async q => {
       done = true; lv$(".lv-fhint")?.remove();
-      const t = performance.now(), i = Math.max(0, Math.min(pts.length - 2, ts.findIndex(x=>x>=t - 110))), sp = Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])/Math.max(16, t - ts[i]);
-      const dx = q[0] - pts[0][0], dy = Math.max(1, pts[0][1] - q[1]), x = clamp(150 + dx/dy*110, -40, 340), y = 118 - clamp((sp - .25)/1.5, 0, 1.3)*90;
+      // the flick's speed over its whole length (steadier than its last instant), tuned to how fast thumbs really move:
+      // about 0.55 scene units a millisecond puts it low in the corner, 1.15 high, past 1.5 it's over
+      const t = performance.now(), j = Math.max(0, pts.findIndex(p=>Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1])>=6)), sp = Math.hypot(q[0] - pts[j][0], q[1] - pts[j][1])/Math.max(30, t - ts[j]);
+      const dx = q[0] - pts[0][0], dy = Math.max(1, pts[0][1] - q[1]), x = clamp(150 + dx/dy*110, -40, 340), y = 120 - clamp((sp - .3)/1.1, 0, 1.3)*92;
       const over = y<20, wide = x<30 || x>270, wood = !over && !wide && (x<34 || x>266 || y<25);
       window.__lvShot = {x:+x.toFixed(1), y:+y.toFixed(1), sp:+sp.toFixed(2)};
       const wall = v==="freekick" && !over && y>94 && Math.abs(x - 150)<42;
