@@ -87,7 +87,7 @@ function shopBoosts(){
       off: !focus ? "Pick a focus" : used>=SHOP_COACH_MAX ? "Used up this season" : ""},
     {id:"physio", t:"Physio", cost:75, d:`Fitness back to 100. You're on ${Math.round(100-c.fat)}.`, off: c.fat<1 ? "Already fresh" : ""},
     {id:"sharp", t:"Sharpness drills", cost:75, d:`Sharpness back to 100. You're on ${Math.round(c.sharp)}.`, off: c.sharp>=99 ? "Already sharp" : ""},
-    {id:"treat", t:"Injury treatment", cost:300, d: inj ? `Halves the time left out with your ${inj.name.toLowerCase()} (${mcInjWeeks(inj)} week${mcInjWeeks(inj)===1 ? "" : "s"} now). If that leaves a week or less, you're fit straight away.` : "Halves the time left on an injury, or gets you fit at once if it's nearly healed. You're fit right now.", off: inj ? "" : "Not injured"}
+    {id:"treat", t:"Injury treatment", cost:300, d: inj ? `Cures your ${inj.name.toLowerCase()} (${mcInjWeeks(inj)} week${mcInjWeeks(inj)===1 ? "" : "s"} out): you're fit and available straight away.` : "Cures an injury straight away. You're fit right now.", off: inj ? "" : "Not injured"}
   ];
 }
 function shopHTML(){
@@ -154,11 +154,9 @@ function shopBuyBoost(id){
   else if (id==="physio"){ c.fat = 0; shopMsg = "Fully fit again."; }
   else if (id==="sharp"){ c.sharp = 100; shopMsg = "Sharp as you'll ever be."; }
   else if (id==="treat"){
-    // halve the weeks left, rounded down, and fit at once with two or fewer: the injury now ends before this week's games
+    // cured: the injury ends before this week's games, so you're available straight away
     const f = mcFrac(S.mc.wi), i = mcInjury(f);
-    if (i){ const wk = .5/S.mc.weeks.length, before = mcInjWeeks(i), left = Math.floor(before/2), back = left<=1 ? 0 : left;
-      i.red = +Math.max(0, (f - wk/2 - i.at) + back*wk - .0005).toFixed(4);
-      shopMsg = back ? `Treatment done: ${back} weeks out now, down from ${before}.` : `Treatment done: you're fit again and available this week.`; }
+    if (i){ i.red = +Math.max(0, f - .25/S.mc.weeks.length - i.at - .0005).toFixed(4); shopMsg = `Treatment done: your ${i.name.toLowerCase()} is cured. You're fit and available this week.`; }
   }
   save();
 }
