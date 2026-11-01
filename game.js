@@ -721,14 +721,21 @@ function portrait(pl, club, num){
   const stripes = Array.from({length:14}, (_,k)=>{ const i = k-7; return k%2 ? "" : `<path d="M${100+i*13} 140 L${100+(i+1)*13} 140 L${100+(i+1)*70} 190 L${100+i*70} 190Z" fill="#fff" opacity=".045"/>`; }).join("");
   const lights = cx => `<g><circle cx="${cx}" cy="16" r="46" fill="url(#${id}fl)"/><rect x="${cx-12}" y="10" width="24" height="11" rx="2" fill="#0b0f10" stroke="#3a4146" stroke-width=".6"/>
     ${[0,1,2].flatMap(c=>[0,1].map(r=>`<circle cx="${cx-7.5+c*7.5}" cy="${13.2+r*4.6}" r="1.9" fill="#FFF8DF"/>`)).join("")}</g>`;
-  const head = `<ellipse cx="100" cy="73" rx="22.5" ry="26.5"`;
-  const curls = []; for (let yy=49; yy<=93; yy+=6.5) for (let xx=76; xx<=124; xx+=6.5){ if (((xx-100)/21)**2+((yy-73)/25)**2<=1 && yy<=92) curls.push(`<circle cx="${xx+((yy/6.5)%2?3:0)}" cy="${yy}" r="5.6"/>`); }
+  // the back of a real head: wider at the crown, narrowing to the nape, with the neck coming out of it
+  const HEAD = "M100 44 C115 44 125.5 54 125.5 70 C125.5 82 122 90 115.5 95 C111 98.5 106 99.5 100 99.5 C94 99.5 89 98.5 84.5 95 C78 90 74.5 82 74.5 70 C74.5 54 85 44 100 44Z";
+  const head = `<path d="${HEAD}"`;
+  // hair falling from the crown: each strand bows out a little with the shape of the head
+  const strands = (n, y0, y1, w) => Array.from({length:n}, (_,k)=>{ const x = 100 - w/2 + w*k/(n-1), b = (x - 100)*.14 + (rnd2() - .5)*1.2; return `M${(100 + (x - 100)*.35).toFixed(1)} ${y0}Q${(x + b).toFixed(1)} ${(y0 + y1)/2} ${(x + b*.3).toFixed(1)} ${y1}`; }).join("");
+  const curls = []; for (let yy=47; yy<=95; yy+=5.6) for (let xx=74; xx<=126; xx+=5.6){ const dx = (xx-100)/25.5, dy = (yy-71)/27.5; if (dx*dx + dy*dy<=.8) curls.push(`<circle cx="${(xx + ((yy/5.6)%2 ? 2.8 : 0)).toFixed(1)}" cy="${yy}" r="${(4.6 + rnd2()*1.1).toFixed(1)}"/>`); }
   const hairs = {
-    short:`<g clip-path="url(#${id}hd)"><path d="M70 91 Q100 99 130 91 L130 40 L70 40Z" fill="${hc}"/><path d="M84 60 q6 -4 12 0 M102 58 q6 -4 12 0 M90 72 q6 -4 12 0 M80 82 q6 -3 12 0 M106 80 q6 -3 12 0" stroke="#fff" stroke-opacity=".1" stroke-width="1.4" fill="none"/></g>`,
-    buzz:`<g clip-path="url(#${id}hd)"><path d="M70 95 Q100 101 130 95 L130 40 L70 40Z" fill="${hc}" opacity=".62"/></g>`,
-    curly:`<g clip-path="url(#${id}hd)"><path d="M70 90 Q100 97 130 90 L130 40 L70 40Z" fill="${hc}"/></g><g fill="${hc}" stroke="#000" stroke-opacity=".16" stroke-width=".7">${curls.join("")}</g>`,
-    long:`<g clip-path="url(#${id}hd)"><rect x="70" y="40" width="60" height="70" fill="${hc}"/></g><path d="M79 86 C78 104 83 118 90 127 L110 127 C117 118 122 104 121 86Z" fill="${hc}"/><path d="M92 96 C92 108 94 118 97 125 M108 96 C108 108 106 118 103 125" stroke="#fff" stroke-opacity=".1" stroke-width="1.2" fill="none"/>`,
-    none:`<ellipse cx="93" cy="58" rx="8" ry="5" fill="#fff" opacity=".12"/>`
+    short:`<g clip-path="url(#${id}hd)"><path d="M70 92 Q100 101 130 92 L130 40 L70 40Z" fill="${hc}"/><path d="${strands(15, 47, 93, 46)}" stroke="#fff" stroke-opacity=".07" stroke-width=".9" fill="none"/><path d="${strands(9, 50, 92, 40)}" stroke="#000" stroke-opacity=".14" stroke-width=".8" fill="none"/>
+      <path d="M78 92 Q100 99 122 92" stroke="#000" stroke-opacity=".25" stroke-width="2" fill="none"/></g>`,
+    buzz:`<g clip-path="url(#${id}hd)"><path d="M70 96 Q100 103 130 96 L130 40 L70 40Z" fill="${hc}" opacity=".6"/><path d="M70 96 Q100 103 130 96 L130 40 L70 40Z" fill="url(#${id}st2)" opacity=".5"/></g>`,
+    curly:`<g clip-path="url(#${id}hd)"><path d="M70 90 Q100 98 130 90 L130 40 L70 40Z" fill="${hc}"/></g><g fill="${hc}" stroke="#000" stroke-opacity=".22" stroke-width=".7">${curls.join("")}</g>
+      <g fill="#fff" opacity=".08">${curls.slice(0, 14).join("")}</g>`,
+    long:`<g clip-path="url(#${id}hd)"><rect x="70" y="40" width="60" height="70" fill="${hc}"/></g><path d="M77 84 C76 100 81 112 89 120 L111 120 C119 112 124 100 123 84Z" fill="${hc}"/>
+      <path d="${strands(11, 52, 119, 40)}" stroke="#fff" stroke-opacity=".1" stroke-width="1" fill="none"/><path d="${strands(9, 60, 118, 34)}" stroke="#000" stroke-opacity=".18" stroke-width=".8" fill="none"/>`,
+    none:`<path d="M86 52 Q96 46 108 50" stroke="#fff" stroke-opacity=".28" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M84 92 Q100 98 116 92" stroke="#000" stroke-opacity=".12" stroke-width="2" fill="none"/>`
   };
   const nameSize = sur.length>10 ? 9.5 : sur.length>7 ? 11 : 12.5;
   return `<svg viewBox="0 0 200 190" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${esc(pl.name||"Your player")}, seen from behind in the ${esc(club.n)} kit under the floodlights">
@@ -741,7 +748,10 @@ function portrait(pl, club, num){
     <linearGradient id="${id}sv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${lightKit?0:.1}"/><stop offset=".35" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
     <radialGradient id="${id}hs" cx="38%" cy="28%" r="80%"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>
     <linearGradient id="${id}nk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset=".5" stop-color="#000" stop-opacity=".1"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
-    <clipPath id="${id}hd"><ellipse cx="100" cy="72.5" rx="23.5" ry="27.5"/></clipPath>
+    <clipPath id="${id}hd"><path d="M100 43 C116 43 126.5 53.5 126.5 70 C126.5 82 123 90.5 116 95.5 C111.4 99 106.2 100.3 100 100.3 C93.8 100.3 88.6 99 84 95.5 C77 90.5 73.5 82 73.5 70 C73.5 53.5 84 43 100 43Z"/></clipPath>
+    <pattern id="${id}st2" width="2.4" height="2.4" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r=".55" fill="#000" opacity=".5"/></pattern>
+    <linearGradient id="${id}cy" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".42"/><stop offset=".22" stop-color="#000" stop-opacity=".05"/><stop offset=".5" stop-color="#fff" stop-opacity=".06"/><stop offset=".78" stop-color="#000" stop-opacity=".05"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></linearGradient>
+    <linearGradient id="${id}nk2" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".32"/><stop offset=".35" stop-color="#000" stop-opacity=".06"/><stop offset=".65" stop-color="#000" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".34"/></linearGradient>
     <pattern id="${id}cr" width="5" height="4.5" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r=".8" fill="#fff" opacity=".22"/><circle cx="4" cy="3.6" r=".6" fill="${c1}" opacity=".5"/></pattern>
   </defs>
   <rect width="200" height="190" fill="#05090A"/>
@@ -753,25 +763,33 @@ function portrait(pl, club, num){
   <path d="M44 24 L4 140 L84 140Z M156 24 L196 140 L116 140Z" fill="#FFF1C2" opacity=".045"/>
   ${bokeh}${lights(52)}${lights(148)}
   <ellipse cx="100" cy="190" rx="92" ry="10" fill="#000" opacity=".35"/>
-  <path d="M23 167 L43 173 L41 190 L19 190Z" fill="${skin}"/><path d="M177 167 L157 173 L159 190 L181 190Z" fill="${skin}"/>
-  <path d="M23 167 L43 173 L41 190 L19 190Z M177 167 L157 173 L159 190 L181 190Z" fill="#000" opacity=".2"/>
-  <path d="M88.5 90 L111.5 90 L113.5 116 L86.5 116Z" fill="${skin}"/><path d="M88.5 90 L111.5 90 L113.5 116 L86.5 116Z" fill="url(#${id}nk)"/>
-  <path id="${id}sp" d="M66 112 C52 114 38 120 33 133 L22 166 L44 173 L50 148 L53 190 L147 190 L150 148 L156 173 L178 166 L167 133 C162 120 148 114 134 112 C124 117 112 119 100 119 C88 119 76 117 66 112Z" fill="${c1}"/>
-  ${lightKit?`<path d="M33 133 L22 166 L44 173 L50 148Z M167 133 L178 166 L156 173 L150 148Z" fill="${c2}" opacity=".85"/>`:""}
-  <path d="M66 112 C52 114 38 120 33 133 L22 166 L44 173 L50 148 L53 190 L147 190 L150 148 L156 173 L178 166 L167 133 C162 120 148 114 134 112 C124 117 112 119 100 119 C88 119 76 117 66 112Z" fill="url(#${id}sh)"/>
-  <path d="M66 112 C52 114 38 120 33 133 L22 166 L44 173 L50 148 L53 190 L147 190 L150 148 L156 173 L178 166 L167 133 C162 120 148 114 134 112 C124 117 112 119 100 119 C88 119 76 117 66 112Z" fill="url(#${id}sv)"/>
-  <path d="M50 148 C70 150 76 156 78 170 M150 148 C130 150 124 156 122 170 M100 124 V190" stroke="#000" stroke-opacity=".1" stroke-width="1.6" fill="none"/>
-  <path d="M22.5 165 L44 172 M177.5 165 L156 172" stroke="${c2}" stroke-width="3.2"/>
+  <path d="M17 162 C16 170 15 180 14 190 L40 190 L42 170Z" fill="${skin}"/><path d="M183 162 C184 170 185 180 186 190 L160 190 L158 170Z" fill="${skin}"/>
+  <path d="M17 162 C16 170 15 180 14 190 L22 190 C22 178 23 170 26 164Z M183 162 C184 170 185 180 186 190 L178 190 C178 178 177 170 174 164Z" fill="#000" opacity=".22"/>
+  <path d="M85 94 C84.5 103 81 109 70 114.5 L130 114.5 C119 109 115.5 103 115 94Z" fill="${skin}"/><path d="M85 94 C84.5 103 81 109 70 114.5 L130 114.5 C119 109 115.5 103 115 94Z" fill="url(#${id}nk2)"/>
+  <path d="M95 100 C95.6 106 96 110 96 116 M105 100 C104.4 106 104 110 104 116" stroke="#000" stroke-opacity=".1" stroke-width="1.3" fill="none"/>
+  <path id="${id}sp" d="M75 112 C58 114 40 116 30 125 C22 133 18 148 16 166 L42 172 L49 150 L51 190 L149 190 L151 150 L158 172 L184 166 C182 148 178 133 170 125 C160 116 142 114 125 112 C115 117.5 107 119.5 100 119.5 C93 119.5 85 117.5 77 112Z" fill="${c1}"/>
+  ${lightKit?`<path d="M30 125 C22 133 18 148 16 166 L42 172 L49 150Z M170 125 C178 133 182 148 184 166 L158 172 L151 150Z" fill="${c2}" opacity=".85"/>`:""}
+  <path d="M75 112 C58 114 40 116 30 125 C22 133 18 148 16 166 L42 172 L49 150 L51 190 L149 190 L151 150 L158 172 L184 166 C182 148 178 133 170 125 C160 116 142 114 125 112 C115 117.5 107 119.5 100 119.5 C93 119.5 85 117.5 77 112Z" fill="url(#${id}cy)"/>
+  <path d="M75 112 C58 114 40 116 30 125 C22 133 18 148 16 166 L42 172 L49 150 L51 190 L149 190 L151 150 L158 172 L184 166 C182 148 178 133 170 125 C160 116 142 114 125 112 C115 117.5 107 119.5 100 119.5 C93 119.5 85 117.5 77 112Z" fill="url(#${id}sv)"/>
+  <ellipse cx="74" cy="146" rx="20" ry="15" fill="#fff" opacity=".045"/><ellipse cx="126" cy="146" rx="20" ry="15" fill="#fff" opacity=".045"/>
+  <path d="M100 122 V190" stroke="#000" stroke-opacity=".13" stroke-width="2.2"/>
+  <path d="M50 150 C64 152 72 160 74 176 M150 150 C136 152 128 160 126 176 M58 128 C66 134 70 140 72 148 M142 128 C134 134 130 140 128 148" stroke="#000" stroke-opacity=".1" stroke-width="1.5" fill="none"/>
+  <path d="M60 182 Q80 176 98 184 M104 186 Q122 178 140 182" stroke="#000" stroke-opacity=".07" stroke-width="1.6" fill="none"/>
+  <path d="M16.5 165 L42 171.5 M183.5 165 L158 171.5" stroke="${c2}" stroke-width="3.4"/><path d="M17 168.2 L41.6 174.4 M183 168.2 L158.4 174.4" stroke="#000" stroke-opacity=".2" stroke-width="1"/>
   <path id="${id}np" d="M60 139 Q100 129 140 139" fill="none"/>
   <text font-family="Big Shoulders Display, Impact, sans-serif" font-weight="800" font-size="${nameSize}" letter-spacing="1.4" fill="${c2}" text-anchor="middle"><textPath href="#${id}np" startOffset="50%">${esc(sur)}</textPath></text>
   <text x="100" y="172" text-anchor="middle" font-family="Big Shoulders Display, Impact, sans-serif" font-weight="900" font-size="38" fill="${c2}" stroke="#000" stroke-opacity=".25" stroke-width=".8">${esc(num)}</text>
-  <path d="M66 112 C76 117 88 119 100 119 C112 119 124 117 134 112" stroke="${c2}" stroke-width="4" fill="none" stroke-linecap="round"/>
-  <ellipse cx="77.5" cy="77" rx="4.2" ry="7.5" fill="${skin}"/><ellipse cx="122.5" cy="77" rx="4.2" ry="7.5" fill="${skin}"/>
-  <ellipse cx="77.5" cy="77" rx="4.2" ry="7.5" fill="#000" opacity=".15"/><ellipse cx="122.5" cy="77" rx="4.2" ry="7.5" fill="#000" opacity=".15"/>
+  <path d="M77 112 C87 117.5 94 119.5 100 119.5 C106 119.5 113 117.5 123 112" stroke="${c2}" stroke-width="4.6" fill="none" stroke-linecap="round"/>
+  <path d="M78 114.6 C88 120 94 122 100 122 C106 122 112 120 122 114.6" stroke="#000" stroke-opacity=".22" stroke-width="1" fill="none"/>
+  <g transform="translate(100 104) scale(.86) translate(-100 -100)">
+  <path d="M75.2 70 C72.4 68.6 71.2 72 71.8 76.6 C72.3 81 74.1 84.6 77 84.4 C76.4 79.6 76 75 75.2 70Z" fill="${skin}"/><path d="M124.8 70 C127.6 68.6 128.8 72 128.2 76.6 C127.7 81 125.9 84.6 123 84.4 C123.6 79.6 124 75 124.8 70Z" fill="${skin}"/>
+  <path d="M73.6 73.4 C73 76 73.4 79.4 75.1 81.6 M126.4 73.4 C127 76 126.6 79.4 124.9 81.6" stroke="#000" stroke-opacity=".22" stroke-width="1" fill="none"/>
   ${head} fill="${skin}"/>${head} fill="url(#${id}hs)"/>
   ${hairs[pl.hair||"short"] ?? hairs.short}
-  <path d="M33 133 C38 120 52 114 66 112 M167 133 C162 120 148 114 134 112" stroke="#FFE9B0" stroke-opacity=".55" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-  <path d="M80 56 A23 27 0 0 1 100 46" stroke="#FFE9B0" stroke-opacity=".35" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M30 125 C40 116 58 114 75 112 M170 125 C160 116 142 114 125 112" stroke="#FFE9B0" stroke-opacity=".6" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <path d="M17.5 160 C19 146 23 133 30 125 M182.5 160 C181 146 177 133 170 125" stroke="#FFE9B0" stroke-opacity=".25" stroke-width="1.2" fill="none"/>
+  <path d="M80 54 C84 48 91 44.6 100 44.4" stroke="#FFE9B0" stroke-opacity=".38" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  </g>
   </svg>`;
 }
 // original trophy designs: each competition gets its own shape, metal, plinth colour and engraving

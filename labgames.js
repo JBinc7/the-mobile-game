@@ -1358,11 +1358,42 @@ lgDragAdd({id:"flickpen", t:"Flick penalty", d:"Flick the ball at the goal: the 
 // does. In the green, curled enough and inside the post, it's in: the keeper's covering the near side
 function lgFinesse(st){
   const kit = lvKits(st), e = st.lab.ease; let got = 0;
-  const one = k => new Promise(res=>{
+  // part one, from above: dribble to the spot on one side of the box with a defender chasing; part two, from where you
+  // got to: the goal at that angle, the keeper on the near post, and the curled shot into the far corner
+  const dribble = k => new Promise(res=>{
+    const fromL = Math.random()<.5, T = [fromL ? 92 : 208, 58 + Math.random()*10], me = [150, 160], D = [fromL ? 196 : 104, 92], vMe = 92, vD = clamp(38*(1 - e*.6), 26, 52);
+    lgShow(st, "Finesse shot", `Run ${k+1} of 5. Drag your man with the ball to the gold spot on the edge of the box. Don't let the defender catch you.`,
+      lvField("top", `<circle cx="${T[0]}" cy="${T[1]}" r="9" fill="rgba(245,197,66,.18)" stroke="#F5C542" stroke-width="2" stroke-dasharray="4 3"/>
+        <g id="lgD">${lvMan(0, 0, kit.them, {run:true})}</g><g id="lgM">${lvMan(0, 0, kit.us, {ring:"#F5C542", run:true})}</g>${lvBallSvg("lgB", me[0], me[1] + 2, 3.6)}`) + lgHud(got, "scored") + lgTimerHTML);
+    const fin = r => { done = true; res(r); }; lvSkippable(fin);
+    const stage = lv$(".lv-stage"); let done = false, aim = null, last = performance.now(); const t0 = last, lim = 6500;
+    const put = () => { lvMove("#lgM", me[0], me[1]); lvMove("#lgD", D[0], D[1]); lvBallAt("#lgB", me[0] + 3, me[1] + 2, 1, 0, me[1]*8); lgDepth(["#lgM", "#lgD"], [me[1], D[1]]); };
+    put(); lgPop("Drag your man to the gold spot", true, 50, 80);
+    lvDrag(stage, {ok:()=>!done, start:q=>{ aim = q; }, move:q=>{ aim = q; }, end:()=>{ aim = null; }, cancel:()=>{ aim = null; }});
+    lvLoop(now=>{
+      if (done) return false;
+      const dt = Math.min(.04, (now - last)/1000); last = now; lgSetTimer(1 - (now - t0)/lim);
+      if (aim){ const dx = aim[0] - me[0], dy = aim[1] - me[1], d = Math.hypot(dx, dy); if (d>1){ const m = Math.min(d, vMe*dt); me[0] = clamp(me[0] + dx/d*m, 14, 286); me[1] = clamp(me[1] + dy/d*m, 20, 172); } }
+      // he closes you down, a little behind where you're heading
+      const tx = me[0] + (aim ? (aim[0] - me[0])*.15 : 0), ty = me[1] - 4, dd = Math.hypot(tx - D[0], ty - D[1]); if (dd>1){ D[0] += (tx - D[0])/dd*vD*dt; D[1] += (ty - D[1])/dd*vD*dt; }
+      put();
+      if (Math.hypot(me[0] - T[0], me[1] - T[1])<9){ done = true; return res({ok:true, x:T[0]}), false; }
+      if (Math.hypot(me[0] - D[0], me[1] - D[1])<8){ done = true; lvKick("#lgD .lv-man"); return res({ok:false, big:"Tackled", small:"Go round him: he comes at you, not where you're going"}), false; }
+      if (now - t0>lim){ done = true; return res({ok:false, big:"Too slow", small:"He got back into position"}), false; }
+    });
+  });
+  const one = async k => {
+    const D = await dribble(k); if (D==="skip") return D; if (!D.ok) return D;
+    lgPop("Shoot!", true, 50, 40); await lvWait(250);
+    return shot(k, D.x);
+  };
+  const shot = (k, at) => new Promise(res=>{
     st.lab.tally = `${got} of 5`;
-    const side = Math.random()<.5 ? "l" : "r", zone = clamp(.13*(1 + e*1.3), .07, .22), mid = .7, lo = mid - zone/2, hi = mid + zone/2, per = 1500, need = clamp(14*(1 - e*.5), 9, 18);
-    lgShow(st, "Finesse shot", `Shot ${k+1} of 5. He's covering the ${side==="l" ? "right" : "left"} side: hold the ball, then swipe up with a curve to bend it into the far ${side==="l" ? "left" : "right"} corner, with the power in the green.`,
+    // coming in from the left, the far corner is the right one, and the goal's seen at that angle: near post bigger
+    const side = at<150 ? "r" : "l", tilt = clamp((150 - at)/58, -1, 1)*22, zone = clamp(.13*(1 + e*1.3), .07, .22), mid = .7, lo = mid - zone/2, hi = mid + zone/2, per = 1500, need = clamp(14*(1 - e*.5), 9, 18);
+    lgShow(st, "Finesse shot", `You're in on the ${at<150 ? "left" : "right"}. He's covering his near post: hold the ball, then swipe up with a curve to bend it into the far ${side==="l" ? "left" : "right"} corner, with the power in the green.`,
       lvGoalSvg(kit.them, null, false) + lgHud(got, "scored") + `<div class="lv-pow"><span class="lv-pow-l">Power</span>${lvBarHTML(mid, zone)}</div>`);
+    lv$(".lv-stage svg").style.cssText = `transform:perspective(560px) rotateY(${tilt.toFixed(1)}deg) scale(1.1);transform-origin:50% 62%`;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
     svg.insertAdjacentHTML("beforeend", `<path id="lgSw" fill="none" stroke="#F5C542" stroke-width="3" stroke-linecap="round" opacity=".9"/>`);
@@ -1409,8 +1440,8 @@ function lgFinesse(st){
     return {ok:got>=3, big:`${got} of 5`, small:got>=3 ? "Silky" : "Bow your swipe out, away from the corner", score:`${got} of 5 curled in`};
   })();
 }
-lgDragAdd({id:"finesse", t:"Finesse shot", d:"Hold the ball for the power, then swipe a curve to bend it round the keeper into the far corner.", ic:"bend", run:lgFinesse},
-  {t:"Finesse shot", steps:["The keeper's covering the near side, so the far corner is open, if you can bend it there.", "<b>Put your finger on the ball</b>: the power bar starts to build. <b>Swipe up with a curve</b> towards the far corner, letting go with the power <b>in the green</b>.",
+lgDragAdd({id:"finesse", t:"Finesse shot", d:"Dribble to the edge of the box, then curl it round the keeper into the far corner.", ic:"bend", run:lgFinesse},
+  {t:"Finesse shot", steps:["Two parts. First, from above: <b>drag your man</b> with the ball to the gold spot on the edge of the box, away from the defender chasing you.", "Then you see the goal from where you got to. The keeper's on his near post. <b>Put your finger on the ball</b> (the power builds), then <b>swipe up with a curve</b> towards the far corner, starting the swipe with the power <b>in the green</b>.",
     "Bow your swipe out, away from the corner, and the ball curls back in round him. Not enough curl and he gets to it."]});
 
 /* ---------- D9. Block it: get in the way of the shot before he hits it ---------- */
