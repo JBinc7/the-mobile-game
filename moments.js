@@ -401,11 +401,10 @@ const LV_HELP = {
     "The rest of the match is simulated around them, so the final score includes what you did. When your team's on top you get more attacking moments; under pressure, more defending.",
     "Every match ends with a <b>rating</b>. Ratings decide your form, the manager's trust, how fast you grow, your value and the season's awards.",
     "Your attributes, boots, form and sharpness make every mini-game easier. Tap <b>Sim the match</b> on a match's intro to skip it."]},
-  shot:{t:"How to shoot", steps:["<b>Drag the ball</b> up to where you want to shoot (or tap that part of the goal). The corners are hardest to save.",
-    "Keep your finger down while the marker slides along the power bar, and <b>let go</b> while it's <b>in the green</b> (or tap <b>Shoot!</b>).",
-    "Too early and the shot is weak; too late and it flies over. For free kicks, low shots in the middle hit the wall."],
-    svg:`<svg viewBox="0 0 240 160"><rect x="30" y="10" width="180" height="72" fill="rgba(255,255,255,.05)" stroke="#F4F7F2" stroke-width="4"/><circle cx="182" cy="30" r="10" fill="none" stroke="#F5C542" stroke-width="3"/><circle cx="182" cy="30" r="3" fill="#F5C542"/>${LV_TXT(120,52,"1 · DRAG TO AIM")}
-      <rect x="30" y="112" width="180" height="16" rx="8" fill="rgba(255,255,255,.14)"/><rect x="138" y="112" width="34" height="16" fill="rgba(74,222,128,.8)"/><rect x="152" y="106" width="5" height="28" rx="2" fill="#fff"/>${LV_TXT(120,152,"2 · LET GO IN THE GREEN")}</svg>`},
+  shot:{t:"How to shoot", steps:["<b>Flick up from the ball</b> towards the goal. The direction of your flick is where it goes; the <b>faster</b> you flick, the <b>higher</b> it goes. Too fast and it's over the bar.",
+    "Land it in a <b>green corner</b> and it's a <b>goal, guaranteed</b>. The better your <b>finishing</b>, the bigger the green.",
+    "Anywhere else on target, the keeper might save it: good keepers read it more often, and soft flicks are easy. Free kicks: low down the middle hits the wall."],
+    svg:`<svg viewBox="0 0 240 160"><rect x="30" y="10" width="180" height="72" fill="rgba(255,255,255,.05)" stroke="#F4F7F2" stroke-width="4"/><circle cx="54" cy="30" r="13" fill="rgba(74,222,128,.3)" stroke="#4ADE80" stroke-dasharray="3 2"/><circle cx="186" cy="30" r="13" fill="rgba(74,222,128,.3)" stroke="#4ADE80" stroke-dasharray="3 2"/><circle cx="120" cy="140" r="7" fill="#fff"/><path d="M120 132Q150 90 182 36" fill="none" stroke="#F5C542" stroke-width="3" stroke-dasharray="6 5"/>${LV_TXT(120,58,"FLICK INTO THE GREEN")}</svg>`},
   header:{t:"How to head it", steps:["A cross is coming in. A <b>ring closes in</b> on the ball.", "Tap <b>Head it!</b> the moment it lines up with the <b>gold target ring</b>.",
     "Spot on and it flies into the corner; a bit off and the keeper has a chance; way off and it goes over."],
     svg:lvDemo("top", `<circle cx="150" cy="70" r="16" fill="none" stroke="#F5C542" stroke-width="3"/><circle cx="150" cy="70" r="34" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 5"/><circle cx="150" cy="70" r="5" fill="#fff"/>`, "TAP WHEN THE RINGS MEET")},
@@ -590,13 +589,22 @@ async function lvFullTime(st, home, away){
    ========================================================================================= */
 
 /* ---------- shots: aim, then power (one-on-ones, in the box, from distance, free kicks) ---------- */
+// z: how big the green corners are for this kind of shot; k: how good keepers are at it
 const LV_SHOT = {
-  oneonone:{t:"Through on goal!", s:"Drag the ball to your spot, hold, and let go with the power in the green.", z:.2, k:.85, per:1300},
-  box:{t:"Space in the box", s:"Drag the ball to your spot, hold, and let go with the power in the green.", z:.16, k:1, per:1200},
-  long:{t:"Shot from 25 yards", s:"Drag the ball to your spot. Let go too late and it's in the stands.", z:.11, k:1.25, per:1000},
-  freekick:{t:"Free kick in range", s:"Drag it over the wall or into a corner, and let go with the power in the green.", z:.12, k:1.1, per:1050},
-  pen:{t:"Penalty", s:"Drag the ball to your spot, hold, and let go with the power in the green.", z:.2, k:.95, per:1250}
+  oneonone:{t:"Through on goal!", s:"Flick it at goal: a green corner is a certain goal.", z:1.15, k:.85},
+  box:{t:"Space in the box", s:"Flick it at goal: a green corner is a certain goal.", z:1, k:1},
+  long:{t:"Shot from 25 yards", s:"Flick it at goal. From this far the green's small: flick too hard and it's in the stands.", z:.72, k:1.25},
+  freekick:{t:"Free kick in range", s:"Flick it over the wall into a green corner. Low and down the middle hits the wall.", z:.85, k:1.1},
+  pen:{t:"Penalty", s:"Flick it at goal: a green corner is a certain goal.", z:1.1, k:.95}
 };
+// the green corners: land a shot in one and it's a goal, whatever the keeper does. Their size is your finishing
+// (on top of the kind of shot): about 6 for a finisher of 40, 12 at 60, 16 at 75 and 20 at 90
+function lvGreenZones(st, mult = 1){
+  const r = clamp(6 + (lvAttr(st).fin - 40)*.28, 5, 21)*mult;
+  return [[60, 47, r], [240, 47, r], [60, 101, r*.8], [240, 101, r*.8]];
+}
+const lvGreenSvg = Z => `<g class="lv-green">${Z.map(([x, y, r])=>`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="rgba(74,222,128,.3)" stroke="#4ADE80" stroke-width="1.4" stroke-dasharray="3 2"/>`).join("")}</g>`;
+const lvInGreen = (Z, x, y) => Z.some(([zx, zy, r])=>Math.hypot(x - zx, y - zy) <= r);
 // where the keeper ends up: at the ball when he saves it, close when it beats his hands, the other way when he's fooled
 function lvKeeperTo(tx, ty, reach, kcol){
   lv$("#lvKp")?.classList.add("dive");
@@ -619,67 +627,49 @@ function lvKeeper(st, fin){
 // a tag on the goal saying who's in it and how good he is
 const lvKeeperTag = GK => `<span class="lv-gk ${GK.r>=85 ? "elite" : GK.r<65 ? "weak" : ""}" aria-label="Their keeper${GK.name ? `, ${esc(GK.name)}` : ""}, rated ${GK.r}">GK${GK.name ? ` · ${esc(GK.name)}` : ""} <b>${GK.r}</b></span>`;
 // the shot itself, also used at the end of a take-on and an attacking move: resolves {goal, big, small} or "skip"
-function lvShotCore(st, m, v, head, title){
-  const K = LV_SHOT[v], f = st.f, attr = lvAttr(st).fin, e = lvEase(st, attr), kit = lvKits(st), GK = lvKeeper(st, attr);
-  const zone = clamp(K.z*(1 + e*1.3), .05, .32), mid = .72, per = K.per*(1 + e*.8), kq = GK.q;
-  const lo = mid-zone/2, hi = mid+zone/2;
+function lvShotCore(st, m, v, head, title, o = {}){
+  const K = LV_SHOT[v], attr = lvAttr(st).fin, kit = lvKits(st), GK = lvKeeper(st, attr), kq = GK.q, Z = lvGreenZones(st, K.z*(o.zone || 1));
   return new Promise(res=>{
     lvShow(`${head}<h2 class="lv-t">${title || K.t}</h2><p class="lv-s">${K.s}</p>
-      <div class="lv-stage">${lvGoalSvg(kit.them, v==="freekick" ? kit.them : null)}
-        <div class="lv-aims">${["tl","tc","tr","bl","bc","br"].map(z=>`<button type="button" class="lv-aim" data-z="${z}" aria-label="Aim ${{t:"high",b:"low"}[z[0]]} ${{l:"left",c:"centre",r:"right"}[z[1]]}"></button>`).join("")}</div>
-        <span class="lv-reticle" hidden></span>${lvKeeperTag(GK)}</div>
-      ${lvBarHTML(mid, zone)}
-      <button type="button" class="btn big lv-act" disabled>Drag the ball to aim</button>`);
+      <div class="lv-stage lv-flick">${lvGoalSvg(kit.them, v==="freekick" ? kit.them : null)}${lvKeeperTag(GK)}<span class="lv-fhint">Flick up from the ball</span></div>
+      <p class="lv-zonecap">The <b>green corners</b> grow with your finishing: <b>${Math.round(attr)}</b></p>`);
     lvSkippable(res);
-    let aim = null, pt = null, t0 = 0, p = 0, fired = false;
-    const act = lv$(".lv-act"), ret = lv$(".lv-reticle"), stage = lv$(".lv-stage");
-    // aim where you tapped (in the scene's coordinates), or the middle of the zone from the keyboard
-    const setAim = (b, ev)=>{
-      if (fired) return; aim = b.dataset.z; lvEl.querySelectorAll(".lv-aim").forEach(x=>x.classList.toggle("on", x===b));
-      const r = stage.getBoundingClientRect(), br = b.getBoundingClientRect(), tap = ev && ev.pointerType && ev.clientX!=null;
-      pt = [clamp(((tap ? ev.clientX : br.left + br.width/2) - r.left)/r.width*300, 40, 260), clamp(((tap ? ev.clientY : br.top + br.height/2) - r.top)/r.height*180, 30, 114)];
-      ret.hidden = false; ret.setAttribute("style", lvPct(pt[0], pt[1])); ret.classList.remove("pop"); void ret.offsetWidth; ret.classList.add("pop");
-      startBar();
-    };
-    const startBar = () => { if (t0) return; t0 = performance.now(); act.disabled = false; act.classList.add("primary"); act.textContent = "Shoot!";
-      lvLoop(now=>{ if (fired) return false; p = (1 - Math.cos(2*Math.PI*(now-t0)/per))/2; lvBarSet(p, lo, hi); }); };
-    lvEl.querySelectorAll(".lv-aim").forEach(b=>lvTap(b, ev=>setAim(b, ev)));
-    // dragging: the spot follows your finger (just above it, so you can see it) and the power starts swinging; let go to shoot
-    const dragAim = q => { const at = [clamp(q[0], 40, 260), clamp(q[1] - 12, 30, 114)], z = (at[1]<72 ? "t" : "b") + (at[0]<110 ? "l" : at[0]>190 ? "r" : "c");
-      if (fired) return; aim = z; pt = at; lvEl.querySelectorAll(".lv-aim").forEach(x=>x.classList.toggle("on", x.dataset.z===z));
-      ret.hidden = false; ret.setAttribute("style", lvPct(at[0], at[1])); startBar(); };
-    lvDrag(stage, {from:[150, 166], ok:()=>!fired, line:q=>[clamp(q[0], 40, 260), clamp(q[1] - 12, 30, 166)], move:(q, d)=>{ if (d.moved>=10) dragAim(q); }, end:(q, d, tap)=>{ if (!tap && aim) fire(); }});
-    const fire = async ()=>{
-      if (!aim || fired) return; fired = true; cancelAnimationFrame(lvRaf); act.disabled = true; ret.hidden = true;
-      const row = aim[0], col = aim[1];
-      // just past the green still hits the target, a little easier to save; well past it goes over
-      let over = false, weak = 0;
-      if (p>hi){ if (p-hi > (row==="t" ? .03 : .1)) over = true; else weak = .1; }
-      else if (p<lo) weak = clamp((lo-p)*1.6, .12, .6);
-      const wall = v==="freekick" && !over && row==="b" && (col==="c" || Math.random()<.3);
-      // good keepers read where you're going more often
-      const kcol = Math.random() < 1/3 + kq*.25 ? col : pick(["l","c","r"].filter(x=>x!==col));
-      const read = {t:{l:.45, c:.8, r:.45}, b:{l:.6, c:.9, r:.6}}[row][col];
-      const save = clamp((kcol===col ? read : col==="c" ? .2 : .04)*(kq/.5)*K.k + weak, .02, .97);
-      let goal = !over && !wall && Math.random()>save, tip = false;
-      if (goal && Math.random()>m.q){ goal = false; tip = true; }   // in a match that's going against you, chances are harder
-      // a poor keeper sometimes gets to it and still lets it in
-      const howler = !goal && !over && !wall && !tip && Math.random() < Math.max(0, .5 - kq)*.35; if (howler) goal = true;
-      const tx = clamp(pt[0] + (Math.random()*10-5), 36, 264), ty = over ? -14 : wall ? 140 : clamp(pt[1] + (Math.random()*8-4), 30, 116);
-      const wx = wall ? clamp(tx, 128, 172) : tx;
-      const [kx, ky, rot] = lvKeeperTo(wx, ty, howler || (!goal && !over && !wall) ? "save" : goal && kcol===col ? "near" : "wrong", howler ? col : kcol);
+    lv$("#lvKp").insertAdjacentHTML("beforebegin", lvGreenSvg(Z));
+    let done = false, pts = [], ts = [];
+    const stage = lv$(".lv-stage");
+    // flick: the direction is where it goes, the speed at the end is how high (as the lab's flick penalty)
+    lvDrag(stage, {from:[150, 166], ok:()=>!done, line:q=>q,
+      start:q=>{ pts = [q]; ts = [performance.now()]; },
+      // it goes the moment the flick's long enough: no waiting for your finger to lift
+      move:q=>{ pts.push(q); ts.push(performance.now()); if (!done && pts[0][1] - q[1]>=70) take(q); },
+      end:(q, d, tap)=>{ if (done) return; if (tap || pts.length<3 || pts[0][1] - q[1]<26){ pts = []; const h = lv$(".lv-fhint"); if (h){ h.textContent = "Flick up, towards the goal"; h.classList.remove("pop"); void h.offsetWidth; h.classList.add("pop"); } return; } take(q); }});
+    const take = async q => {
+      done = true; lv$(".lv-fhint")?.remove();
+      const t = performance.now(), i = Math.max(0, Math.min(pts.length - 2, ts.findIndex(x=>x>=t - 110))), sp = Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1])/Math.max(16, t - ts[i]);
+      const dx = q[0] - pts[0][0], dy = Math.max(1, pts[0][1] - q[1]), x = clamp(150 + dx/dy*110, -40, 340), y = 118 - clamp((sp - .25)/1.5, 0, 1.3)*90;
+      const over = y<20, wide = x<30 || x>270, wood = !over && !wide && (x<34 || x>266 || y<25);
+      window.__lvShot = {x:+x.toFixed(1), y:+y.toFixed(1), sp:+sp.toFixed(2)};
+      const wall = v==="freekick" && !over && y>94 && Math.abs(x - 150)<42;
+      const green = !over && !wide && !wood && !wall && lvInGreen(Z, x, y);
+      const row = y<72 ? "t" : "b", col = x<110 ? "l" : x>190 ? "r" : "c";
+      // anywhere else on target, the keeper: better ones read it more, and a soft flick is easy
+      const kcol = green ? (col==="l" ? "r" : col==="r" ? "l" : pick(["l","r"])) : Math.random() < 1/3 + kq*.25 ? col : pick(["l","c","r"].filter(z=>z!==col));
+      const read = {t:{l:.5, c:.85, r:.5}, b:{l:.65, c:.92, r:.65}}[row][col];
+      const save = clamp((kcol===col ? read : col==="c" ? .25 : .06)*(kq/.5)*K.k + (sp<.6 ? .25 : 0), .03, .97);
+      let goal = green || (!over && !wide && !wood && !wall && Math.random()>save), tip = false;
+      if (goal && !green && Math.random()>m.q){ goal = false; tip = true; }   // in a match that's going against you, chances are harder
+      const wx = wall ? clamp(x, 128, 172) : x, ty = over ? -14 : wall ? 140 : y;
+      const [kx, ky, rot] = lvKeeperTo(clamp(wx, 36, 264), clamp(ty, 30, 116), !goal && !over && !wide && !wood && !wall ? "save" : green ? "wrong" : "near", kcol);
       await lvStrike(st);
       await Promise.all([
-        lvFly("#lvBall", [150, 166], [wx, ty], over ? 520 : 470, {s0:1, s1:wall ? .85 : .6, h:row==="t" || over ? 14 : 4, curve:(col==="l" ? -1 : col==="r" ? 1 : 0)*(6 + Math.random()*8), spin:1.6}),
-        lvTween(330 + (1 - kq)*110, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (ky-84)*q, rot*q, 1 + .06*q); })   // a better keeper gets down quicker
+        lvFly("#lvBall", [150, 166], [clamp(wx, -10, 310), ty], over ? 520 : sp>1.2 ? 420 : 520, {s0:1, s1:wall ? .85 : .6, h:row==="t" || over ? 14 : 4, curve:(col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6), spin:1.6}),
+        lvTween(330 + (1 - kq)*110, k=>{ const q2 = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q2, 84 + (ky-84)*q2, rot*q2, 1 + .06*q2); })
       ]);
       if (goal){ lvRipple(wx, ty); await lvWait(160); }
-      res({goal, big: howler ? "Howler!" : goal ? "Goal!" : over ? "Over the bar" : wall ? "Hit the wall" : "Saved",
-        small: howler ? "It squirmed through the keeper's hands" : goal ? (kcol===col ? "Past the keeper's hands" : "Sent him the wrong way") : over ? (row==="t" ? "Too high" : "Overhit") : wall ? "Go higher or wider" : tip ? "Fingertip save" : weak>=.3 ? "Not enough on it" : kcol===col ? "The keeper read it" : "Brilliant save"});
+      res({goal, big: goal ? "Goal!" : over ? "Over the bar" : wide ? "Wide" : wood ? "Off the woodwork" : wall ? "Hit the wall" : "Saved",
+        small: green ? "Right in the green corner" : goal ? (kcol===col ? "Past the keeper's hands" : "Sent him the wrong way") : over ? "Flick a touch slower" : wide ? "Straighter" : wood ? "Inches away"
+          : wall ? "Lift it over them, or go wide of them" : tip ? "Fingertip save" : sp<.6 ? "Not enough on it: flick faster" : kcol===col ? "He read it: aim for the green" : "Brilliant save"});
     };
-    act.addEventListener("click", fire);
-    lv$(".lv-bar").addEventListener("pointerdown", fire);
-    lvKey = k=>{ if (k==="go") fire(); };
   });
 }
 async function lvGameShot(st, m){
@@ -802,9 +792,9 @@ async function lvGamePass(st, m){
 }
 
 /* ---------- take-ons: read the defender and go the other way ---------- */
-function lvTakeonCore(st, head, title, sub){
+function lvTakeonCore(st, head, title, sub, hard = 1){
   const f = st.f, a = lvAttr(st), e = lvEase(st, a.pac*.6 + a.fin*.4), kit = lvKits(st);
-  const react = clamp(720*(1 + e), 380, 1100), wait = 700 + Math.random()*900, fake = f.oppStr > a.pac + 4 && Math.random()<.3;
+  const react = clamp(720*(1 + e)*hard, 300, 1100), wait = 700 + Math.random()*900, fake = f.oppStr > a.pac + 4 && Math.random()<.3;
   return new Promise(res=>{
     lvShow(`${head}<h2 class="lv-t">${title}</h2><p class="lv-s">${sub}</p>
       <div class="lv-stage">${lvField("top", `<g id="lvDef">${lvMan(0, 0, kit.them)}</g><text id="lvBang" x="0" y="0" font-size="26" font-weight="900" fill="#F5C542" opacity="0" font-family="Big Shoulders Display,sans-serif">!</text>
@@ -854,10 +844,10 @@ async function lvGameTakeon(st, m){
 
 /* ---------- the attacking move: pass, take-on, then shoot or square it ---------- */
 async function lvGameMove(st, m){
-  const S1 = await lvPassCore(st, lvHead(st, m.min, [1,3]), "Attacking move", "Step 1: find the free man to get it going.", -200);
+  const S1 = await lvPassCore(st, lvHead(st, m.min, [1,3]), "Attacking move", "Step 1: find the free man to get it going.", -420);
   if (S1==="skip") return S1;
   if (!S1.ok) return {ok:false, big:"Move broken down", small:S1.why, bonus:-.06};
-  const S2 = await lvTakeonCore(st, lvHead(st, m.min, [2,3]), "Attacking move", "Step 2: the return ball's yours. Beat your man.");
+  const S2 = await lvTakeonCore(st, lvHead(st, m.min, [2,3]), "Attacking move", "Step 2: the return ball's yours. Beat your man.", .75);
   if (S2==="skip") return S2;
   if (!S2.ok) return {ok:false, big:"Move broken down", small:S2.why, bonus:-.04};
   const kit = lvKits(st);
@@ -871,7 +861,7 @@ async function lvGameMove(st, m){
   });
   if (pickIt==="skip") return pickIt;
   if (pickIt==="shoot"){
-    const s = await lvShotCore(st, m, "box", lvHead(st, m.min, [3,3]), "Finish the move"); if (s==="skip") return s;
+    const s = await lvShotCore(st, m, "box", lvHead(st, m.min, [3,3]), "Finish the move", {zone:.8}); if (s==="skip") return s;
     return s.goal ? {ok:true, big:"Goal!", small:"What a team move", g:1} : {ok:false, big:s.big, small:s.small, bonus:.02};
   }
   // squaring it: weight the pass (a quick power bar with a wide green zone)
@@ -1093,7 +1083,7 @@ function lvGameRush(st, m){
 }
 
 /* ---------- the lab's games as match moments: one go, against this opponent, with your attributes ---------- */
-const lvHelpKey = m => m.g==="lab" ? "lg_" + m.v : m.g;
+const lvHelpKey = m => m.g==="lab" ? "lg_" + m.v : m.g==="shot" ? "flick" : m.g;   // "flick": the flick shot's guide, new in 1.36
 async function lvGameLab(st, m){
   const g = (typeof LAB_NEW!=="undefined" ? LAB_NEW : []).find(x=>x.id===m.v), K = LV_LABM[m.v];
   if (!g || !K) return lvAuto(st, m);

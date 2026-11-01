@@ -87,7 +87,7 @@ function shopBoosts(){
       off: !focus ? "Pick a focus" : used>=SHOP_COACH_MAX ? "Used up this season" : ""},
     {id:"physio", t:"Physio", cost:75, d:`Fitness back to 100. You're on ${Math.round(100-c.fat)}.`, off: c.fat<1 ? "Already fresh" : ""},
     {id:"sharp", t:"Sharpness drills", cost:75, d:`Sharpness back to 100. You're on ${Math.round(c.sharp)}.`, off: c.sharp>=99 ? "Already sharp" : ""},
-    {id:"treat", t:"Injury treatment", cost:300, d: inj ? `Halves the time left out with your ${inj.name.toLowerCase()}.` : "Halves the time left on an injury. You're fit right now.", off: inj ? "" : "Not injured"}
+    {id:"treat", t:"Injury treatment", cost:300, d: inj ? `Halves the time left out with your ${inj.name.toLowerCase()} (${mcInjWeeks(inj)} week${mcInjWeeks(inj)===1 ? "" : "s"} now). If that leaves a week or less, you're fit straight away.` : "Halves the time left on an injury, or gets you fit at once if it's nearly healed. You're fit right now.", off: inj ? "" : "Not injured"}
   ];
 }
 function shopHTML(){
@@ -153,7 +153,13 @@ function shopBuyBoost(id){
   else if (id==="coach"){ const k = S.train.focus; S.attr[k] = Math.min(99, +(S.attr[k] + 1).toFixed(2)); shopUses().coach++; shopMsg = `+1 ${mcAttrName(k)}. It's now ${Math.round(S.attr[k])}.`; }
   else if (id==="physio"){ c.fat = 0; shopMsg = "Fully fit again."; }
   else if (id==="sharp"){ c.sharp = 100; shopMsg = "Sharp as you'll ever be."; }
-  else if (id==="treat"){ const f = mcFrac(S.mc.wi), i = mcInjury(f); if (i){ i.red = +((f - i.at) + (i.at + i.red - f)/2).toFixed(3); shopMsg = `Treatment done: you'll be back sooner from your ${i.name.toLowerCase()}.`; } }
+  else if (id==="treat"){
+    // halve the weeks left, rounded down, and fit at once with two or fewer: the injury now ends before this week's games
+    const f = mcFrac(S.mc.wi), i = mcInjury(f);
+    if (i){ const wk = .5/S.mc.weeks.length, before = mcInjWeeks(i), left = Math.floor(before/2), back = left<=1 ? 0 : left;
+      i.red = +Math.max(0, (f - wk/2 - i.at) + back*wk - .0005).toFixed(4);
+      shopMsg = back ? `Treatment done: ${back} weeks out now, down from ${before}.` : `Treatment done: you're fit again and available this week.`; }
+  }
   save();
 }
 document.addEventListener("click", e=>{

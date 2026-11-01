@@ -895,8 +895,9 @@ function lgBend(st){
   const kit = lvKits(st), e = st.lab.ease; let got = 0;
   const one = k => new Promise(res=>{
     st.lab.tally = `${got} of 3`;
-    lgShow(st, "Bend it", `Go ${k+1} of 3. Swipe up from the ball, curving your finger: the ball follows your swipe round the wall or over it.`,
+    lgShow(st, "Bend it", `Go ${k+1} of 3. Swipe up from the ball, curving your finger: it follows your swipe round the wall or over it. A green corner is a certain goal.`,
       lvGoalSvg(kit.them, kit.them, false) + lgHud(got, "goals"));
+    const Z = lvGreenZones(st, .95); lv$("#lvKp").insertAdjacentHTML("beforebegin", lvGreenSvg(Z));
     let done = false, fired = false, pts = [], down = false;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
@@ -916,10 +917,12 @@ function lgBend(st){
       const mi = Math.max(0, acc.findIndex(x=>x>=L/2)), M = [pts[mi + 1][0] + o[0], pts[mi + 1][1] + o[1]];
       const dev = [M[0] - (A[0] + B[0])/2, M[1] - (A[1] + B[1])/2], C = [(A[0] + B[0])/2 + dev[0]*2.6, (A[1] + B[1])/2 + dev[1]*2.6];
       const Pq = u => { const q = 1 - u; return [q*q*A[0] + 2*q*u*C[0] + u*u*B[0], q*q*A[1] + 2*q*u*C[1] + u*u*B[1]]; };
-      const W = Pq(.28), wall = W[0]>114 && W[0]<186 && W[1]>108;
-      const wide = B[0]<30 || B[0]>270, over = B[1]<22, post = !wide && !over && (B[0]<36 || B[0]>264 || B[1]<27);
-      const curl = Math.hypot(...dev), dist = Math.hypot(B[0] - 150, B[1] - 84), save = clamp(1.2 - dist/80 - curl/50 - e*.4, .05, .92);
-      const goal = !wall && !wide && !over && !post && Math.random()>save;
+      // the wall only stops a ball that's still low through the middle; a green corner beats the keeper every time
+      const W = Pq(.28), wall = W[0]>122 && W[0]<178 && W[1]>114;
+      const wide = B[0]<30 || B[0]>270, over = B[1]<22, post = !wide && !over && (B[0]<34 || B[0]>266 || B[1]<25);
+      const green = !wall && !wide && !over && !post && lvInGreen(Z, B[0], B[1]);
+      const curl = Math.hypot(...dev), dist = Math.hypot(B[0] - 150, B[1] - 84), save = clamp(.8 - dist/90 - curl/45 - e*.4, .05, .7);
+      const goal = green || (!wall && !wide && !over && !post && Math.random()>save);
       const [kx, ky, rot] = lvKeeperTo(B[0], B[1], wall || wide || over ? "wrong" : goal ? "near" : "save", B[0]<140 ? "l" : B[0]>160 ? "r" : "c");
       lv$("#lgSw").style.transition = "opacity .5s"; lv$("#lgSw").setAttribute("opacity", ".25");
       await lvStrike(st); if (done) return;
@@ -928,7 +931,7 @@ function lgBend(st){
         wall ? null : lvTween(340, kk=>{ const q = lvEaseOut(kk); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (ky-84)*q, rot*q, 1 + .06*q); })]);
       if (done) return;
       if (wall){ await lvFly("#lvBall", end, [end[0] + (Math.random()*60 - 30), 176], 320, {s0:.88, s1:1, h:12, spin:-1}); return fin({ok:false, big:"Hit the wall", small:"Bend it wider, or lift it higher over them"}); }
-      if (goal){ got++; lgSetHud(got); lvRipple(B[0], B[1]); await lvWait(200); return fin({ok:true, big:"What a free kick!", small:curl>22 ? "Bent it round the wall" : "Over the wall and in"}); }
+      if (goal){ got++; lgSetHud(got); lvRipple(B[0], B[1]); await lvWait(200); return fin({ok:true, big:"What a free kick!", small:green ? "Into the green corner" : curl>22 ? "Bent it round the wall" : "Over the wall and in"}); }
       fin({ok:false, big:wide ? "Wide" : over ? "Over the bar" : post ? "Off the woodwork" : "Saved", small:wide || over ? "Aim inside the posts" : post ? "Inches away" : curl<12 ? "Not enough bend: he read it" : "He got across to it"});
     };
   });

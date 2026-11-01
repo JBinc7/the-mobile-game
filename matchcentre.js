@@ -172,6 +172,9 @@ function mcBuild(){
 }
 
 /* ---------- playing a week ---------- */
+// the injury you have this week in the match centre, and how many weeks it has left (counting this one)
+const mcInjNow = () => S.mc && !S.mc.done && S.mc.key===mcKey() ? mcInjury(mcFrac(S.mc.wi)) : null;
+const mcInjWeeks = i => i ? Math.max(1, Math.ceil(((i.at + i.red) - mcFrac(S.mc.wi))*S.mc.weeks.length*2 + .5)) : 0;
 function mcInjury(frac){ const list = S.inj && S.inj.season===seasonLabel(S.season) ? S.inj.list : []; return list.find(i=>i.at!=null && frac>=i.at && frac<i.at+i.red) || null; }
 // your average match rating this season: both halves (and both clubs after a January move)
 function mcSeasonRating(){
