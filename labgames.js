@@ -623,49 +623,64 @@ lgAdd({id:"skills", t:"Skill combo", d:"Memorise the sequence of moves, then do 
 
 /* ---------- 14. Race to the ball: stride on the beat ---------- */
 function lgRace(st){
-  const kit = lvKits(st), e = st.lab.ease, beat = 520, win = clamp(140*(1 + e*1.2), 90, 190), vd = 64*(1 - e*.3);
+  // a ball over the top and a defender after it. Hold to sprint (it burns your legs), ease off to get them back, and let go
+  // when the ball's in reach to stretch for it. Pace sets your top speed, stamina how long you can hold it
+  const kit = lvKits(st), e = st.lab.ease, A = st.lab.a || {pac:70, sta:70};
+  const top = 98*(1 + (A.pac - 70)/220 + e*.09), jog = 50, drain = clamp(.62 - (A.sta - 70)/300 - e*.08, .3, .75), vd = 66*(1 - e*.1)*(1 + (Math.random() - .5)*.1), REACH = 24, OUT = 292;
   return new Promise(res=>{
-    lgShow(st, "Race to the ball", "A loose ball and a defender after it. Tap on the beat, as the ring closes on the dot, to stride faster.",
-      lgSideView(`${lvBallSvg("lgB", 150, 166, 5)}<g id="lgDf">${lvMan(0, 0, kit.them, {run:true, s:1.4})}</g><g id="lgMe">${lvMan(0, 0, kit.us, {you:true, mark:true, run:true, s:1.4})}</g>`)
-        + `<div class="lg-beat" aria-hidden="true"><span class="lg-beat-r"></span><span class="lg-beat-c"></span></div>`,
-      `<button type="button" class="btn primary big lv-act">Stride!</button>`);
-    let done = false;
+    lgShow(st, "Chase it down", "A ball over the top and their defender's on it too. <b>Hold</b> to sprint: it drains your legs. <b>Let go</b> when the ball's in your reach (the ring turns gold) to stretch for it.",
+      lgSideView(`<path d="M${OUT} 120 V178" stroke="#fff" stroke-width="2" opacity=".55"/><circle id="lgRch" cx="0" cy="166" r="${REACH}" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="2" stroke-dasharray="4 4"/>
+        ${lvBallSvg("lgB", 120, 166, 5)}<g id="lgDf">${lvMan(0, 0, kit.them, {run:true, s:1.4})}</g><g id="lgMe">${lvMan(0, 0, kit.us, {you:true, mark:true, run:true, s:1.4})}</g>`)
+        + `<div class="lg-legs" aria-hidden="true"><span>Legs</span><i><b></b></i></div>`,
+      `<button type="button" class="btn primary big lv-act">Hold to sprint</button>`);
+    let done = false, hold = false, legs = 1, gassed = false, me = 14, df = 50, v = jog, bx = 80, vb = 76 + Math.random()*8, last = 0, stretch = null;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
-    const ring = lv$(".lg-beat-r"), beatEl = lv$(".lg-beat"), t0 = performance.now() + 700; let me = 30, df = 42, v = 48, bx = 150, vb = 74, last = t0, lastTap = 0;
-    const draw = () => { lvMove("#lgDf", df, 160); lvMove("#lgMe", me, 170); lvBallAt("#lgB", bx, 166, 1, 0, bx*6); };
+    const rch = lv$("#lgRch"), bar = lv$(".lg-legs b"), act = lv$(".lv-act"), t0 = performance.now() + 500;
+    const draw = () => { lvMove("#lgDf", df, 158); lvMove("#lgMe", me, 170); lvBallAt("#lgB", bx, 166, 1, 0, bx*6); rch.setAttribute("cx", (me + 6).toFixed(1));
+      const inR = bx - me > 4 && bx - me < REACH + 6; rch.setAttribute("stroke", inR ? "#F5C542" : "#fff"); rch.setAttribute("stroke-opacity", inR ? ".9" : ".25");
+      bar.style.width = (legs*100).toFixed(0) + "%"; bar.parentNode.classList.toggle("low", legs < .25); };
     draw();
     lvLoop(now=>{
       if (done) return false;
-      // the ring closes on the dot on every beat
-      const ph = (((now - t0) % beat) + beat) % beat/beat; ring.style.transform = `translate(-50%,-50%) scale(${(2.6 - 1.6*ph).toFixed(3)})`; ring.style.opacity = (.3 + .7*ph).toFixed(2);
-      if (now<t0) return;
+      if (now < t0){ last = now; return; }
       const dt = Math.min(.04, (now - last)/1000); last = now;
-      v += (44 - v)*dt*1.1; me += v*dt; df += vd*dt; vb = Math.max(0, vb - 24*dt); bx += vb*dt;
+      if (stretch == null){
+        // sprinting: up towards top speed while your legs last. Run them dry and you're blowing: barely a jog till they're back
+        if (gassed && legs >= .55){ gassed = false; bar.parentNode.parentNode.classList.remove("gas"); }
+        const want = gassed ? 26 : hold ? top : jog; v += (want - v)*dt*(want > v ? 2.4 : 1.8);
+        legs = clamp(legs + (hold && !gassed ? -drain : .3)*dt, 0, 1); me += v*dt;
+        if (legs <= 0 && !gassed){ gassed = true; bar.parentNode.parentNode.classList.add("gas"); lgPop("Blowing!", false, clamp(me/3, 12, 88), 40); lvBuzz("bad"); }
+      }
+      // he tracks the ball and closes, quicker once it's near him
+      df += vd*dt; vb = Math.max(0, vb - 15*dt); bx += vb*dt;
       draw();
-      if (me>=bx - 8 || df>=bx - 8){ end(me>=bx - 8); return false; }
+      if (stretch == null && df >= bx - 9) return end(false, "He got there first"), false;
+      if (bx >= OUT) return end(false, "It ran out of play"), false;
     });
-    const tap = () => {
-      if (done) return; const now = performance.now(); if (now<t0 - 120 || now - lastTap < 150) return; lastTap = now;
-      const ph = (((now - t0) % beat) + beat) % beat, off = Math.min(ph, beat - ph), x = clamp(me/3, 12, 88);
-      if (off<=win/2){ const perfect = off<win/5; v = Math.min(150, v + (perfect ? 36 : 28)); lgPop(perfect ? "Perfect" : "Good", true, x, 48);
-        beatEl.classList.remove("hit"); void beatEl.offsetWidth; beatEl.classList.add("hit"); }
-      else { v *= .62; lgPop("Stumble", false, x, 48); lvBuzz("bad"); }
-    };
-    const end = async won => {
-      done = true; lv$(".lv-act").disabled = true;
+    const down = ev => { if (done || stretch != null) return; ev && ev.preventDefault(); hold = true; act.textContent = "Sprinting · let go to ease off"; };
+    const up = () => { if (!hold || done) return; hold = false; act.textContent = "Hold to sprint";
+      const gap = bx - me;
+      if (gap > 4 && gap < REACH + 6){   // in reach: stretch a long leg to it
+        stretch = 1; lvKick("#lgMe .lv-man");
+        lvTween(180, k=>{ me += (gap - 2 - (me - (bx - gap)))*lvEaseOut(k)*.6; lvMove("#lgMe", me, 170, -18*k); }).then(()=>end(df < bx - 9, "He nicked it first"));
+      } };
+    const stage = lv$(".lv-stage");
+    [stage, act].forEach(el=>{ el.addEventListener("pointerdown", down); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("pointerleave", up); });
+    lvKey = k=>{ if (k==="go"){ if (hold) up(); else down(); } };
+    const end = async (won, why) => {
+      if (done) return; done = true; act.disabled = true;
       lvEl.querySelectorAll(".lv-legs.run").forEach(l=>l.classList.remove("run"));
       const gap = Math.round(Math.abs(me - df)/3);
-      // whoever gets there first takes it on
-      lvKick(won ? "#lgMe .lv-man" : "#lgDf .lv-man");
-      await lvFly("#lgB", [bx, 166], [bx + 34, won ? 170 : 162], 380, {h:won ? 8 : 5, spin:1});
-      res(won ? {ok:true, big:"First to it!", small:gap ? `By ${gap} yard${gap===1 ? "" : "s"}` : "By a whisker"} : {ok:false, big:"Beaten to it", small:"Stride on the beat"});
+      if (why!=="It ran out of play") lvKick(won ? "#lgMe .lv-man" : "#lgDf .lv-man");
+      await lvFly("#lgB", [bx, 166], won ? [bx - 30, 168] : why==="It ran out of play" ? [bx + 20, 166] : [bx + 40, 150], 380, {h:won ? 6 : 10, spin:1});
+      res(won ? {ok:true, big:"Won it!", small:legs > .4 ? "And legs to spare" : gap ? `By ${gap} yard${gap===1 ? "" : "s"}` : "By a whisker"}
+        : {ok:false, big:why==="It ran out of play" ? "Out of play" : "Beaten to it", small:why==="It ran out of play" ? "Let go sooner, when the ring's gold" : gassed ? "You ran your legs dry: ease off before the bar empties" : why});
     };
-    lvTap(lv$(".lv-act"), tap); lvTap(lv$(".lv-stage"), tap); lvKey = k=>{ if (k==="go") tap(); };
   });
 }
-lgAdd({id:"race", t:"Race to the ball", d:"A loose ball and a defender racing you for it: stride on the beat to get there first.", ic:"sprint", run:lgRace},
-  {t:"Race to the ball", steps:["The ball's loose and a defender's racing you for it.", "Tap <b>Stride!</b> (or anywhere, or space) <b>on the beat</b>: as the ring closes on the dot. Each good stride makes you faster.",
-    "Tap off the beat and you stumble. Stop tapping and you slow down."]});
+lgAdd({id:"race", t:"Chase it down", d:"A ball over the top and a defender after it. Hold to sprint, save your legs, let go to stretch for it.", ic:"sprint", run:lgRace},
+  {t:"Chase it down", steps:["A ball's been played over the top and their defender's chasing it too.", "<b>Hold</b> your finger down (or the button, or space) to <b>sprint</b>. The <b>Legs</b> bar drains while you sprint; ease off and it comes back. Run it dry and you're blowing: barely moving until it's half full again.",
+    "When the ball's in your reach the ring at your feet turns <b>gold</b>: <b>let go</b> to stretch a leg to it before he gets there. Let it run out of play and it's lost."]});
 
 /* ---------- 15. Offside trap: step up just before he plays it ---------- */
 function lgOffside(st){

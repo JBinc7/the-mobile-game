@@ -8,14 +8,14 @@
    skill, scaled by chance quality), so the score always includes what you did. Each mini-game (LV_GAMES) resolves to
    a result R that lvApply turns into goals, assists, own goals, goals conceded and a rating bonus. */
 const LV_POOL = {
-  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross","lab:volley","lab:bicycle","lab:chip","lab:race","lab:airduel","lab:dribble","lab:lob","lab:shield"], def:["intercept","tackle"]},
-  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
-  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:skills","lab:dribble","lab:corner","lab:race","lab:chip","lab:volley"], def:["intercept","tackle"]},
+  ST:{att:["shot:oneonone","shot:box","shot:long","header","move","takeon","pass","cross","lab:volley","lab:bicycle","lab:chip","lab:airduel","lab:dribble","lab:lob","lab:shield"], def:["intercept","tackle"]},
+  LW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:skills","lab:dribble","lab:corner","lab:chip","lab:volley"], def:["intercept","tackle"]},
+  RW:{att:["shot:box","shot:long","takeon","cross","move","pass","shot:oneonone","lab:skills","lab:dribble","lab:corner","lab:chip","lab:volley"], def:["intercept","tackle"]},
   CAM:{att:["shot:box","shot:long","pass","move","takeon","shot:freekick","shot:oneonone","lab:through","lab:onetwo","lab:skills","lab:bendit","lab:volley","lab:chip","lab:gap"], def:["intercept","tackle"]},
   CM:{att:["pass","move","shot:long","shot:box","takeon","lab:through","lab:switch","lab:onetwo","lab:gap","lab:shield","lab:volley"], def:["intercept","tackle","block","lab:blockit"]},
   CDM:{att:["pass","shot:long","move","takeon","lab:switch","lab:gap","lab:shield"], def:["intercept","tackle","block","header:def","lab:offside","lab:blockit"]},
-  LB:{att:["cross","takeon","pass","move","shot:long","lab:corner","lab:race","lab:switch","lab:dribble"], def:["tackle","intercept","block","header:def","lab:blockit","lab:clear"]},
-  RB:{att:["cross","takeon","pass","move","shot:long","lab:corner","lab:race","lab:switch","lab:dribble"], def:["tackle","intercept","block","header:def","lab:blockit","lab:clear"]},
+  LB:{att:["cross","takeon","pass","move","shot:long","lab:corner","lab:switch","lab:dribble"], def:["tackle","intercept","block","header:def","lab:blockit","lab:clear"]},
+  RB:{att:["cross","takeon","pass","move","shot:long","lab:corner","lab:switch","lab:dribble"], def:["tackle","intercept","block","header:def","lab:blockit","lab:clear"]},
   CB:{att:["header","pass","shot:long","lab:switch","lab:airduel"], def:["tackle","block","intercept","header:def","lab:offside","lab:clear","lab:blockit"]},
   GK:{att:[], def:["save","save","claim","rush","lab:fingertips","lab:fingertips"]}
 };
@@ -24,7 +24,7 @@ const LV_POOL = {
 // it often ends in a goal or an assist; keep = keep the ball; def and save = stop them scoring; pen = a penalty
 const LV_LABM = {volley:["goal","fin"], bicycle:["goal","fin"], chip:["goal","fin"], lob:["goal","fin"], topbins:["goal","fin"], bendit:["goal","fin"], flickpen:["pen","fin"],
   through:["assist","pas"], switch:["assist","pas"], corner:["assist","pas"], gap:["assist","pas"],
-  onetwo:["chance","pas"], skills:["chance","pac"], race:["chance","pac"], dribble:["chance","pac"], airduel:["chance","def"], shield:["keep","sta"],
+  onetwo:["chance","pas"], skills:["chance","pac"], dribble:["chance","pac"], airduel:["chance","def"], shield:["keep","sta"],
   offside:["def","def"], clear:["def","def"], blockit:["def","def"], fingertips:["save","def"]};
 // the set piece a match sometimes hands you instead of one of your moments: who takes it, and how often
 const LV_SETPIECE = {ST:["shot:pen",.14], LW:["shot:freekick",.12], RW:["shot:freekick",.12], CAM:["shot:pen",.12], CM:["shot:freekick",.1], CDM:["shot:freekick",.06], LB:["shot:freekick",.05], RB:["shot:freekick",.05], CB:["header",.12]};
@@ -394,7 +394,33 @@ function lvPlan(f, X){
   return {list:list.sort((x,y)=>x.min-y.min), eF:eF*qa, eA:eA*qd};
 }
 // what a moment did: R = {ok, big, small, g (your goal), a (your assist), gf (a team goal), ga (they scored), og (your own goal), bonus}
+/* ---------- fouls and cards ----------
+   sev 0..1: how bad the challenge was. A late one from behind can be a straight red; a third foul in a match is a booking
+   for persistent fouling; a second yellow is a red. Being sent off ends your match (lvSentOff) and brings a ban (mcBook) */
+function lvFoul(st, m, sev, early){
+  st.fouls = (st.fouls || 0) + 1;
+  let card = "", why;
+  if (!early && sev > .72 && Math.random() < .22){ card = "r"; why = "A reckless lunge from behind: straight red"; }
+  else if (Math.random() < .12 + sev*.7){ card = "y"; why = early ? "You dived in and took him down" : "You clipped his heels"; }
+  else if (st.fouls >= 3){ card = "y"; why = "That's your third foul: booked for persistent fouling"; }
+  else why = early ? "You went through the back of him" : "Late, but the ref only gives the free kick";
+  if (card==="y" && st.yc){ card = "yy"; why = "A second yellow, so it's red"; }
+  const fk = Math.random() < .1*m.q;   // and the free kick that follows
+  const big = card==="y" ? "Yellow card" : card ? "Red card!" : "Foul";
+  return {ok:false, big, small: why + (fk ? ". They score from the free kick" : card==="y" || !card ? ". Free kick to them" : ""), foul:1, card, ga: fk ? 1 : 0,
+    bonus: card==="y" ? -.25 : card ? -.9 : -.12};
+}
+// sent off: the rest of your moments don't happen, and ten men concede more and score less for the rest of the game
+function lvSentOff(st, m){
+  const f = st.f, me = f.me, left = Math.max(0, 90 - m.min)/90, on = me.st==="start" ? 0 : 90 - me.mins;
+  st.ev = st.ev.filter(e => e.min < m.min || !e.us || Math.random() < .65);
+  for (let i=0, n=mcPoisson(st.X.la*.45*left); i<n; i++) st.ev.push({min:m.min + 1 + Math.floor(Math.random()*Math.max(1, 90 - m.min)), us:false});
+  me.mins = clamp(Math.min(90, m.min) - on, 1, me.mins); me.sent = m.min;
+  st.left = 0;
+}
 function lvApply(st, m, R){
+  if (R.card){ st.log.push({min:m.min, txt:R.card==="y" ? "Booked" : "Sent off", good:false, card:R.card==="y" ? "y" : "r"});
+    if (R.card==="y") st.yc = 1; else st.red = R.card; st.card = R.card==="y" ? "y" : R.card; }
   if (R.g || R.a || R.gf) st.ev.push({min:m.min, us:true, me:R.g ? "g" : R.a ? "a" : ""});
   if (R.g) st.g++; if (R.a) st.a++;
   if (R.ga || R.og){ st.ev.push({min:m.min, us:false, og:!!R.og}); if (R.og) st.og++; }
@@ -426,7 +452,7 @@ const LV_ICON = {good:`<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"
   goal:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="#fff" stroke="#15171A" stroke-width="1.5"/><path d="M12 7.6l3.8 2.8-1.5 4.4H9.7l-1.5-4.4z" fill="#15171A"/></svg>`};
 function lvResHTML(R, cls = "lv-res"){
   const goal = !!(R.g || R.a || R.gf), kind = goal ? "goal" : R.ok ? "good" : "bad";
-  return `<div class="${cls} ${R.ok?"good":"bad"} ${goal ? "goal" : ""}"><i class="lv-ico ${kind}" aria-hidden="true">${LV_ICON[kind]}</i><span>${esc(R.big)}</span>${R.small?`<small>${esc(R.small)}</small>`:""}</div>`;
+  return `<div class="${cls} ${R.ok?"good":"bad"} ${goal ? "goal" : ""}${R.card ? R.card==="y" ? " cy" : " cr" : ""}">${R.card ? `<div class="lv-refcard ${R.card==="y" ? "y" : "r"}" aria-hidden="true">${R.card==="yy" ? `<i class="y"></i>` : ""}<i></i></div>` : `<i class="lv-ico ${kind}" aria-hidden="true">${LV_ICON[kind]}</i>`}<span>${esc(R.big)}</span>${R.small?`<small>${esc(R.small)}</small>`:""}</div>`;
 }
 function lvOutcome(st, R){
   const goal = !!(R.g || R.a || R.gf);
@@ -436,7 +462,7 @@ function lvOutcome(st, R){
   // some mini-games (take-ons) have their own buttons instead of a main one: swap those for it
   let act = lv$(".lv-act"); if (!act){ act = document.createElement("button"); act.type = "button"; lv$(".lv-in").appendChild(act); }
   lv$(".lv-lr")?.remove(); act.hidden = false;
-  act.textContent = st.lab ? st.lab.next || "Continue" : st.left>1 ? "Next moment" : "Full time"; act.disabled = true; act.className = "btn big primary lv-act"; act.onclick = null;
+  act.textContent = st.lab ? st.lab.next || "Continue" : R.card && R.card!=="y" ? "Walk off" : st.left>1 ? "Next moment" : "Full time"; act.disabled = true; act.className = "btn big primary lv-act"; act.onclick = null;
   lv$("[data-lv-skip]")?.remove();
   // a short pause, so the tap that made the tackle can't also skip past its result
   return new Promise(res=>setTimeout(()=>{
@@ -517,7 +543,8 @@ const LV_COINS = {win:50, draw:10, loss:0, goal:20, assist:15, og:-10, potm:25};
 function lvCoins(f){
   const r = f.res, me = f.me, res = r.gf>r.ga ? "win" : r.gf===r.ga ? "draw" : "loss", og = me.og || 0;
   const parts = [[{win:"Win", draw:"Draw", loss:"Defeat"}[res], LV_COINS[res]], ...(me.g ? [[`${me.g} goal${me.g>1?"s":""}`, me.g*LV_COINS.goal]] : []),
-    ...(me.a ? [[`${me.a} assist${me.a>1?"s":""}`, me.a*LV_COINS.assist]] : []), ...(og ? [[`${og} own goal${og>1?"s":""}`, og*LV_COINS.og]] : []), ...(f.potm ? [["Player of the Match", LV_COINS.potm]] : [])];
+    ...(me.a ? [[`${me.a} assist${me.a>1?"s":""}`, me.a*LV_COINS.assist]] : []), ...(og ? [[`${og} own goal${og>1?"s":""}`, og*LV_COINS.og]] : []), ...(f.potm ? [["Player of the Match", LV_COINS.potm]] : []),
+    ...(me.card && me.card!=="y" ? [["Sent off", -Math.round(LV_COINS.goal/2)]] : [])];
   return {parts, total:parts.reduce((s,p)=>s + p[1], 0)};
 }
 
@@ -554,9 +581,10 @@ async function lvPlayMatch(f, w){
         }
         if (auto){ lvApply(st, m, lvAuto(st, m)); st.left--; continue; }
         lvApply(st, m, R); await lvOutcome(st, R); st.left--;
+        if (st.red){ lvSentOff(st, m); break; }
       }
-      const D = mcKoLevel(f, ev) ? await lvDecider(st, P => mcKoLevel(f, st.ev)) : {};
-      mcResolve(f, w, {gf:ev.filter(e=>e.us).length, ga:ev.filter(e=>!e.us).length, g:st.g, a:st.a, og:st.og, bonus:st.bonus, ev, et:D.et, pens:D.pens});
+      const D = mcKoLevel(f, st.ev) ? await lvDecider(st, P => mcKoLevel(f, st.ev)) : {};
+      mcResolve(f, w, {gf:st.ev.filter(e=>e.us).length, ga:st.ev.filter(e=>!e.us).length, g:st.g, a:st.a, og:st.og, bonus:st.bonus, ev:st.ev, et:D.et, pens:D.pens, card:st.card});
       f.coins = lvCoins(f).total; Account.addCoins(f.coins); save();
       if (!lvSeen().coins) await lvHelp(["coins"], true);
     } else mcResolve(f, w);
@@ -567,6 +595,12 @@ async function lvPlayMatch(f, w){
    level(st) says whether it's still level (counting a first leg). Resolves {et, pens} for the result. */
 async function lvDecider(st, level){
   const f = st.f, X = st.X, P = LV_POOL[lvPos(st)] || LV_POOL.CM, [g0, a0] = lvScore(st, 999);
+  if (st.red){   // you watch from the tunnel: extra time and penalties are simmed
+    for (let i=0, n=mcPoisson(X.lf*.2); i<n; i++) st.ev.push({min:91 + Math.floor(Math.random()*29), us:true});
+    for (let i=0, n=mcPoisson(X.la*.32); i<n; i++) st.ev.push({min:91 + Math.floor(Math.random()*29), us:false});
+    st.et = true; if (!level(st)) return {et:true};
+    return {et:true, pens:Math.random() < logistic((X.base - f.oppStr)/12) ? "won" : "lost"};
+  }
   const go = await lvAsk(`<div class="lv-card"><div class="lv-eye">${esc(f.round || "Knockout")} · 90 minutes</div><h2 class="lv-t">Extra time</h2>
     <p>Level at ${g0}–${a0}${f.leg===2 ? " on aggregate" : ""}. Thirty more minutes, then penalties if nobody wins it.</p>
     <div class="lv-row"><button type="button" class="btn primary big" data-lv="play" data-lv-focus>Play extra time</button><button type="button" class="btn" data-lv="sim">Sim it</button></div></div>`);
@@ -620,10 +654,12 @@ async function lvShootout(st){
   return won ? "won" : "lost";
 }
 // how long you played: "90 minutes", "Started, off on 68' (68 minutes)", "On at 71' (19 minutes)"
-const lvMinsLine = me => me.st==="start" ? (me.mins>=90 ? "Played the full <b>90 minutes</b>" : `Started, off on ${me.mins}' · <b>${me.mins} minutes</b>`) : `On at ${90 - me.mins}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>`;
+const lvCardIc = c => c ? `<i class="card-ic ${c==="y" ? "y" : "r"}" role="img" aria-label="${c==="y" ? "Yellow card" : c==="yy" ? "Two yellows, sent off" : "Red card"}"></i>` : "";
+const lvMinsLine = me => me.sent ? (me.st==="start" ? `${lvCardIc(me.card)} Sent off on ${me.sent}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>` : `On at ${me.sent - me.mins}', ${lvCardIc(me.card)} sent off on ${me.sent}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>`) : me.st==="start" ? (me.mins>=90 ? "Played the full <b>90 minutes</b>" : `Started, off on ${me.mins}' · <b>${me.mins} minutes</b>`) : `On at ${90 - me.mins}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>`;
 async function lvFullTime(st, home, away){
   const f = st.f, me = f.me, [l, r] = f.home || f.neutral ? [f.res.gf, f.res.ga] : [f.res.ga, f.res.gf];
-  const bits = [me.g ? `${me.g} goal${me.g>1?"s":""}` : "", me.a ? `${me.a} assist${me.a>1?"s":""}` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : ""].filter(Boolean);
+  const bits = [me.g ? `${me.g} goal${me.g>1?"s":""}` : "", me.a ? `${me.a} assist${me.a>1?"s":""}` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : "",
+    me.card==="y" ? "booked" : me.card ? "sent off" : ""].filter(Boolean);
   const html = `<div class="lv-card lv-ftc">
       <div class="lv-eye">Full time${f.res.pens ? ` · ${f.res.pens==="won"?"won":"lost"} on penalties` : f.res.et ? " · after extra time" : ""}${f.agg && !f.res.pens ? ` · ${f.agg[0]}–${f.agg[1]} on aggregate` : ""}</div>
       <div class="lv-ft"><span>${clubBadge(home, 44)}<em>${esc(home)}</em></span><b>${l}–${r}</b><span>${clubBadge(away, 44)}<em>${esc(away)}</em></span></div>
@@ -634,7 +670,7 @@ async function lvFullTime(st, home, away){
       ${f.potm ? `<div class="lv-potm">★ Player of the Match</div>` : f.potmBy ? `<p class="lv-potm-by">Player of the Match: <b>${esc(f.potmBy.n)}</b> (${esc(f.potmBy.c)}), ${f.potmBy.r.toFixed(1)}</p>` : ""}
       ${f.coins!=null ? (()=>{ const C = lvCoins(f); return `<div class="lv-coins"><i class="coin" aria-hidden="true"></i><b>${C.total>=0?"+":""}${C.total}</b><span>${C.parts.map(([l,n])=>`${esc(l)} ${n>=0?"+":""}${n}`).join(" · ")}</span></div>`; })()
         : `<p class="lv-nocoins">Simmed matches don't earn gold coins. Play the key moments to earn them.</p>`}
-      ${st.log.length ? `<details class="lv-logd"><summary>Your key moments · ${st.log.filter(x=>x.good).length} of ${st.log.length} went your way</summary><ol class="lv-log">${st.log.map(x=>`<li class="${x.good===true?"good":x.good===false?"bad":""}"><span>${x.min}'</span>${esc(x.txt)}</li>`).join("")}</ol></details>` : ""}
+      ${st.log.length ? `<details class="lv-logd"><summary>Your key moments · ${st.log.filter(x=>x.good).length} of ${st.log.length} went your way</summary><ol class="lv-log">${st.log.map(x=>`<li class="${x.good===true?"good":x.good===false?"bad":""}"><span>${x.min}'</span>${x.card ? lvCardIc(x.card) + " " : ""}${esc(x.txt)}</li>`).join("")}</ol></details>` : ""}
       ${lgFullTime(f)}
       <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>Continue</button>
     </div>`;
@@ -1018,6 +1054,12 @@ function lvGameTiming(st, m){
       if (ok){ await lvWait(120); if (block) await lvFly("#lvRun", [x, 92], [x - 40, 30], 380, {h:24, spin:2}); else await lvFly("#lvRunB", [9, 6], [9, -50], 380, {h:20, spin:2});
         return res({ok:true, big: block ? "Blocked!" : "Tackle won!", small: block ? "Off your shin and away" : "Clean as a whistle", bonus:.3}); }
       await lvWait(260);
+      // a tackle you mistime catches the man, not the ball: the later (or the more reckless the dive), the worse it is
+      if (!block && !late){
+        const off = early ? (mid - zone/2) - p : p - (mid + zone/2);
+        const foul = early ? off < .1 && Math.random() < .6 : off < .34;
+        if (foul) return res(lvFoul(st, m, early ? .3*(1 - off/.1) : off/.34, early));
+      }
       const why = early ? (block ? "You went down too soon" : "You dived in") : (block ? "Too late" : "He skipped past you");
       if (Math.random() >= (block ? .72 : .52)*m.q) return res({ok:false, big:"Got away with it", small:`${why}, but the shot went wide`, bonus:-.1});
       const og = block && Math.random()<.3;   // a block that goes wrong can deflect in off you

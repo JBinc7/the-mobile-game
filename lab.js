@@ -47,40 +47,10 @@ const LAB_IC = {
 };
 const labIcon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${LAB_IC[k] || LAB_IC.goal}</svg>`;
 
-/* ---------- the games: the match ones (moments.js), the drills (drills.js), the new ones (labgames.js) ---------- */
-// a match game played as a one-off moment
-const labMatch = (g, v, pos) => st => { if (pos) st.lab.pos = pos; return LV_GAMES[g](st, {min:0, q:1, g, v, side:"att"}); };
-// the two drills of their own, scored as one go
-async function labSprint(st){
-  st.drill = {t:"Sprint starts", n:0}; st.lvl = 0;
-  const rt = await drSprintCore(st); if (rt==="skip") return rt;
-  return rt<0 ? {ok:false, big:"False start", small:"Wait for the green"} : {ok:rt<450, big:rt<330 ? "Rapid!" : rt<450 ? "Good start" : "Slow start", small:`${(rt/1000).toFixed(2)}s reaction`};
-}
-async function labBeep(st){
-  st.drill = {t:"Beep test", n:0}; st.lvl = 0;
-  const n = await drBeepCore(st); if (n==="skip") return n;
-  return {ok:n>=8, big:`Level ${Math.floor(n/2)+1}`, small:`${n} shuttle${n===1 ? "" : "s"} of ${DR_BEEP_MAX}`};
-}
+/* ---------- the games: only the unreleased ones (labgames.js, p90.js) ---------- */
+// the lab is only for games that aren't released yet: the rest are in matches, or at the training ground (drills.js)
 const LAB_GAMES = [
-  {id:"shot-11", t:"Shot: one-on-one", d:"Through on goal. Pick your spot, then hit the power bar's green.", cat:"match", ic:"goal", help:"shot", run:labMatch("shot", "oneonone")},
-  {id:"shot-box", t:"Shot: in the box", d:"A chance in the area: aim, then power.", cat:"match", ic:"goal", help:"shot", run:labMatch("shot", "box")},
-  {id:"shot-long", t:"Shot: from distance", d:"25 yards out. Too much power and it's in the stands.", cat:"match", ic:"goal", help:"shot", run:labMatch("shot", "long")},
-  {id:"freekick", t:"Free kick", d:"Over the wall or round it, with the keeper set.", cat:"match", ic:"wall", help:"shot", run:labMatch("shot", "freekick")},
-  {id:"header", t:"Header", d:"A cross comes in: time your header with the closing ring.", cat:"match", ic:"head", help:"header", run:labMatch("header")},
-  {id:"pass", t:"Pass", d:"Find the teammate the defenders aren't marking.", cat:"match", ic:"pass", help:"pass", run:labMatch("pass", null, "CM")},
-  {id:"move", t:"Attacking move", d:"Three steps: a pass, a take-on, then shoot or square it.", cat:"match", ic:"move", help:"move", run:labMatch("move", null, "ST")},
-  {id:"takeon", t:"Take-on", d:"Wait for the defender to commit, go the other way, then finish.", cat:"match", ic:"dribble", help:"takeon", run:labMatch("takeon", null, "LW")},
-  {id:"cross", t:"Cross", d:"Whip it in to the free runner as he reaches his spot.", cat:"match", ic:"cross", help:"cross", run:labMatch("cross", null, "RW")},
-  {id:"tackle", t:"Tackle", d:"Time your challenge as he runs into the green.", cat:"match", ic:"tackle", help:"tackle", run:labMatch("tackle")},
-  {id:"block", t:"Block", d:"Throw yourself in front of the shot at the right moment.", cat:"match", ic:"block", help:"block", run:labMatch("block")},
-  {id:"intercept", t:"Interception", d:"Read the passer's eyes and cut out the pass.", cat:"match", ic:"eye", help:"intercept", run:labMatch("intercept")},
-  {id:"save", t:"Save", d:"Keeper: watch the ball and dive the right way.", cat:"match", ic:"glove", help:"save", run:labMatch("save")},
-  {id:"pen-save", t:"Penalty save", d:"Keeper: a penalty, so even less time.", cat:"match", ic:"spot", help:"save", run:labMatch("save", "pen")},
-  {id:"claim", t:"Claim a cross", d:"Keeper: come for the cross as the rings meet.", cat:"match", ic:"claim", help:"claim", run:labMatch("claim")},
-  {id:"rush", t:"Rush out", d:"Keeper: smother it after the striker's heavy touch.", cat:"match", ic:"rush", help:"rush", run:labMatch("rush")},
-  {id:"sprint", t:"Sprint starts", d:"Training drill: go the moment the lights turn green.", cat:"drill", ic:"lights", help:"sprint", run:labSprint},
-  {id:"beep", t:"Beep test", d:"Training drill: turn at each line, faster and faster.", cat:"drill", ic:"shuttle", help:"beep", run:labBeep},
-  ...(typeof LAB_NEW!=="undefined" ? LAB_NEW : []),
+  ...(typeof LAB_NEW!=="undefined" ? LAB_NEW.filter(g=>g.cat==="new") : []),
   ...(typeof LAB_P90!=="undefined" ? LAB_P90 : [])
 ];
 const LAB_CATS = {match:"In matches", drill:"Training", arcade:"Arcade · training ground", new:"New · lab only", full:"Full match · lab only"};
@@ -114,7 +84,7 @@ function labHome(){
   const list = LAB_GAMES.filter(g=>labCat==="all" || g.cat===labCat), n = c => LAB_GAMES.filter(g=>c==="all" || g.cat===c).length;
   return `<div class="lab">
     <div class="lab-head"><div><div class="lv-eye">Development</div><h2 class="lv-t">Mini-game lab</h2></div><button type="button" class="dlg-x lab-x" data-lab="close" aria-label="Close the lab">×</button></div>
-    <p class="lab-intro">Every mini-game in the game, to try out as often as you like. <b>Nothing here touches your career</b>: no coins, no stats, no training, no saves. The new games aren't used in matches.</p>
+    <p class="lab-intro">Mini-games that <b>aren't in the game yet</b>, to try out as often as you like. <b>Nothing here touches your career</b>: no coins, no stats, no training, no saves. The released ones are in your matches and at the training ground.</p>
     <div class="lab-bar">
       <div class="lab-seg" role="group" aria-label="Difficulty">${Object.entries(LAB_DIFF).map(([k,D])=>`<button type="button" data-lab="diff" data-k="${k}" aria-pressed="${k===labDiff}">${D.t}</button>`).join("")}</div>
       <div class="chips lab-cats" role="group" aria-label="Show">${["all","match","drill","arcade","new","full"].filter(c=>n(c)).map(c=>`<button type="button" class="chip ${c===labCat?"on":""}" data-lab="cat" data-k="${c}" aria-pressed="${c===labCat}">${c==="all" ? "All" : LAB_CATS[c].split(" ·")[0]} <small>${n(c)}</small></button>`).join("")}</div>

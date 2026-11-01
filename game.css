@@ -1318,3 +1318,20 @@ small.boot{display:inline-flex;align-items:center}
 .lv-count b.pop{animation:lvcount .9s ease-out}
 @keyframes lvcount{from{transform:translateY(-50%) scale(1.6);opacity:0}25%{transform:translateY(-50%) scale(1);opacity:1}to{transform:translateY(-50%) scale(.92);opacity:.85}}
 @media (prefers-reduced-motion:reduce){.lv-count b.pop{animation:none}}
+/* yellow and red cards */
+.card-ic{display:inline-block;width:.62em;height:.86em;border-radius:2px;vertical-align:-.1em;margin:0 .28em 0 .05em;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:rotate(-6deg)}
+.card-ic.y{background:linear-gradient(160deg,#FFE45C,#F5C518)}
+.card-ic.r{background:linear-gradient(160deg,#FF5A5A,#D4161C)}
+.cards-v .card-ic{width:.5em;height:.7em}
+.lv-refcard{display:flex;justify-content:center;gap:0;margin-bottom:6px}
+.lv-refcard i{display:block;width:34px;height:48px;border-radius:4px;background:linear-gradient(160deg,#FF5A5A,#D4161C);box-shadow:0 4px 14px rgba(0,0,0,.5);animation:lvcard .5s cubic-bezier(.2,1.4,.4,1) both;transform-origin:50% 100%}
+.lv-refcard.y i{background:linear-gradient(160deg,#FFE45C,#F5C518)}
+.lv-refcard i.y{background:linear-gradient(160deg,#FFE45C,#F5C518);margin-right:-12px;transform:rotate(-12deg);animation:none}
+@keyframes lvcard{from{transform:translateY(30px) rotate(14deg) scale(.6);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.lv-refcard i{animation:none}}
+.lv-res.cy>span{color:#FFE45C}.lv-res.cr>span{color:#FF6B6B}
+/* chase it down: the legs bar */
+.lg-legs{position:absolute;left:10px;top:10px;display:flex;align-items:center;gap:6px;font:700 11px/1 var(--f-ui,system-ui);letter-spacing:.08em;text-transform:uppercase;color:#E8F2EC;pointer-events:none}
+.lg-legs i{display:block;width:84px;height:8px;border-radius:5px;background:rgba(0,0,0,.45);overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.lg-legs b{display:block;height:100%;width:100%;background:linear-gradient(90deg,#4ADE80,#A3E635);border-radius:5px}
+.lg-legs.gas b,.lg-legs i.low b{background:linear-gradient(90deg,#F87171,#FB923C)}

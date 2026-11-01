@@ -1716,7 +1716,7 @@ function newState(player, age, clubName, years, custom, value){
 /* ================= SEASON FLOW ================= */
 // a season's numbers. From the match centre also: mins (minutes played) and of (the team's minutes while you were
 // there), rs and rn (the total of your match ratings and how many there were) and potm (Player of the Match awards)
-const EXTRA = ["mins","of","rs","rn","potm"];
+const EXTRA = ["mins","of","rs","rn","potm","yc","rc"];
 function totOf(comps){ const t = {apps:0,g:0,a:0,cs:0,mins:0,of:0,rs:0,rn:0,potm:0}; Object.values(comps||{}).forEach(c=>{ t.apps+=c.apps; t.g+=c.g; t.a+=c.a; t.cs+=(c.cs||0); EXTRA.forEach(k=>{ t[k] += c[k] || 0; }); }); t.rs = +t.rs.toFixed(1); return t; }
 function mergeComps(a, b){ const out = {}; [a||{}, b||{}].forEach(x=>Object.entries(x).forEach(([k,c])=>{ const o = out[k] ||= {apps:0,g:0,a:0,cs:0,mins:0,of:0,rs:0,rn:0,potm:0,code:c.code||k}; o.apps+=c.apps; o.g+=c.g; o.a+=c.a; o.cs+=(c.cs||0); EXTRA.forEach(e=>{ o[e] += c[e] || 0; }); })); return out; }
 const minsPct = t => t && t.of ? Math.round(t.mins/t.of*100) + "%" : "–";
@@ -2798,6 +2798,7 @@ function statsTab(part){
       <div class="total"><div class="label">Share of minutes</div><div class="v">${minsAvg}</div></div>
       <div class="total"><div class="label">Avg rating</div><div class="v">${(r => r ? r.toFixed(2) : "–")(avgRating(S.history.reduce((t,h)=>({rs:t.rs + (h.tot.rs||0), rn:t.rn + (h.tot.rn||0)}), {rs:0, rn:0})))}</div></div>
       <div class="total"><div class="label">Player of the Match</div><div class="v">${S.history.reduce((n,h)=>n + (h.tot.potm||0), 0)}</div></div>
+      <div class="total"><div class="label">Cards</div><div class="v cards-v">${lvCardIc("y")}${S.history.reduce((n,h)=>n + (h.tot.yc||0), 0)} ${lvCardIc("r")}${S.history.reduce((n,h)=>n + (h.tot.rc||0), 0)}</div></div>
       <div class="total"><div class="label">Clubs</div><div class="v">${clubs.length}</div></div>
       <div class="total"><div class="label">Trophies</div><div class="v">${S.trophies.length}</div></div>
       <div class="total"><div class="label">Peak value</div><div class="v">${money(tt.peak)}</div></div>

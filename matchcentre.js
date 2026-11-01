@@ -234,7 +234,23 @@ function mcTrain(w){
   MC_ATTR.forEach(([k])=>{ a[k] = +clamp(a[k], 20, 99).toFixed(2); });
   if (S.boost && S.boost.double>0) S.boost.double--;
 }
+/* ---------- cards: bookings in simmed games, and the bans that follow ----------
+   a yellow or a red (or two yellows) for a game. Defenders and holding midfielders pick up the most */
+const MC_YC = {GK:.03, CB:.17, LB:.14, RB:.14, CDM:.2, CM:.14, CAM:.08, LW:.07, RW:.07, ST:.09};
+function mcCardRoll(mins){
+  const t = mins/90, y = (MC_YC[S.player.pos] ?? .12)*t, x = Math.random();
+  return x < .006*t ? "r" : x < .006*t + y*.06 ? "yy" : x < .006*t + y ? "y" : "";
+}
+function mcDisc(){ const k = seasonLabel(S.season); if (!S.disc || S.disc.s!==k) S.disc = {s:k, y:0, r:0, ban:(S.disc && S.disc.ban) || 0}; return S.disc; }
+// a card goes in the book: five yellows in a season is a one-match ban, two yellows in a game one match, a straight red three
+function mcBook(card){
+  if (!card) return; const D = mcDisc();
+  if (card==="y"){ D.y++; if (D.y%5===0){ D.ban++; note("bad", "Suspended for a match", `That's your ${ord(D.y)} yellow card of the season: you'll sit out the next game.`); } }
+  else if (card==="yy"){ D.r++; D.ban++; note("bad", "Sent off: a one-match ban", "Two yellows in one game. You'll miss the next match."); }
+  else { D.r++; D.ban += 3; note("bad", "Straight red: a three-match ban", "A reckless challenge. You'll miss the next three matches."); }
+}
 function mcSelect(f, w){
+  if (S.disc && S.disc.ban>0) return {st:"ban", mins:0};
   const inj = mcInjury(mcFrac(w));
   if (inj) return {st:"inj", mins:0, why:inj.name};
   if (w < S.mc.intlTo) return {st:"intl", mins:0};
@@ -310,12 +326,15 @@ function mcResolve(f, w, live){
   const our = S.mc.club, rec = mcRec(our), pos = S.player.pos, a = S.attr, c = S.cond, me = f.me, X = mcXg(f), t = X.t;
   const r = f.code==="league" ? null : f.eu ? rec.eu : rec.cups[f.code];
   let gf, ga, et = false;
-  if (live){ gf = live.gf; ga = live.ga; me.g = live.g; me.a = live.a; me.og = live.og || 0; f.live = true; }
+  if (me.st==="ban" && S.disc && S.disc.ban>0){ S.disc.ban--; me.served = true; }
+  if (live){ gf = live.gf; ga = live.ga; me.g = live.g; me.a = live.a; me.og = live.og || 0; f.live = true; if (live.card) me.card = live.card; }
   else {
     gf = mcPoisson(X.lf); ga = mcPoisson(X.la);
     // level in a knockout: thirty minutes of extra time (penalties, if it's still level, come in mcAfter)
     if (mcKoLevel(f, null, gf, ga)){ gf += mcPoisson(X.lf*.3); ga += mcPoisson(X.la*.3); et = true; }
     if (me.mins) for (let i=0;i<gf;i++){ const x = Math.random(); if (x<X.pG) me.g++; else if (x<X.pG+X.pA) me.a++; }
+    // booked, or sent off (and down to ten, a goal more likely against you)
+    if (me.mins){ me.card = mcCardRoll(me.mins); if (me.card && me.card!=="y"){ me.sent = Math.max(me.st==="start" ? 20 : 90 - me.mins + 1, Math.round((me.st==="start" ? 0 : 90 - me.mins) + me.mins*(.35 + Math.random()*.6))); me.mins = Math.max(1, me.sent - (me.st==="start" ? 0 : 90 - me.mins)); if (Math.random()<.35) ga++; } }
   }
   f.res = {gf, ga};
   if (live ? live.et : et) f.res.et = true;
@@ -326,7 +345,9 @@ function mcResolve(f, w, live){
     let rt = 6.35 + (mcOvr() - f.oppStr)*.02 + me.g*.95 + me.a*.6 + (me.cs && d ? .7 : 0) + (win ? .3 : loss ? -.3 : 0) - (d && ga>=3 ? .5 : 0)
       - Math.max(0, c.fat-60)/40*.6 + (c.sharp-80)/40*.35 + (live ? live.bonus*.6 + gauss()*.3 : gauss()*.5);   // on the same scale as everyone else's (sqRate)
     if (me.st==="sub") rt = 6.3 + (rt-6.35)*.6;
+    rt -= me.card==="y" ? .25 : me.card ? 1.2 : 0;
     me.r = +clamp(rt, 3.5, 10).toFixed(1);
+    mcBook(me.card);
     c.form = c.form.concat(me.r).slice(-6);
     c.fat = clamp(c.fat + 13*t*(1 - (mcA().sta-55)/150)*(pos==="GK" ? .5 : 1), 0, 100); c.sharp = clamp(c.sharp + 9*t, 0, 100);
     // matches teach you too, more when you play well
@@ -403,6 +424,7 @@ function mcFinishHalf(){
     if (!f.me.mins) return;
     o.apps++; o.g += f.me.g; o.a += f.me.a; if (f.me.cs) o.cs++; o.mins += f.me.mins; if (f.me.st==="start") o.starts = (o.starts || 0) + 1;
     if (f.me.r!=null){ o.rs = +(o.rs + f.me.r).toFixed(1); o.rn++; } if (f.potm) o.potm++;
+    if (f.me.card==="y") o.yc = (o.yc || 0) + 1; else if (f.me.card) o.rc = (o.rc || 0) + 1;
   }));
   M.finished = true;
   tgHalfway();
@@ -459,9 +481,10 @@ function mcEuroResult(our, code){
 function mcCompLabel(f){ return f.code==="league" ? TIERS[tierOf(S.mc.club)].short : compName(f.code); }
 function mcMeLine(f){
   const me = f.me; if (!me) return "";
-  const st = {start:"Started", sub:`Came on for ${me.mins}'`, bench:"Unused sub", inj:`Injured${me.why?` (${esc(me.why)})`:""}`, intl:"Away on international duty"}[me.st];
+  const st = {start:"Started", sub:`Came on for ${me.mins}'`, bench:"Unused sub", inj:`Injured${me.why?` (${esc(me.why)})`:""}`, intl:"Away on international duty", ban:"Suspended"}[me.st];
   if (!me.mins) return st;
-  const bits = [me.g ? `<b>${me.g} goal${me.g>1?"s":""}</b>` : "", me.a ? `<b>${me.a} assist${me.a>1?"s":""}</b>` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : ""].filter(Boolean);
+  const bits = [me.g ? `<b>${me.g} goal${me.g>1?"s":""}</b>` : "", me.a ? `<b>${me.a} assist${me.a>1?"s":""}</b>` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : "",
+    me.card ? `${lvCardIc(me.card)}${me.card==="y" ? "booked" : `sent off${me.sent ? ` ${me.sent}'` : ""}`}` : ""].filter(Boolean);
   return `${st}${bits.length ? " · " + bits.join(", ") : ""} · <span class="rt ${me.r>=7.5?"hi":me.r<6?"lo":""}">${me.r}</span>${f.coins!=null ? ` · <span class="coins sm"><i class="coin" aria-hidden="true"></i>${f.coins>=0?"+":""}${f.coins}</span>` : ""}`;
 }
 function mcFxRow(f, w){
@@ -487,7 +510,7 @@ function mcPanel(){
   const M = S.mc, c = S.cond, a = S.attr, W = M.weeks.length, h = M.half, cups = cpPanel(), eup = euPanel();
   const list = []; M.weeks.forEach((wk,w)=>wk.fx.slice().sort((x,y)=>(x.code==="league")-(y.code==="league")).forEach(f=>{ if (!f.skip && (f.res || mcLive(f) || f.code==="league")) list.push([f,w]); }));
   const played = list.filter(([f])=>f.res), now = list.filter(([f,w])=>!f.res && w===M.wi), later = list.filter(([f,w])=>!f.res && w>M.wi);
-  const tot = {apps:0, g:0, a:0, cs:0, r:[], potm:0, mins:0, of:0}; played.forEach(([f])=>{ if (!f.me) return; tot.of += 90; if (f.me.mins){ tot.apps++; tot.g += f.me.g; tot.a += f.me.a; if (f.me.cs) tot.cs++; tot.r.push(f.me.r); if (f.potm) tot.potm++; tot.mins += f.me.mins; } });
+  const tot = {apps:0, g:0, a:0, cs:0, r:[], potm:0, mins:0, of:0, yc:0, rc:0}; played.forEach(([f])=>{ if (!f.me) return; tot.of += 90; if (f.me.card==="y") tot.yc++; else if (f.me.card) tot.rc++; if (f.me.mins){ tot.apps++; tot.g += f.me.g; tot.a += f.me.a; if (f.me.cs) tot.cs++; tot.r.push(f.me.r); if (f.potm) tot.potm++; tot.mins += f.me.mins; } });
   const avgR = tot.r.length ? (tot.r.reduce((s,x)=>s+x, 0)/tot.r.length).toFixed(2) : "–";
   const fa = mcFormAvg(), pS = mcStartChance(), injNow = M.done ? null : mcInjury(mcFrac(M.wi));
   const T = S.train, a0 = S.attr0 && S.attr0.s===seasonLabel(S.season) ? S.attr0 : null, showCS = DEF.includes(S.player.pos);
@@ -500,6 +523,8 @@ function mcPanel(){
   return `<section class="panel mc" id="actionPanel">
     <div class="mc-head"><h2>${seasonLabel(S.season)} · ${esc(M.club)}</h2><span class="pill ${h===1?"":"eu"}">${h===1 ? "Aug to Dec" : "Jan to May"}</span></div>
     <div class="mc-prog"><span class="label">${M.done ? `All ${W} weeks played` : `Week ${M.wi+1} of ${W}`}</span><div class="meter"><span style="width:${Math.round(M.wi/W*100)}%"></span></div><span class="mc-tf" aria-label="Team form">${mcFormPills(mcTeamForm(M.club).L)}</span></div>
+    ${S.disc && S.disc.ban>0 && !M.done ? `<p class="ref bad"><strong>Suspended.</strong> You'll miss the next ${S.disc.ban===1 ? "match" : S.disc.ban + " matches"}.</p>` : ""}
+    ${S.disc && S.disc.s===seasonLabel(S.season) && S.disc.y%5===4 && !M.done ? `<p class="ref">${lvCardIc("y")} ${S.disc.y} yellow cards this season: one more and you're banned for a match.</p>` : ""}
     ${injNow ? `<p class="ref bad"><strong>Injured: ${esc(injNow.name)}.</strong> You'll miss games until you're fit again. Training this week is rehab.</p>` : ""}
     ${!M.done && M.wi<M.intlTo ? `<p class="ref">Away on international duty for the first ${M.intlTo} weeks of the half.</p>` : ""}
     ${M.done ? `<div class="mc-next"><p><strong>${h===1 ? "That's the first half of the season done." : "That's the season done."}</strong> ${tot.apps} appearances, ${tot.g} goals and ${tot.a} assists${showCS?`, ${tot.cs} clean sheets`:""}, average rating ${avgR}.</p>
@@ -528,7 +553,7 @@ function mcPanel(){
       cups && ["cups", "Cups", cups],
       eup && ["europe", "Europe", eup],
       S.tg && S.tg.s===seasonLabel(S.season) && ["targets", "Targets", tgPanel()],
-      ["you", "You", `<div class="totals">${[["Apps",tot.apps],["Goals",tot.g],["Assists",tot.a],...(showCS?[["Clean sheets",tot.cs]]:[]),["Avg rating",avgR],["Minutes",tot.of ? Math.round(tot.mins/tot.of*100)+"%" : "–"],["Player of the Match",tot.potm]].map(([l,v])=>`<div class="total"><div class="label">${l}</div><div class="v">${v}</div></div>`).join("")}</div>
+      ["you", "You", `<div class="totals">${[["Apps",tot.apps],["Goals",tot.g],["Assists",tot.a],...(showCS?[["Clean sheets",tot.cs]]:[]),["Avg rating",avgR],["Minutes",tot.of ? Math.round(tot.mins/tot.of*100)+"%" : "–"],["Player of the Match",tot.potm],["Cards",`${lvCardIc("y")}${tot.yc} ${lvCardIc("r")}${tot.rc}`]].map(([l,v])=>`<div class="total"><div class="label">${l}</div><div class="v">${v}</div></div>`).join("")}</div>
         <h3>Your attributes</h3>
         <div class="attrs">${MC_ATTR.map(([k])=>{ const d = a0 ? Math.round(a[k]-a0[k]) : 0, bt = mcBoot(), bn = bt && bt.k===k ? bt.n : 0;
           return `<div class="attr"><span>${esc(mcAttrName(k))}</span><div class="meter"><span style="width:${Math.min(99, a[k]+bn)}%"></span></div><span class="v">${Math.round(Math.min(99, a[k]+bn))}${bn ? `<small class="boot" title="From your boots">${shopBootIcon(mcBoot().k, Account.locker().boots[mcBoot().k], "boot-ic tiny")}+${bn}</small>` : ""}${d ? `<small class="${d>0?"":"neg"}">${d>0?"+":""}${d}</small>` : ""}</span></div>`; }).join("")}</div>

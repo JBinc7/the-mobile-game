@@ -142,7 +142,8 @@ function tXg(P, f){
 function tResolve(P, f, live){
   const X = tXg(P, f), me = f.me, pos = S.player.pos, c = P.cur;
   let gf, ga;
-  if (live){ gf = live.gf; ga = live.ga; me.g = live.g; me.a = live.a; me.og = live.og || 0; }
+  if (live){ gf = live.gf; ga = live.ga; me.g = live.g; me.a = live.a; me.og = live.og || 0; if (live.card) me.card = live.card; }
+  else if (me.mins) me.card = mcCardRoll(me.mins);
   else { gf = mcPoisson(X.lf); ga = mcPoisson(X.la); if (me.mins) for (let i=0;i<gf;i++){ const x = Math.random(); if (x<X.pG) me.g++; else if (x<X.pG + X.pA) me.a++; } }
   let pens = 0;
   if (live && live.pens) pens = live.pens==="won" ? 1 : 2;   // extra time and the shootout were played (lvDecider)
@@ -153,6 +154,7 @@ function tResolve(P, f, live){
     const d = DEF.includes(pos) || pos==="CDM", win = gf>ga || pens===1, loss = gf<ga || pens===2;
     let rt = 6.35 + (mcOvr() - f.oppStr)*.02 + me.g*.95 + me.a*.6 + (me.cs && d ? .7 : 0) + (win ? .3 : loss ? -.3 : 0) - (d && ga>=3 ? .5 : 0) + (live ? live.bonus*.6 + gauss()*.3 : gauss()*.5);
     if (me.st==="sub") rt = 6.3 + (rt - 6.35)*.6;
+    rt -= me.card==="y" ? .25 : me.card ? 1.2 : 0;
     me.r = +clamp(rt, 3.5, 10).toFixed(1);
     P.me[0]++; P.me[1] += me.g; P.me[2] += me.a; if (me.cs && (DEF.includes(pos) || pos==="CDM")) P.me[3]++;
   }
@@ -235,9 +237,10 @@ async function tPlayLive(P, f){
         if (!auto){ if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true); lvCountNext = true; R = await LV_GAMES[m.g](st, m); if (R==="skip") auto = true; }
         if (auto){ lvApply(st, m, lvAuto(st, m)); st.left--; continue; }
         lvApply(st, m, R); await lvOutcome(st, R); st.left--;
+        if (st.red){ lvSentOff(st, m); break; }
       }
       const D = P.cur.ko && st.ev.filter(e=>e.us).length===st.ev.filter(e=>!e.us).length ? await lvDecider(st, s2 => s2.ev.filter(e=>e.us).length===s2.ev.filter(e=>!e.us).length) : {};
-      tResolve(P, f, {gf:ev.filter(e=>e.us).length, ga:ev.filter(e=>!e.us).length, g:st.g, a:st.a, og:st.og, bonus:st.bonus, et:D.et, pens:D.pens});
+      tResolve(P, f, {gf:st.ev.filter(e=>e.us).length, ga:st.ev.filter(e=>!e.us).length, g:st.g, a:st.a, og:st.og, bonus:st.bonus, et:D.et, pens:D.pens, card:st.card});
       f.coins = lvCoins(f).total; Account.addCoins(f.coins);
     } else tResolve(P, f);
     save();
