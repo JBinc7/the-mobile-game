@@ -242,10 +242,11 @@ function mcCardRoll(mins){
   return x < .006*t ? "r" : x < .006*t + y*.06 ? "yy" : x < .006*t + y ? "y" : "";
 }
 function mcDisc(){ const k = seasonLabel(S.season); if (!S.disc || S.disc.s!==k) S.disc = {s:k, y:0, r:0, ban:(S.disc && S.disc.ban) || 0}; return S.disc; }
-// a card goes in the book: five yellows in a season is a one-match ban, and a red (two yellows or straight) is one match too
-function mcBook(card){
+// a card goes in the book: five league yellows in a season is a one-match ban, and a red (two yellows or straight) is one match too
+function mcBook(card, league){
   if (!card) return; const D = mcDisc();
-  if (card==="y"){ D.y++; if (D.y%5===0){ D.ban++; note("bad", "Suspended for a match", `That's your ${ord(D.y)} yellow card of the season: you'll sit out the next game.`); } }
+  // only league yellows count towards the five (a cup or European booking doesn't)
+  if (card==="y"){ if (!league) return; D.y++; if (D.y%5===0){ D.ban++; note("bad", "Suspended for a match", `That's your ${ord(D.y)} league yellow card of the season: you'll sit out the next game.`); } }
   else if (card==="yy"){ D.r++; D.ban++; note("bad", "Sent off: a one-match ban", "Two yellows in one game. You'll miss the next match."); }
   else { D.r++; D.ban++; note("bad", "Straight red: a one-match ban", "A reckless challenge. You'll miss the next match."); }
 }
@@ -347,7 +348,7 @@ function mcResolve(f, w, live){
     if (me.st==="sub") rt = 6.3 + (rt-6.35)*.6;
     rt -= me.card==="y" ? .25 : me.card ? 1.2 : 0;
     me.r = +clamp(rt, 3.5, 10).toFixed(1);
-    mcBook(me.card);
+    mcBook(me.card, f.code==="league");
     c.form = c.form.concat(me.r).slice(-6);
     c.fat = clamp(c.fat + 13*t*(1 - (mcA().sta-55)/150)*(pos==="GK" ? .5 : 1), 0, 100); c.sharp = clamp(c.sharp + 9*t, 0, 100);
     // matches teach you too, more when you play well
@@ -524,7 +525,7 @@ function mcPanel(){
     <div class="mc-head"><h2>${seasonLabel(S.season)} · ${esc(M.club)}</h2><span class="pill ${h===1?"":"eu"}">${h===1 ? "Aug to Dec" : "Jan to May"}</span></div>
     <div class="mc-prog"><span class="label">${M.done ? `All ${W} weeks played` : `Week ${M.wi+1} of ${W}`}</span><div class="meter"><span style="width:${Math.round(M.wi/W*100)}%"></span></div><span class="mc-tf" aria-label="Team form">${mcFormPills(mcTeamForm(M.club).L)}</span></div>
     ${S.disc && S.disc.ban>0 && !M.done ? `<p class="ref bad"><strong>Suspended.</strong> You'll miss the next ${S.disc.ban===1 ? "match" : S.disc.ban + " matches"}.</p>` : ""}
-    ${S.disc && S.disc.s===seasonLabel(S.season) && S.disc.y%5===4 && !M.done ? `<p class="ref">${lvCardIc("y")} ${S.disc.y} yellow cards this season: one more and you're banned for a match.</p>` : ""}
+    ${S.disc && S.disc.s===seasonLabel(S.season) && S.disc.y%5===4 && !M.done ? `<p class="ref">${lvCardIc("y")} ${S.disc.y} league yellow cards this season: one more and you're banned for a match.</p>` : ""}
     ${injNow ? `<p class="ref bad"><strong>Injured: ${esc(injNow.name)}.</strong> You'll miss games until you're fit again. Training this week is rehab.</p>` : ""}
     ${!M.done && M.wi<M.intlTo ? `<p class="ref">Away on international duty for the first ${M.intlTo} weeks of the half.</p>` : ""}
     ${M.done ? `<div class="mc-next"><p><strong>${h===1 ? "That's the first half of the season done." : "That's the season done."}</strong> ${tot.apps} appearances, ${tot.g} goals and ${tot.a} assists${showCS?`, ${tot.cs} clean sheets`:""}, average rating ${avgR}.</p>
