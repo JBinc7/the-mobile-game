@@ -284,45 +284,70 @@ const G3 = (() => {
     const pg = new THREE.CylinderGeometry(r, r, H + r, 16);
     [-1, 1].forEach(s=>{ const p = new THREE.Mesh(pg, post); p.position.set(s*X, (H + r)/2, 0); scene.add(p); });
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 2*X + 2*r, 16), post); bar.rotation.z = Math.PI/2; bar.position.set(0, H, 0); scene.add(bar);
-    // the net: a grid on the back, the roof and the sides, fine enough to ripple
-    const D = 1.9, n = .14, pts = [];
-    const line = (a, b, k = 6) => { for (let i = 0; i < k; i++){ const t0 = i/k, t1 = (i + 1)/k; pts.push(a[0] + (b[0]-a[0])*t0, a[1] + (b[1]-a[1])*t0, a[2] + (b[2]-a[2])*t0, a[0] + (b[0]-a[0])*t1, a[1] + (b[1]-a[1])*t1, a[2] + (b[2]-a[2])*t1); } };
-    const Hb = H*.86;
-    for (let x = -X; x <= X + 1e-6; x += n){ line([x, 0, -D], [x, Hb, -D], 10); line([x, Hb, -D], [x, H, -.25], 6); }
-    for (let y = 0; y <= Hb + 1e-6; y += n) line([-X, y, -D], [X, y, -D], 40);
-    for (let z = 0; z <= 1; z += .12){ const zz = -.25 - (D - .25)*z, yy = H - (H - Hb)*z; line([-X, yy, zz], [X, yy, zz], 40); }
-    [-1, 1].forEach(s=>{ for (let z = 0; z <= D + 1e-6; z += n) line([s*X, 0, -z], [s*X, z < .25 ? H : H - (H - Hb)*(z - .25)/(D - .25), -z], 10);
-      for (let y = 0; y <= H + 1e-6; y += n) line([s*X, y, -.02], [s*X, y, -(y > Hb ? .25 + (D - .25)*(H - y)/(H - Hb) : D)], 8); });
-    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); const base = Float32Array.from(pts);
-    // which way each point of the net moves when it's hit: the back out (-z), the roof up, the sides out
-    const N = base.length/3, dir = new Int8Array(N), fix = new Uint8Array(N);
-    for (let i = 0; i < N; i++){ const x = base[i*3], y = base[i*3 + 1], z = base[i*3 + 2];
-      fix[i] = (y < .02 || z > -.03 || Math.abs(Math.abs(x) - X) < .005 && z > -.03) ? 1 : 0;   // the frame and the ground hold it
-      dir[i] = Math.abs(Math.abs(x) - X) < .005 ? (x < 0 ? 3 : 4) : z < -D + .01 ? 1 : 2; }
-    const net = new THREE.LineSegments(g, new THREE.LineBasicMaterial({color:0xE8EEE8, transparent:true, opacity:.45}));
-    scene.add(net);
-    const shade = new THREE.Mesh(new THREE.PlaneGeometry(2*X, Hb), new THREE.MeshBasicMaterial({color:0x04100A, transparent:true, opacity:.45})); shade.position.set(0, Hb/2, -D - .02); scene.add(shade);
-    // a hit at (x, y, z) at time t0: a bulge where the ball went in, and ripples running out across the net
-    let hit = null;
+    /* the net. The back is a stretchy sheet: a grid of knots, each pushed back by the ball and pulled by its
+       neighbours (a wave on a membrane), held by the frame at its edges. The roof and the sides hang off it and
+       move with its top and side edges. */
+    const D = 1.9, Hb = H*.86, n = .14, NX = Math.round(2*X/n) + 1, NY = Math.round(Hb/n) + 1, dx = 2*X/(NX - 1), dy = Hb/(NY - 1);
+    const h = new Float32Array(NX*NY), v = new Float32Array(NX*NY), at = (i, j) => j*NX + i;
+    const pts = [], link = [];   // every vertex: [x, y, z] at rest, and how it follows the sheet
+    const V = (x, y, z, l) => { pts.push(x, y, z); link.push(l); };
+    // the back: rows and columns joining the knots
+    for (let j = 0; j < NY; j++) for (let i = 0; i < NX - 1; i++){ V(-X + i*dx, j*dy, -D, [1, at(i, j)]); V(-X + (i + 1)*dx, j*dy, -D, [1, at(i + 1, j)]); }
+    for (let i = 0; i < NX; i++) for (let j = 0; j < NY - 1; j++){ V(-X + i*dx, j*dy, -D, [1, at(i, j)]); V(-X + i*dx, (j + 1)*dy, -D, [1, at(i, j + 1)]); }
+    // the roof, sloping from the back's top edge up to the bar: it moves with the knot below it, less towards the bar
+    const roofAt = (i, t) => [-X + i*dx, Hb + (H - Hb)*t, -D + (D - .25)*t];
+    for (let i = 0; i < NX; i++) for (let k = 0; k < 6; k++){ const a = roofAt(i, k/6), b = roofAt(i, (k + 1)/6); V(...a, [2, at(i, NY - 2), 1 - k/6]); V(...b, [2, at(i, NY - 2), 1 - (k + 1)/6]); }
+    for (let k = 0; k <= 6; k++) for (let i = 0; i < NX - 1; i++){ const t = k/6; V(...roofAt(i, t), [2, at(i, NY - 2), 1 - t]); V(...roofAt(i + 1, t), [2, at(i + 1, NY - 2), 1 - t]); }
+    // the sides: they bow out with the knots next to the posts, more towards the back
+    [-1, 1].forEach(s=>{ const ci = s < 0 ? 1 : NX - 2;
+      const sideTop = z => z < .25 ? H : H - (H - Hb)*(z - .25)/(D - .25);
+      for (let z = 0; z <= D + 1e-6; z += n){ const top = sideTop(z), rows = Math.max(1, Math.round(top/dy));
+        for (let k = 0; k < rows; k++){ const y0 = top*k/rows, y1 = top*(k + 1)/rows; V(s*X, y0, -z, [3, at(ci, Math.min(NY - 2, Math.round(y0/dy))), z/D, s]); V(s*X, y1, -z, [3, at(ci, Math.min(NY - 2, Math.round(y1/dy))), z/D, s]); } }
+      for (let y = 0; y <= H + 1e-6; y += n){ const zEnd = y > Hb ? .25 + (D - .25)*(H - y)/(H - Hb) : D, segs = 8;
+        for (let k = 0; k < segs; k++){ const z0 = .02 + (zEnd - .02)*k/segs, z1 = .02 + (zEnd - .02)*(k + 1)/segs, jj = at(ci, Math.min(NY - 2, Math.round(y/dy)));
+          V(s*X, y, -z0, [3, jj, z0/D, s]); V(s*X, y, -z1, [3, jj, z1/D, s]); } } });
+    const base = Float32Array.from(pts), g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    // each knot lit by the floodlights: brighter where the net tilts up towards them, darker where it tilts away
+    const cols = new Float32Array(pts.length).fill(.93); g.setAttribute("color", new THREE.Float32BufferAttribute(cols, 3));
+    const lit = new Float32Array(NX*NY).fill(1), gxA = new Float32Array(NX*NY), gyA = new Float32Array(NX*NY);
+    const net = new THREE.LineSegments(g, new THREE.LineBasicMaterial({color:0xFFFFFF, vertexColors:true, transparent:true, opacity:.6}));
+    net.frustumCulled = false; scene.add(net);
+    // the dark inside of the goal, well behind the net and drawn first, so the net never disappears into it
+    const shade = new THREE.Mesh(new THREE.PlaneGeometry(2*X + 1, Hb + .6), new THREE.MeshBasicMaterial({color:0x04100A, transparent:true, opacity:.4, depthWrite:false}));
+    shade.position.set(0, Hb/2, -D - 1.4); shade.renderOrder = -1; scene.add(shade);
+    let ball = null, live = 0, last = 0;
+    const C2 = 22/(n*n), K = 10, DAMP = 1.7;   // wave speed squared over the knot spacing, a little spring back, and damping
+    const step = dt => {
+      for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const k = at(i, j);
+        // the top row is tied to the roof, which gives a little: it mirrors the row below
+        const up = j + 1 < NY - 1 ? h[k + NX] : h[k]*.5;
+        v[k] += (C2*(h[k - 1] + h[k + 1] + h[k - NX] + up - 4*h[k]) - K*h[k] - DAMP*v[k])*dt; }
+      for (let k = 0; k < h.length; k++) h[k] += v[k]*dt;
+      // where the ball is in the net, the net is where the ball is: pushed back around it
+      if (ball){ const pen = -D - (ball.z - .11); if (pen > 0){ const R = .55;
+        for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const x = -X + i*dx, y = j*dy, d2 = ((x - ball.x)**2 + (y - ball.y)**2)/(R*R); if (d2 >= 1) continue;
+          const want = pen*(1 - d2)*(1 - d2); const k = at(i, j); if (h[k] < want){ v[k] = (want - h[k])/dt*.5; h[k] = want; } } } }
+    };
     return {D,
-      hit(x, y, z){ hit = {x, y, z, t0:performance.now()}; },
+      // the ball, while it's in the goal (null once it's done)
+      touch(b){ ball = b; live = performance.now(); },
       update(now){
-        if (!hit) return; const t = (now - hit.t0)/1000, p = g.attributes.position.array;
-        if (t > 2.2){ p.set(base); g.attributes.position.needsUpdate = true; hit = null; return; }
-        const pulse = t < .1 ? t/.1 : Math.exp(-(t - .1)*3.2), damp = Math.exp(-t*2.2), front = t*5.5;
-        for (let i = 0; i < N; i++){ if (fix[i]) continue;
-          const bx = base[i*3], by = base[i*3 + 1], bz = base[i*3 + 2], d = Math.hypot(bx - hit.x, by - hit.y, bz - hit.z);
-          const bulge = .7*pulse*Math.exp(-d*d/.4), wave = d < front ? damp*Math.exp(-d/2.4)*Math.sin(d*8 - t*22) : 0;
-          // the edges move less than the middle
-          const e = Math.min(1, by/.4, (H - by)/.3 + .3, (X - Math.abs(bx))/.4 + .3), m = (bulge + .06*wave)*e;
-          const k = i*3; p[k] = bx; p[k + 1] = by; p[k + 2] = bz;
-          if (dir[i]===1){
-            // the back: pushed out, the mesh drawn in towards the ball (a dent you can see from the front), and a wave across it
-            const pull = .22*pulse*e*Math.exp(-d*d/.8); p[k + 2] = bz - m; p[k] = bx + (hit.x - bx)*pull; p[k + 1] = by + (hit.y - by)*pull + .14*wave*e;
-          } else if (dir[i]===2){ p[k + 1] = by + m*.8; p[k] += .05*wave*e; }
-          else { p[k] = bx + (dir[i]===3 ? -m : m)*.9; p[k + 1] = by + .08*wave*e; }
-        }
-        g.attributes.position.needsUpdate = true;
+        const dt = Math.min(.033, last ? (now - last)/1000 : .016); last = now;
+        if (!ball && now - live > 4500) return;   // settled: nothing to do
+        for (let s = 0; s < 3; s++) step(dt/3);
+        // the slope of the sheet at each knot: the cords sway across with it (that's what you see of a ripple from the
+        // front), it draws the mesh in round the bulge, and it lights the knot
+        for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const k = at(i, j);
+          const gx = gxA[k] = (h[k + 1] - h[k - 1])/(2*dx), gy = gyA[k] = (h[k + NX] - h[k - NX])/(2*dy);
+          const b = (.6*gy + .8)/Math.sqrt(1 + gx*gx + gy*gy)/.8; lit[k] = Math.max(.3, Math.min(1.9, 1 + 3*(b - 1))); }
+        const p = g.attributes.position.array, c = g.attributes.color.array, SW = .28;
+        for (let q = 0; q < link.length; q++){ const L = link[q], o = q*3, k = L[1]; let d = 0, l = 1;
+          if (L[0]===1){ d = h[k]; const sx = -gxA[k]*(SW + h[k]*.3), sy = -gyA[k]*(SW + h[k]*.3);
+            p[o] = base[o] + Math.max(-.16, Math.min(.16, sx)); p[o + 1] = base[o + 1] + Math.max(-.16, Math.min(.16, sy)) - d*.1; p[o + 2] = base[o + 2] - d; l = lit[k]; }
+          else if (L[0]===2){ d = h[k]*L[2]; p[o] = base[o] - gxA[k]*SW*L[2]*.6; p[o + 1] = base[o + 1] + d*.25; p[o + 2] = base[o + 2] - d*.85; l = 1 + (lit[k] - 1)*L[2]; }
+          else { d = h[k]*L[2]; p[o] = base[o] + L[3]*d*.6; p[o + 1] = base[o + 1] - gyA[k]*SW*L[2]*.6; p[o + 2] = base[o + 2] - d*.3; l = 1 + (lit[k] - 1)*L[2]*.7; }
+          c[o] = c[o + 1] = c[o + 2] = .93*l; }
+        g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true;
       }};
   }
   let crowdTex = null, boardTex = null;
@@ -410,12 +435,19 @@ const G3 = (() => {
     // an animation step run every frame for ms milliseconds (several can run at once)
     W.tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
     // the ball into the net: it hits the back of the net, which bulges and ripples, and drops
-    W.inNet = async (spinAxis) => { const p0 = B.position.clone(), back = -net.D + .12;
-      await W.tween(260, k=>{ const e = ease(k); B.position.set(p0.x*(1 - .1*e), Math.max(.11, p0.y - .25*k*k), p0.z + (back - p0.z)*e); trailPush(); B.rotateOnAxis(spinAxis, -.2*(1 - k)); });
-      net.hit(B.position.x, B.position.y, -net.D);
+    W.inNet = async (spinAxis) => { const p0 = B.position.clone(), back = -net.D + .11;
+      net.touch(B.position);
+      // across the goal to the back of the net
+      const t1 = Math.max(90, Math.abs(back - p0.z)*90);
+      await W.tween(t1, k=>{ B.position.set(p0.x*(1 - .06*k), Math.max(.11, p0.y - .12*k*k), p0.z + (back - p0.z)*k); trailPush(); B.rotateOnAxis(spinAxis, -.25); });
       W.tween(300, k=>{ trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; });
+      // the net stretches round it and stops it…
       const p1 = B.position.clone();
-      await W.tween(420, k=>{ B.position.set(p1.x, Math.max(.11, p1.y - 1.4*k*k), p1.z + .35*Math.sin(k*Math.PI)*.6); });
+      await W.tween(170, k=>{ const e = Math.sin(k*Math.PI/2); B.position.set(p1.x, p1.y - .05*k, back - .42*e); B.rotateOnAxis(spinAxis, -.12*(1 - k)); });
+      // …then throws it back out, and it drops into the goal
+      const p2 = B.position.clone();
+      await W.tween(520, k=>{ const e = ease(k); B.position.set(p2.x, Math.max(.11, p2.y + .1*k - (p2.y + .1)*k*k), p2.z + .75*e); });
+      net.touch(null);
     };
     return W;
   }
