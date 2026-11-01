@@ -115,6 +115,7 @@ async function drArcade(id, idx){
     let quit; const q = new Promise(r=>{ quit = r; }), box = lvEl;
     const onExit = e=>{ if (e.target.closest("[data-lv-skip]")){ st.lab.quit = true; quit("skip"); } };
     box.addEventListener("click", onExit);
+    lvCountNext = true;
     const R = await Promise.race([g.run(st).catch(e=>{ if (e==="lab-quit") return "skip"; throw e; }), q]).finally(()=>box.removeEventListener("click", onExit));
     if (!R || R==="skip") return;
     // how well it went: a pass is most of it, the rest from how far past the target you got
@@ -260,6 +261,7 @@ async function drPlay(k = S.train.focus, idx = null){
       <p>${D.n ? `${D.n} ${D.unit}, easier than in a match.` : "Keep going as long as you can."} ${k==="prep" ? "A good session sharpens you for the next games." : `The better you do, the more your ${esc(mcAttrName(k).toLowerCase())} grows this week.`}</p>
       <div class="lv-row"><button type="button" class="btn primary big" data-lv="go" data-lv-focus>Start</button><button type="button" class="btn" data-lv="no">Not now</button></div></div>`);
     if (go!=="go") return;
+    lvCountNext = true;
     const {score, res} = await drSession(st, k);
     // in the week's session each exercise adds half a drill's growth; finishing all four doubles the week (mcTrain)
     const gain = k==="prep" ? Math.round(12*score*(idx!=null ? .5 : 1)) : +(drGain(k, score)*(idx!=null ? .5 : 1)).toFixed(2);

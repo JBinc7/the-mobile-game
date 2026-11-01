@@ -48,11 +48,12 @@ function lvOpen(label = "Match"){
   lvEl = document.createElement("div"); lvEl.className = "lv"; lvEl.setAttribute("role", "dialog"); lvEl.setAttribute("aria-modal", "true"); lvEl.setAttribute("aria-label", label);
   document.body.appendChild(lvEl); document.documentElement.classList.add("lv-open");
 }
-function lvClose(){ cancelAnimationFrame(lvRaf); lvKey = null; lvEl?.remove(); lvEl = null; document.documentElement.classList.remove("lv-open"); }
+function lvClose(){ lvRelease(); lvCountNext = false; cancelAnimationFrame(lvRaf); lvKey = null; lvEl?.remove(); lvEl = null; document.documentElement.classList.remove("lv-open"); }
 // a new screen eases in (only when it first appears: parts swapped in later, like a scoreboard, don't)
 function lvShow(html){
   cancelAnimationFrame(lvRaf); lvKey = null; lvEl.innerHTML = `<div class="lv-in enter">${html}</div>`; lvEl.scrollTop = 0;
   const box = lvEl.firstElementChild; setTimeout(()=>box.classList.remove("enter"), 450);
+  if (lvCountNext && box.querySelector(".lv-stage")){ lvCountNext = false; lvCountdown(); }
   (lvEl.querySelector("[data-lv-focus]") || lvEl.querySelector("button:not([data-lv-skip]):not(.lv-tap)"))?.focus({preventScroll:true});   // never "Sim the rest" or a tap zone: an outline there looks like a hint
 }
 const lv$ = s => lvEl.querySelector(s);
@@ -61,10 +62,28 @@ function lvAsk(html){ return new Promise(res=>{ lvShow(html); lvEl.querySelector
 // a tween stops (and never finishes) if its screen goes, so nothing carries on drawing after you've left
 function lvTween(ms, step){ return new Promise(res=>{ const t0 = performance.now(), box = lvEl?.firstElementChild; const tick = now=>{ if (box && !box.isConnected) return; const k = Math.min(1, (now-t0)/ms); step(k); if (k<1) lvRaf = requestAnimationFrame(tick); else res(); }; lvRaf = requestAnimationFrame(tick); }); }
 const lvWait = ms => new Promise(r=>setTimeout(r, ms));
+/* ---------- the countdown: 3, 2, 1, Go! before each mini-game ----------
+   The scene is on screen but frozen while it counts: the mini-games' clock (performance.now and the timestamps
+   requestAnimationFrame hands out) is held, so nothing moves, no bar swings and no timer runs; taps and keys are ignored.
+   A caller sets lvCountNext before starting a moment; the next screen with a stage counts down, once. */
+const lvRealNow = performance.now.bind(performance), lvRealRaf = window.requestAnimationFrame.bind(window);
+let lvHeld = 0, lvHoldAt = 0, lvCountNext = false, lvCountT = 0;
+performance.now = () => lvRealNow() - lvHeld - (lvHoldAt ? lvRealNow() - lvHoldAt : 0);
+window.requestAnimationFrame = cb => lvRealRaf(()=>cb(performance.now()));
+function lvRelease(){ if (lvHoldAt){ lvHeld += lvRealNow() - lvHoldAt; lvHoldAt = 0; } clearTimeout(lvCountT); lvEl?.querySelector(".lv-count")?.remove(); }
+function lvCountdown(){
+  lvRelease(); lvHoldAt = lvRealNow();
+  const box = lvEl.firstElementChild; box.insertAdjacentHTML("beforeend", `<div class="lv-count" aria-live="assertive"><b>3</b></div>`);
+  const el = box.lastElementChild, b = el.firstElementChild, stg = box.querySelector(".lv-stage");
+  if (stg){ const r = stg.getBoundingClientRect(), r0 = box.getBoundingClientRect(); b.style.top = (r.top - r0.top + r.height/2) + "px"; }   // over the middle of the pitch
+  el.addEventListener("pointerdown", e=>{ e.preventDefault(); e.stopPropagation(); }, true);
+  const step = n => { b.textContent = n || "Go!"; b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); if (n){ lvCountT = setTimeout(()=>step(n - 1), 1000); } else lvCountT = setTimeout(lvRelease, 420); };
+  step(3);
+}
 // one animation loop per mini-game: step(now) returns false to stop
 function lvLoop(step){ const box = lvEl?.firstElementChild; const tick = now=>{ if (lvEl && (!box || box.isConnected) && step(now)!==false) lvRaf = requestAnimationFrame(tick); }; lvRaf = requestAnimationFrame(tick); }
 document.addEventListener("keydown", e=>{
-  if (!lvEl || !lvKey) return;
+  if (!lvEl || !lvKey || lvHoldAt) return;
   const k = {" ":"go", Enter:"go", ArrowLeft:"l", ArrowRight:"r", ArrowUp:"c", ArrowDown:"c"}[e.key];
   if (!k || (k==="go" && e.target.closest && e.target.closest(".lv-aim, .lv-tap, [data-lv]"))) return;
   e.preventDefault(); lvKey(k);
@@ -530,7 +549,7 @@ async function lvPlayMatch(f, w){
         let R = null;
         if (!auto){
           if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true);
-          R = await LV_GAMES[m.g](st, m);
+          lvCountNext = true; R = await LV_GAMES[m.g](st, m);
           if (R==="skip") auto = true;
         }
         if (auto){ lvApply(st, m, lvAuto(st, m)); st.left--; continue; }
@@ -560,7 +579,7 @@ async function lvDecider(st, level){
   st.left = 1;
   if (go==="play"){
     if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true);
-    const R = await LV_GAMES[m.g](st, m);
+    lvCountNext = true; const R = await LV_GAMES[m.g](st, m);
     if (R==="skip") lvApply(st, m, lvAuto(st, m)); else { lvApply(st, m, R); await lvOutcome(st, R); }
   } else lvApply(st, m, lvAuto(st, m));
   if (!level(st)) return {et:true};
@@ -583,6 +602,7 @@ async function lvShootout(st){
   const head = () => `<div class="lv-top"><span class="lv-sc"><b>${esc(left ? us : op)}</b> ${left ? g : a}–${left ? a : g} <b>${esc(left ? op : us)}</b></span><span>Pens ${left ? n(me) : n(them)}–${left ? n(them) : n(me)}</span>
     <button type="button" class="lv-skip" data-lv-skip>Sim the rest</button></div>`;
   const simTo = () => { while (!decided() && me.length<30){ if (me.length===them.length) me.push(Math.random()<.76); else them.push(Math.random()<.74); } };
+  lvCountNext = true;
   for (let r=0; r<30 && !decided(); r++){
     const sh = await lvShotCore(st, {q:1}, "pen", head(), r<5 ? `Your penalty · ${r + 1} of 5` : "Sudden death: your penalty");
     if (sh==="skip"){ simTo(); break; }

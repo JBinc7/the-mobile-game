@@ -232,7 +232,7 @@ async function tPlayLive(P, f){
       let auto = false;
       for (const m of plan.list){
         let R = null;
-        if (!auto){ if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true); R = await LV_GAMES[m.g](st, m); if (R==="skip") auto = true; }
+        if (!auto){ if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true); lvCountNext = true; R = await LV_GAMES[m.g](st, m); if (R==="skip") auto = true; }
         if (auto){ lvApply(st, m, lvAuto(st, m)); st.left--; continue; }
         lvApply(st, m, R); await lvOutcome(st, R); st.left--;
       }

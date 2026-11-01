@@ -143,6 +143,7 @@ async function labPlay(g){
     let quit; const q = new Promise(r=>{ quit = r; }), box = lvEl;
     const onExit = e=>{ if (e.target.closest("[data-lv-skip]")){ st.lab.quit = true; quit("skip"); } };
     box.addEventListener("click", onExit);
+    lvCountNext = true;
     const R = await Promise.race([g.run(st).catch(e=>{ if (e==="lab-quit") return "skip"; throw e; }), q]).finally(()=>box.removeEventListener("click", onExit));
     if (R==="skip" || !R) return;
     if (lv$(".lv-stage")) await lvOutcome(st, R);

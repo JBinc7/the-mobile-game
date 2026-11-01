@@ -591,7 +591,7 @@ html.lv-open,html.lv-open body{overflow:hidden}
 .lv{position:fixed;inset:0;z-index:100;overflow-y:auto;-webkit-overflow-scrolling:touch;color:#F2F6F3;color-scheme:dark;
   background:radial-gradient(ellipse 60% 40% at 10% -5%,rgba(245,197,66,.28),transparent 70%),radial-gradient(ellipse 60% 40% at 90% -5%,rgba(45,212,191,.22),transparent 70%),linear-gradient(180deg,#050A08,#0A1A12 70%,#0E2A1C);
   padding:max(14px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(18px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-.lv-in{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.lv-in{position:relative;max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
 .lv .label{color:rgba(242,246,243,.65)}
 .lv-top{display:flex;align-items:center;gap:12px;font-family:var(--f-label);font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:15px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px 12px}
 .lv-sc{flex:1;font-variant-numeric:tabular-nums}
@@ -1311,3 +1311,10 @@ small.boot{display:inline-flex;align-items:center}
 .lv-mins{margin:-4px 0 6px;font-size:14px;color:rgba(242,246,243,.75)}
 .lv-mins b{color:#FFE9A8}
 .lv-pow.locked .lv-bar{outline:2px solid #FFE9A8;outline-offset:1px}
+
+/* the 3-2-1 before a mini-game: the scene shows, frozen, under a big count */
+.lv-count{position:absolute;inset:0;z-index:30;background:rgba(5,9,10,.28);touch-action:none}
+.lv-count b{position:absolute;left:0;right:0;top:40%;transform:translateY(-50%);text-align:center;font-family:var(--f-display);font-weight:900;font-size:120px;line-height:1;color:#F5C542;text-shadow:0 6px 30px rgba(0,0,0,.6),0 0 40px rgba(245,197,66,.45)}
+.lv-count b.pop{animation:lvcount .9s ease-out}
+@keyframes lvcount{from{transform:translateY(-50%) scale(1.6);opacity:0}25%{transform:translateY(-50%) scale(1);opacity:1}to{transform:translateY(-50%) scale(.92);opacity:.85}}
+@media (prefers-reduced-motion:reduce){.lv-count b.pop{animation:none}}
