@@ -395,13 +395,14 @@ function lvPlan(f, X){
 }
 // what a moment did: R = {ok, big, small, g (your goal), a (your assist), gf (a team goal), ga (they scored), og (your own goal), bonus}
 /* ---------- fouls and cards ----------
-   sev 0..1: how bad the challenge was. A late one from behind can be a straight red; a third foul in a match is a booking
+   sev 0..1: how bad the challenge was. Most are a yellow, a bad one can be a straight red; a third foul in a match is a booking
    for persistent fouling; a second yellow is a red. Being sent off ends your match (lvSentOff) and brings a ban (mcBook) */
 function lvFoul(st, m, sev, early){
   st.fouls = (st.fouls || 0) + 1;
   let card = "", why;
-  if (!early && sev > .72 && Math.random() < .22){ card = "r"; why = "A reckless lunge from behind: straight red"; }
-  else if (Math.random() < .12 + sev*.7){ card = "y"; why = early ? "You dived in and took him down" : "You clipped his heels"; }
+  // most bad tackles are a booking; the worse it is, the likelier, and a bad one can be a straight red
+  if (sev > .45 && Math.random() < (early ? .1 : .14) + (sev - .45)*.4){ card = "r"; why = early ? "Two-footed and out of control: straight red" : "A reckless lunge from behind: straight red"; }
+  else if (Math.random() < .72 + sev*.25){ card = "y"; why = early ? "You dived in and took him down" : "You clipped his heels"; }
   else if (st.fouls >= 3){ card = "y"; why = "That's your third foul: booked for persistent fouling"; }
   else why = early ? "You went through the back of him" : "Late, but the ref only gives the free kick";
   if (card==="y" && st.yc){ card = "yy"; why = "A second yellow, so it's red"; }

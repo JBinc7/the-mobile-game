@@ -242,12 +242,12 @@ function mcCardRoll(mins){
   return x < .006*t ? "r" : x < .006*t + y*.06 ? "yy" : x < .006*t + y ? "y" : "";
 }
 function mcDisc(){ const k = seasonLabel(S.season); if (!S.disc || S.disc.s!==k) S.disc = {s:k, y:0, r:0, ban:(S.disc && S.disc.ban) || 0}; return S.disc; }
-// a card goes in the book: five yellows in a season is a one-match ban, two yellows in a game one match, a straight red three
+// a card goes in the book: five yellows in a season is a one-match ban, and a red (two yellows or straight) is one match too
 function mcBook(card){
   if (!card) return; const D = mcDisc();
   if (card==="y"){ D.y++; if (D.y%5===0){ D.ban++; note("bad", "Suspended for a match", `That's your ${ord(D.y)} yellow card of the season: you'll sit out the next game.`); } }
   else if (card==="yy"){ D.r++; D.ban++; note("bad", "Sent off: a one-match ban", "Two yellows in one game. You'll miss the next match."); }
-  else { D.r++; D.ban += 3; note("bad", "Straight red: a three-match ban", "A reckless challenge. You'll miss the next three matches."); }
+  else { D.r++; D.ban++; note("bad", "Straight red: a one-match ban", "A reckless challenge. You'll miss the next match."); }
 }
 function mcSelect(f, w){
   if (S.disc && S.disc.ban>0) return {st:"ban", mins:0};
