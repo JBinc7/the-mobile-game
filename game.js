@@ -721,21 +721,54 @@ function portrait(pl, club, num){
   const stripes = Array.from({length:14}, (_,k)=>{ const i = k-7; return k%2 ? "" : `<path d="M${100+i*13} 140 L${100+(i+1)*13} 140 L${100+(i+1)*70} 190 L${100+i*70} 190Z" fill="#fff" opacity=".045"/>`; }).join("");
   const lights = cx => `<g><circle cx="${cx}" cy="16" r="46" fill="url(#${id}fl)"/><rect x="${cx-12}" y="10" width="24" height="11" rx="2" fill="#0b0f10" stroke="#3a4146" stroke-width=".6"/>
     ${[0,1,2].flatMap(c=>[0,1].map(r=>`<circle cx="${cx-7.5+c*7.5}" cy="${13.2+r*4.6}" r="1.9" fill="#FFF8DF"/>`)).join("")}</g>`;
-  // the back of a real head: wider at the crown, narrowing to the nape, with the neck coming out of it
-  const HEAD = "M100 44 C115 44 125.5 54 125.5 70 C125.5 82 122 90 115.5 95 C111 98.5 106 99.5 100 99.5 C94 99.5 89 98.5 84.5 95 C78 90 74.5 82 74.5 70 C74.5 54 85 44 100 44Z";
-  const head = `<path d="${HEAD}"`;
-  // hair falling from the crown: each strand bows out a little with the shape of the head
-  const strands = (n, y0, y1, w) => Array.from({length:n}, (_,k)=>{ const x = 100 - w/2 + w*k/(n-1), b = (x - 100)*.14 + (rnd2() - .5)*1.2; return `M${(100 + (x - 100)*.35).toFixed(1)} ${y0}Q${(x + b).toFixed(1)} ${(y0 + y1)/2} ${(x + b*.3).toFixed(1)} ${y1}`; }).join("");
-  const curls = []; for (let yy=47; yy<=95; yy+=5.6) for (let xx=74; xx<=126; xx+=5.6){ const dx = (xx-100)/25.5, dy = (yy-71)/27.5; if (dx*dx + dy*dy<=.8) curls.push(`<circle cx="${(xx + ((yy/5.6)%2 ? 2.8 : 0)).toFixed(1)}" cy="${yy}" r="${(4.6 + rnd2()*1.1).toFixed(1)}"/>`); }
+  // the back of a real head: a round crown, full at the ears, flowing into a strong neck
+  const HEAD = "M100 42.5 C116.5 42.5 126.5 53 126.5 68 C126.5 78.5 124.8 86 121.5 91.5 C118 97 110.5 100.5 100 100.5 C89.5 100.5 82 97 78.5 91.5 C75.2 86 73.5 78.5 73.5 68 C73.5 53 83.5 42.5 100 42.5Z";
+  const head = `<path d="${HEAD}"`, hr = seeded(hashStr((pl.name||"")+"|hair")), f1 = v => v.toFixed(1);
+  const inHead = (x, y) => ((x-100)/26.5)**2 + ((y-69)/29.5)**2 < .97;
+  // where the hair stops: up and round behind the ears, then across the nape in little tufts
+  const nape = x => 88.5 + 3.5*(1 - ((x-100)/22)**2);
+  const hairline = (drop = 0, tuft = 1.5) => { let d = `M68 38 L72.6 ${70+drop} C74 ${77+drop} 76 ${83+drop} 78.6 ${86.5+drop}`;
+    for (let x = 80, k = 0; x <= 120; x += 2.5, k++) d += ` L${f1(x)} ${f1(nape(x) + drop + (k%2 ? tuft : 0) + (hr()-.5)*.8)}`;
+    return d + ` L121.4 ${86.5+drop} C124 ${83+drop} 126 ${77+drop} 127.4 ${70+drop} L132 38Z`; };
+  // short strokes of hair growing out of the crown in a slight swirl, the way real hair lies
+  const crown = [103.5, 56];
+  const growth = (n, len, keep = () => true) => { let dk = "", lt = ""; for (let i = 0, t = 0; i < n && t < n*6; t++){
+      const x = 74 + hr()*52, y = 43 + hr()*50; if (!inHead(x, y) || !keep(x, y)) continue;
+      const vx = x - crown[0], vy = y - crown[1], r = Math.hypot(vx, vy); if (r < 2.2) continue;
+      const an = Math.atan2(vy, vx) + .55 - Math.min(.35, r/90), L = len*(.6 + hr()*.8), seg = `M${f1(x)} ${f1(y)}l${f1(Math.cos(an)*L)} ${f1(Math.sin(an)*L)}`;
+      if ((x < 100 && y < 70 && hr() < .55) || hr() < .22) lt += seg; else dk += seg; i++; }
+    return `<path d="${dk}" stroke="#000" stroke-opacity=".26" stroke-width=".75" stroke-linecap="round" fill="none"/><path d="${lt}" stroke="#fff" stroke-opacity=".13" stroke-width=".6" stroke-linecap="round" fill="none"/>`; };
+  const whorl = `<path d="M${crown[0]} ${crown[1]} m-1.6 0 a1.6 1.6 0 1 1 1.6 1.6 a3.2 3.2 0 1 1 3.2 -3.4" stroke="#000" stroke-opacity=".28" stroke-width=".7" fill="none"/>`;
+  const shortCut = (op, len, n) => `<g clip-path="url(#${id}hd)"><path d="${hairline(3.2, 1.2)}" fill="${hc}" opacity="${op*.28}"/><path d="${hairline()}" fill="${hc}" opacity="${op}"/>
+      ${growth(n, len, (x, y) => y < nape(x) - .6 && !(y > 70 && (x < 76.5 || x > 123.5)))}${whorl}</g>`;
+  // tight coils: a fuller outline, bumpy at the edge, tapered short at the nape
+  const coilEdge = Array.from({length:17}, (_,k)=>{ const an = Math.PI*(1.02 + k/16*.96), rr = 27 + hr()*1.6; return `<circle cx="${f1(100 + Math.cos(an)*rr*1.02)}" cy="${f1(68 + Math.sin(an)*rr*1.06)}" r="${f1(4.4 + hr()*1.2)}"/>`; }).join("");
+  const coils = (() => { let dk = "", lt = ""; for (let i = 0, t = 0; i < 120 && t < 900; t++){ const x = 72 + hr()*56, y = 39 + hr()*50;
+      if (((x-100)/29)**2 + ((y-68)/31)**2 > 1 || y > nape(x) - 1) continue; const an = hr()*6.28, r = 1.5 + hr()*.9;
+      const seg = `M${f1(x + Math.cos(an)*r)} ${f1(y + Math.sin(an)*r)}A${f1(r)} ${f1(r)} 0 1 1 ${f1(x + Math.cos(an+2.2)*r)} ${f1(y + Math.sin(an+2.2)*r)}`;
+      if (y < 62 && hr() < .5) lt += seg; else dk += seg; i++; }
+    return `<path d="${dk}" stroke="#000" stroke-opacity=".38" stroke-width=".8" fill="none"/><path d="${lt}" stroke="#fff" stroke-opacity=".14" stroke-width=".7" fill="none"/>`; })();
+  // long hair down past the collar: clumps with tapered ends, a band of sheen where the light catches the crown
+  const LONGHAIR = (() => { let d = "M100 40.5 C117.5 40.5 128 51.5 128 67.5 C128.5 84 127 102 124.5 116"; const tips = 5;
+    for (let k = 0; k < tips; k++){ const x0 = 124.5 - k*49/tips, x1 = x0 - 49/tips, xm = (x0 + x1)/2; const yt = 120 + hr()*3; d += ` C${f1(x0 - 1)} ${f1(yt - 1)} ${f1(xm + 2.5)} ${f1(yt + 1.5)} ${f1(xm)} ${f1(yt + 1.2)} C${f1(xm - 2.5)} ${f1(yt + 1)} ${f1(x1 + 1)} ${f1(yt - 1.5)} ${f1(x1)} ${f1(117 + hr()*1.5)}`; }
+    return d + " C73 102 71.5 84 72 67.5 C72 51.5 82.5 40.5 100 40.5Z"; })();
+  const longStrands = (n, op, col, w) => Array.from({length:n}, ()=>{ const xe = 77 + hr()*46, ye = 112 + hr()*12, xs = 100 + (xe-100)*.18 + (hr()-.5)*6;
+    return `<path d="M${f1(xs)} ${f1(43 + hr()*4)} Q${f1(100 + (xe-100)*1.55)} ${f1(64 + hr()*8)} ${f1(xe)} ${f1(ye)}" stroke="${col}" stroke-opacity="${op}" stroke-width="${w}" fill="none"/>`; }).join("");
   const hairs = {
-    short:`<g clip-path="url(#${id}hd)"><path d="M70 92 Q100 101 130 92 L130 40 L70 40Z" fill="${hc}"/><path d="${strands(15, 47, 93, 46)}" stroke="#fff" stroke-opacity=".07" stroke-width=".9" fill="none"/><path d="${strands(9, 50, 92, 40)}" stroke="#000" stroke-opacity=".14" stroke-width=".8" fill="none"/>
-      <path d="M78 92 Q100 99 122 92" stroke="#000" stroke-opacity=".25" stroke-width="2" fill="none"/></g>`,
-    buzz:`<g clip-path="url(#${id}hd)"><path d="M70 96 Q100 103 130 96 L130 40 L70 40Z" fill="${hc}" opacity=".6"/><path d="M70 96 Q100 103 130 96 L130 40 L70 40Z" fill="url(#${id}st2)" opacity=".5"/></g>`,
-    curly:`<g clip-path="url(#${id}hd)"><path d="M70 90 Q100 98 130 90 L130 40 L70 40Z" fill="${hc}"/></g><g fill="${hc}" stroke="#000" stroke-opacity=".22" stroke-width=".7">${curls.join("")}</g>
-      <g fill="#fff" opacity=".08">${curls.slice(0, 14).join("")}</g>`,
-    long:`<g clip-path="url(#${id}hd)"><rect x="70" y="40" width="60" height="70" fill="${hc}"/></g><path d="M77 84 C76 100 81 112 89 120 L111 120 C119 112 124 100 123 84Z" fill="${hc}"/>
-      <path d="${strands(11, 52, 119, 40)}" stroke="#fff" stroke-opacity=".1" stroke-width="1" fill="none"/><path d="${strands(9, 60, 118, 34)}" stroke="#000" stroke-opacity=".18" stroke-width=".8" fill="none"/>`,
-    none:`<path d="M86 52 Q96 46 108 50" stroke="#fff" stroke-opacity=".28" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M84 92 Q100 98 116 92" stroke="#000" stroke-opacity=".12" stroke-width="2" fill="none"/>`
+    short: shortCut(1, 3.6, 190),
+    buzz:`<g clip-path="url(#${id}hd)"><path d="${hairline(2.4, .8)}" fill="${hc}" opacity=".16"/><path d="${hairline(0, .7)}" fill="${hc}" opacity=".58"/><path d="${hairline(0, .7)}" fill="url(#${id}st2)" opacity=".55"/>
+      ${growth(110, 1.3, (x, y) => y < nape(x) - .6)}</g>`,
+    curly:`<clipPath id="${id}cu"><path d="${hairline(0, 1.6)}"/></clipPath>
+      <g clip-path="url(#${id}cu)"><g fill="${hc}"><path d="M100 39.5 C118.5 39.5 129 51 129 68 C129 80 127 88 124 94 L76 94 C73 88 71 80 71 68 C71 51 81.5 39.5 100 39.5Z"/>${coilEdge}</g>
+      <g fill="#000" opacity=".25">${coilEdge}</g><g fill="${hc}">${coilEdge.replace(/r="([\d.]+)"/g, (m, r) => `r="${(r - .9).toFixed(1)}"`)}</g>${coils}</g>
+      <g clip-path="url(#${id}hd)"><path d="${hairline(3, 1)}" fill="${hc}" opacity=".3"/></g>`,
+    long:`<clipPath id="${id}lh"><path d="${LONGHAIR}"/></clipPath><path d="${LONGHAIR}" fill="${hc}"/>
+      <g clip-path="url(#${id}lh)">${longStrands(26, .26, "#000", .8)}${longStrands(16, .12, "#fff", .6)}
+      <path d="M75 72 C79 56 90 50 100 50 C110 50 121 56 125 72" stroke="url(#${id}sh2)" stroke-width="6" fill="none"/>
+      <rect x="66" y="80" width="68" height="50" fill="url(#${id}lg)"/></g>
+      <path d="M96 41.5 C93 60 92 80 90 104 M104.5 41.5 C107 62 108 84 110 106" stroke="#000" stroke-opacity=".12" stroke-width="1.4" fill="none"/>`,
+    none:`<g clip-path="url(#${id}hd)"><path d="${hairline(0, .4)}" fill="${hc}" opacity=".13"/></g>
+      <path d="M87 94.5 Q100 98.6 113 94.5 M89.5 97.6 Q100 100.4 110.5 97.6" stroke="#000" stroke-opacity=".14" stroke-width=".9" fill="none"/>`
   };
   const nameSize = sur.length>10 ? 9.5 : sur.length>7 ? 11 : 12.5;
   return `<svg viewBox="0 0 200 190" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${esc(pl.name||"Your player")}, seen from behind in the ${esc(club.n)} kit under the floodlights">
@@ -748,7 +781,9 @@ function portrait(pl, club, num){
     <linearGradient id="${id}sv" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="${lightKit?0:.1}"/><stop offset=".35" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
     <radialGradient id="${id}hs" cx="38%" cy="28%" r="80%"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></radialGradient>
     <linearGradient id="${id}nk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset=".5" stop-color="#000" stop-opacity=".1"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
-    <clipPath id="${id}hd"><path d="M100 43 C116 43 126.5 53.5 126.5 70 C126.5 82 123 90.5 116 95.5 C111.4 99 106.2 100.3 100 100.3 C93.8 100.3 88.6 99 84 95.5 C77 90.5 73.5 82 73.5 70 C73.5 53.5 84 43 100 43Z"/></clipPath>
+    <clipPath id="${id}hd"><path d="M100 42 C117 42 127 52.7 127 68 C127 78.7 125.2 86.3 121.9 91.8 C118.3 97.4 110.7 101 100 101 C89.3 101 81.7 97.4 78.1 91.8 C74.8 86.3 73 78.7 73 68 C73 52.7 83 42 100 42Z"/></clipPath>
+    <linearGradient id="${id}sh2" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".3" stop-color="#fff" stop-opacity=".2"/><stop offset=".5" stop-color="#fff" stop-opacity=".12"/><stop offset=".75" stop-color="#fff" stop-opacity=".16"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="${id}lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".38"/></linearGradient>
     <pattern id="${id}st2" width="2.4" height="2.4" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r=".55" fill="#000" opacity=".5"/></pattern>
     <linearGradient id="${id}cy" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".42"/><stop offset=".22" stop-color="#000" stop-opacity=".05"/><stop offset=".5" stop-color="#fff" stop-opacity=".06"/><stop offset=".78" stop-color="#000" stop-opacity=".05"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></linearGradient>
     <linearGradient id="${id}nk2" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".32"/><stop offset=".35" stop-color="#000" stop-opacity=".06"/><stop offset=".65" stop-color="#000" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity=".34"/></linearGradient>
@@ -765,8 +800,10 @@ function portrait(pl, club, num){
   <ellipse cx="100" cy="190" rx="92" ry="10" fill="#000" opacity=".35"/>
   <path d="M17 162 C16 170 15 180 14 190 L40 190 L42 170Z" fill="${skin}"/><path d="M183 162 C184 170 185 180 186 190 L160 190 L158 170Z" fill="${skin}"/>
   <path d="M17 162 C16 170 15 180 14 190 L22 190 C22 178 23 170 26 164Z M183 162 C184 170 185 180 186 190 L178 190 C178 178 177 170 174 164Z" fill="#000" opacity=".22"/>
-  <path d="M85 94 C84.5 103 81 109 70 114.5 L130 114.5 C119 109 115.5 103 115 94Z" fill="${skin}"/><path d="M85 94 C84.5 103 81 109 70 114.5 L130 114.5 C119 109 115.5 103 115 94Z" fill="url(#${id}nk2)"/>
-  <path d="M95 100 C95.6 106 96 110 96 116 M105 100 C104.4 106 104 110 104 116" stroke="#000" stroke-opacity=".1" stroke-width="1.3" fill="none"/>
+  <path d="M83 92 C83 102 80 108.5 70 114.5 L130 114.5 C120 108.5 117 102 117 92Z" fill="${skin}"/><path d="M83 92 C83 102 80 108.5 70 114.5 L130 114.5 C120 108.5 117 102 117 92Z" fill="url(#${id}nk2)"/>
+  <path d="M83 92 C83 102 80 108.5 70 114.5 L130 114.5 C120 108.5 117 102 117 92Z" fill="url(#${id}nk)" opacity=".7"/>
+  <path d="M100 103 C99.6 107 99.8 111 100 116" stroke="#000" stroke-opacity=".16" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+  <path d="M93.5 102 C93 107 91.5 111 88 115 M106.5 102 C107 107 108.5 111 112 115" stroke="#000" stroke-opacity=".08" stroke-width="1.6" fill="none"/>
   <path id="${id}sp" d="M75 112 C58 114 40 116 30 125 C22 133 18 148 16 166 L42 172 L49 150 L51 190 L149 190 L151 150 L158 172 L184 166 C182 148 178 133 170 125 C160 116 142 114 125 112 C115 117.5 107 119.5 100 119.5 C93 119.5 85 117.5 77 112Z" fill="${c1}"/>
   ${lightKit?`<path d="M30 125 C22 133 18 148 16 166 L42 172 L49 150Z M170 125 C178 133 182 148 184 166 L158 172 L151 150Z" fill="${c2}" opacity=".85"/>`:""}
   <path d="M75 112 C58 114 40 116 30 125 C22 133 18 148 16 166 L42 172 L49 150 L51 190 L149 190 L151 150 L158 172 L184 166 C182 148 178 133 170 125 C160 116 142 114 125 112 C115 117.5 107 119.5 100 119.5 C93 119.5 85 117.5 77 112Z" fill="url(#${id}cy)"/>
@@ -782,13 +819,18 @@ function portrait(pl, club, num){
   <path d="M77 112 C87 117.5 94 119.5 100 119.5 C106 119.5 113 117.5 123 112" stroke="${c2}" stroke-width="4.6" fill="none" stroke-linecap="round"/>
   <path d="M78 114.6 C88 120 94 122 100 122 C106 122 112 120 122 114.6" stroke="#000" stroke-opacity=".22" stroke-width="1" fill="none"/>
   <g transform="translate(100 104) scale(.86) translate(-100 -100)">
-  <path d="M75.2 70 C72.4 68.6 71.2 72 71.8 76.6 C72.3 81 74.1 84.6 77 84.4 C76.4 79.6 76 75 75.2 70Z" fill="${skin}"/><path d="M124.8 70 C127.6 68.6 128.8 72 128.2 76.6 C127.7 81 125.9 84.6 123 84.4 C123.6 79.6 124 75 124.8 70Z" fill="${skin}"/>
-  <path d="M73.6 73.4 C73 76 73.4 79.4 75.1 81.6 M126.4 73.4 C127 76 126.6 79.4 124.9 81.6" stroke="#000" stroke-opacity=".22" stroke-width="1" fill="none"/>
-  ${head} fill="${skin}"/>${head} fill="url(#${id}hs)"/>
+  ${[1,-1].map(m=>{ const X = x => f1(100 + m*(x-100)); return `<path d="M${X(75.6)} 68 C${X(71.6)} 66.2 ${X(69.4)} 69.6 ${X(69.8)} 74.4 C${X(70.2)} 79.8 ${X(72.4)} 84.6 ${X(76.8)} 86 Z" fill="${skin}"/>
+    <path d="M${X(75.6)} 68 C${X(71.6)} 66.2 ${X(69.4)} 69.6 ${X(69.8)} 74.4 C${X(70.2)} 79.8 ${X(72.4)} 84.6 ${X(76.8)} 86 Z" fill="#000" opacity=".12"/>
+    <path d="M${X(75.4)} 70 C${X(73.4)} 72.5 ${X(73.3)} 79.5 ${X(76)} 84.5" stroke="#000" stroke-opacity=".32" stroke-width="1.7" fill="none"/>
+    <path d="M${X(70.6)} 71.4 C${X(70)} 75.4 ${X(70.9)} 80.4 ${X(73.4)} 83.8" stroke="#FFE9B0" stroke-opacity=".32" stroke-width=".8" fill="none"/>`; }).join("")}
+  ${head} fill="${skin}"/>
   ${hairs[pl.hair||"short"] ?? hairs.short}
+  ${pl.hair==="long" ? "" : `${head} fill="url(#${id}hs)"/>`}
+  <path d="M80 55 C84 48.5 91 44.6 100 44.4" stroke="#FFE9B0" stroke-opacity=".34" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <path d="M120 55 C117.5 50.5 113 47 107.5 45.4" stroke="#FFE9B0" stroke-opacity=".18" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  <path d="M74.2 74 C74.6 81 76.4 87 79.5 91.5 M125.8 74 C125.4 81 123.6 87 120.5 91.5" stroke="#000" stroke-opacity=".14" stroke-width="1.6" fill="none"/>
   <path d="M30 125 C40 116 58 114 75 112 M170 125 C160 116 142 114 125 112" stroke="#FFE9B0" stroke-opacity=".6" stroke-width="1.6" fill="none" stroke-linecap="round"/>
   <path d="M17.5 160 C19 146 23 133 30 125 M182.5 160 C181 146 177 133 170 125" stroke="#FFE9B0" stroke-opacity=".25" stroke-width="1.2" fill="none"/>
-  <path d="M80 54 C84 48 91 44.6 100 44.4" stroke="#FFE9B0" stroke-opacity=".38" stroke-width="1.5" fill="none" stroke-linecap="round"/>
   </g>
   </svg>`;
 }
