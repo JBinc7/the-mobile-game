@@ -123,7 +123,7 @@ function lgKeepy(st){
       if (x<60 || x>240){ vx = -vx; x = clamp(x, 60, 240); }
       px += (x - px)*Math.min(1, dt*7);
       lvMove("#lgP", px, 176);
-      const leg = lv$("#lgP .lv-l2"); if (leg) leg.setAttribute("transform", now<kick ? "rotate(-38 3.8 -12)" : "");
+      const leg = lv$("#lgP .lv-l2"); if (leg) leg.setAttribute("transform", now<kick ? "rotate(-38 2.6 -13.2)" : "");
       lvBallAt("#lgB", x, 170, 1, Math.max(0, z), now*.6);
       if (live && z<=0){ end(); return false; }
     });
@@ -1237,7 +1237,7 @@ function lgFlickUps(st){
       const dt = Math.min(.04, (now - last)/1000); last = now;
       if (live){ vz -= g*dt; z += vz*dt; x += vx*dt; }
       px += (x - px)*Math.min(1, dt*7); lvMove("#lgP", px, 176);
-      const leg = lv$("#lgP .lv-l2"); if (leg) leg.setAttribute("transform", now<kick ? "rotate(-38 3.8 -12)" : "");
+      const leg = lv$("#lgP .lv-l2"); if (leg) leg.setAttribute("transform", now<kick ? "rotate(-38 2.6 -13.2)" : "");
       lvBallAt("#lgB", x, 170, 1, Math.max(0, z), now*.6);
       if (live && (z<=0 || x<20 || x>280)){ end(x<20 || x>280); return false; }
     });
