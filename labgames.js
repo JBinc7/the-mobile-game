@@ -895,9 +895,8 @@ function lgBend(st){
   const kit = lvKits(st), e = st.lab.ease; let got = 0;
   const one = k => new Promise(res=>{
     st.lab.tally = `${got} of 3`;
-    lgShow(st, "Bend it", `Go ${k+1} of 3. Swipe up from the ball, curving your finger: it follows your swipe round the wall or over it. A green corner is a certain goal.`,
+    lgShow(st, "Bend it", `Go ${k+1} of 3. Swipe up from the ball, curving your finger: it follows your swipe round the wall or over it.`,
       lvGoalSvg(kit.them, kit.them, false) + lgHud(got, "goals"));
-    const Z = lvGreenZones(st, .95); lv$("#lvKp").insertAdjacentHTML("beforebegin", lvGreenSvg(Z));
     let done = false, fired = false, pts = [], down = false;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
@@ -920,7 +919,7 @@ function lgBend(st){
       // the wall only stops a ball that's still low through the middle; a green corner beats the keeper every time
       const W = Pq(.28), wall = W[0]>122 && W[0]<178 && W[1]>114;
       const wide = B[0]<30 || B[0]>270, over = B[1]<22, post = !wide && !over && (B[0]<34 || B[0]>266 || B[1]<25);
-      const green = !wall && !wide && !over && !post && lvInGreen(Z, B[0], B[1]);
+      const green = false;
       const curl = Math.hypot(...dev), dist = Math.hypot(B[0] - 150, B[1] - 84), save = clamp(.8 - dist/90 - curl/45 - e*.4, .05, .7);
       const goal = green || (!wall && !wide && !over && !post && Math.random()>save);
       const [kx, ky, rot] = lvKeeperTo(B[0], B[1], wall || wide || over ? "wrong" : goal ? "near" : "save", B[0]<140 ? "l" : B[0]>160 ? "r" : "c");

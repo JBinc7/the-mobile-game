@@ -402,10 +402,9 @@ const LV_HELP = {
     "The rest of the match is simulated around them, so the final score includes what you did. When your team's on top you get more attacking moments; under pressure, more defending.",
     "Every match ends with a <b>rating</b>. Ratings decide your form, the manager's trust, how fast you grow, your value and the season's awards.",
     "Your attributes, boots, form and sharpness make every mini-game easier. Tap <b>Sim the match</b> on a match's intro to skip it."]},
-  shot:{t:"How to shoot", steps:["<b>Flick up from the ball</b> towards the goal. The direction of your flick is where it goes; the <b>faster</b> you flick, the <b>higher</b> it goes. Too fast and it's over the bar.",
-    "Land it in a <b>green corner</b> and it's a <b>goal, guaranteed</b>. The better your <b>finishing</b>, the bigger the green.",
-    "Anywhere else on target, the keeper might save it: good keepers read it more often, and soft flicks are easy. Free kicks: low down the middle hits the wall."],
-    svg:`<svg viewBox="0 0 240 160"><rect x="30" y="10" width="180" height="72" fill="rgba(255,255,255,.05)" stroke="#F4F7F2" stroke-width="4"/><circle cx="54" cy="30" r="13" fill="rgba(74,222,128,.3)" stroke="#4ADE80" stroke-dasharray="3 2"/><circle cx="186" cy="30" r="13" fill="rgba(74,222,128,.3)" stroke="#4ADE80" stroke-dasharray="3 2"/><circle cx="120" cy="140" r="7" fill="#fff"/><path d="M120 132Q150 90 182 36" fill="none" stroke="#F5C542" stroke-width="3" stroke-dasharray="6 5"/>${LV_TXT(120,58,"FLICK INTO THE GREEN")}</svg>`},
+  shot:{t:"How to shoot", steps:["The <b>power bar</b> swings up and down under the goal.", "<b>Flick up from the ball</b> towards where you want it: across to pick your side, straighter for the top corners.",
+    "Flick while the marker's <b>in the green</b> and it's a <b>goal, guaranteed</b> (as long as it's inside the posts). The better your <b>finishing</b>, the bigger the green. Short of the green is weak; past it flies over."],
+    svg:`<svg viewBox="0 0 240 160"><rect x="30" y="10" width="180" height="72" fill="rgba(255,255,255,.05)" stroke="#F4F7F2" stroke-width="4"/><circle cx="120" cy="104" r="7" fill="#fff"/><path d="M120 96Q150 70 182 34" fill="none" stroke="#F5C542" stroke-width="3" stroke-dasharray="6 5"/><rect x="30" y="132" width="180" height="14" rx="7" fill="rgba(255,255,255,.12)"/><rect x="146" y="132" width="26" height="14" fill="rgba(74,222,128,.75)"/><rect x="157" y="128" width="4" height="22" rx="2" fill="#fff"/>${LV_TXT(120,58,"FLICK IN THE GREEN")}</svg>`},
   header:{t:"How to head it", steps:["A cross is coming in. A <b>ring closes in</b> on the ball.", "Tap <b>Head it!</b> the moment it lines up with the <b>gold target ring</b>.",
     "Spot on and it flies into the corner; a bit off and the keeper has a chance; way off and it goes over."],
     svg:lvDemo("top", `<circle cx="150" cy="70" r="16" fill="none" stroke="#F5C542" stroke-width="3"/><circle cx="150" cy="70" r="34" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 5"/><circle cx="150" cy="70" r="5" fill="#fff"/>`, "TAP WHEN THE RINGS MEET")},
@@ -590,22 +589,17 @@ async function lvFullTime(st, home, away){
    ========================================================================================= */
 
 /* ---------- shots: aim, then power (one-on-ones, in the box, from distance, free kicks) ---------- */
-// z: how big the green corners are for this kind of shot; k: how good keepers are at it
+// z: how big the green is on the power bar for this kind of shot; k: how good keepers are at it; per: the bar's swing (ms)
 const LV_SHOT = {
-  oneonone:{t:"Through on goal!", s:"Flick it at goal: a green corner is a certain goal.", z:1.15, k:.85},
-  box:{t:"Space in the box", s:"Flick it at goal: a green corner is a certain goal.", z:1, k:1},
-  long:{t:"Shot from 25 yards", s:"Flick it at goal. From this far the green's small: flick too hard and it's in the stands.", z:.72, k:1.25},
-  freekick:{t:"Free kick in range", s:"Flick it over the wall into a green corner. Low and down the middle hits the wall.", z:.85, k:1.1},
-  pen:{t:"Penalty", s:"Flick it at goal: a green corner is a certain goal.", z:1.1, k:.95}
+  oneonone:{t:"Through on goal!", s:"Flick it where you want it to go, while the power's in the green: that's a goal.", z:1.15, k:.85, per:1700},
+  box:{t:"Space in the box", s:"Flick it where you want it to go, while the power's in the green: that's a goal.", z:1, k:1, per:1600},
+  long:{t:"Shot from 25 yards", s:"Flick it at goal while the power's in the green. Past the green and it's in the stands.", z:.72, k:1.25, per:1400},
+  freekick:{t:"Free kick in range", s:"Flick it at goal in the green to clear the wall. Short of the green and it hits the wall.", z:.85, k:1.1, per:1450},
+  pen:{t:"Penalty", s:"Flick it where you want it to go, while the power's in the green: that's a goal.", z:1.1, k:.95, per:1650}
 };
-// the green corners: land a shot in one and it's a goal, whatever the keeper does. Their size is your finishing
-// (on top of the kind of shot): about 6 for a finisher of 40, 12 at 60, 16 at 75 and 20 at 90
-function lvGreenZones(st, mult = 1){
-  const r = clamp(6 + (lvAttr(st).fin - 40)*.28, 5, 21)*mult;
-  return [[60, 47, r], [240, 47, r], [60, 101, r*.8], [240, 101, r*.8]];
-}
-const lvGreenSvg = Z => `<g class="lv-green">${Z.map(([x, y, r])=>`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="rgba(74,222,128,.3)" stroke="#4ADE80" stroke-width="1.4" stroke-dasharray="3 2"/>`).join("")}</g>`;
-const lvInGreen = (Z, x, y) => Z.some(([zx, zy, r])=>Math.hypot(x - zx, y - zy) <= r);
+// the green on the power bar: hit it and it's a goal. Its size is your finishing (and the kind of shot): about .08 of
+// the bar for a finisher of 45, .14 at 65, .2 at 85
+const lvGreenSize = (st, mult = 1) => clamp(.08 + (lvAttr(st).fin - 45)*.003, .05, .22)*mult;
 // where the keeper ends up: at the ball when he saves it, close when it beats his hands, the other way when he's fooled
 function lvKeeperTo(tx, ty, reach, kcol){
   lv$("#lvKp")?.classList.add("dive");
@@ -629,50 +623,52 @@ function lvKeeper(st, fin){
 const lvKeeperTag = GK => `<span class="lv-gk ${GK.r>=85 ? "elite" : GK.r<65 ? "weak" : ""}" aria-label="Their keeper${GK.name ? `, ${esc(GK.name)}` : ""}, rated ${GK.r}">GK${GK.name ? ` · ${esc(GK.name)}` : ""} <b>${GK.r}</b></span>`;
 // the shot itself, also used at the end of a take-on and an attacking move: resolves {goal, big, small} or "skip"
 function lvShotCore(st, m, v, head, title, o = {}){
-  const K = LV_SHOT[v], attr = lvAttr(st).fin, kit = lvKits(st), GK = lvKeeper(st, attr), kq = GK.q, Z = lvGreenZones(st, K.z*(o.zone || 1));
+  const K = LV_SHOT[v], attr = lvAttr(st).fin, kit = lvKits(st), GK = lvKeeper(st, attr), kq = GK.q;
+  const zone = lvGreenSize(st, K.z*(o.zone || 1)), mid = .72, lo = mid - zone/2, hi = mid + zone/2, per = K.per;
   return new Promise(res=>{
     lvShow(`${head}<h2 class="lv-t">${title || K.t}</h2><p class="lv-s">${K.s}</p>
       <div class="lv-stage lv-flick">${lvGoalSvg(kit.them, v==="freekick" ? kit.them : null)}${lvKeeperTag(GK)}<span class="lv-fhint">Flick up from the ball</span></div>
-      <p class="lv-zonecap">The <b>green corners</b> grow with your finishing: <b>${Math.round(attr)}</b></p>`);
+      ${lvBarHTML(mid, zone)}
+      <p class="lv-zonecap">The <b>green</b> grows with your finishing: <b>${Math.round(attr)}</b></p>`);
     lvSkippable(res);
-    lv$("#lvKp").insertAdjacentHTML("beforebegin", lvGreenSvg(Z));
-    let done = false, pts = [], ts = [];
-    const stage = lv$(".lv-stage");
-    // flick: the direction is where it goes, the speed at the end is how high (as the lab's flick penalty)
+    let done = false, pts = [], p = 0;
+    const stage = lv$(".lv-stage"), t0 = performance.now();
+    // the power swings the whole time: the flick takes whatever it's at when you flick
+    lvLoop(now=>{ if (done) return false; p = (1 - Math.cos(2*Math.PI*(now - t0)/per))/2; lvBarSet(p, lo, hi); });
     lvDrag(stage, {from:[150, 166], ok:()=>!done, line:q=>q,
-      start:q=>{ pts = [q]; ts = [performance.now()]; },
+      start:q=>{ pts = [q]; },
       // it goes the moment the flick's long enough: no waiting for your finger to lift
-      move:q=>{ pts.push(q); ts.push(performance.now()); if (!done && pts[0][1] - q[1]>=80) take(q); },
-      end:(q, d, tap)=>{ if (done) return; if (tap || pts.length<3 || pts[0][1] - q[1]<26){ pts = []; const h = lv$(".lv-fhint"); if (h){ h.textContent = "Flick up, towards the goal"; h.classList.remove("pop"); void h.offsetWidth; h.classList.add("pop"); } return; } take(q); }});
+      move:q=>{ pts.push(q); if (!done && pts[0][1] - q[1]>=55) take(q); },
+      end:(q, d, tap)=>{ if (done) return; if (tap || pts.length<2 || pts[0][1] - q[1]<26){ pts = []; const h = lv$(".lv-fhint"); if (h){ h.textContent = "Flick up, towards the goal"; h.classList.remove("pop"); void h.offsetWidth; h.classList.add("pop"); } return; } take(q); }});
     const take = async q => {
-      done = true; lv$(".lv-fhint")?.remove();
-      // the flick's speed over its whole length (steadier than its last instant), tuned to how fast thumbs really move:
-      // about 0.55 scene units a millisecond puts it low in the corner, 1.15 high, past 1.5 it's over
-      const t = performance.now(), j = Math.max(0, pts.findIndex(p=>Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1])>=6)), sp = Math.hypot(q[0] - pts[j][0], q[1] - pts[j][1])/Math.max(30, t - ts[j]);
-      const dx = q[0] - pts[0][0], dy = Math.max(1, pts[0][1] - q[1]), x = clamp(150 + dx/dy*110, -40, 340), y = 120 - clamp((sp - .3)/1.1, 0, 1.3)*92;
-      const over = y<20, wide = x<30 || x>270, wood = !over && !wide && (x<34 || x>266 || y<25);
-      window.__lvShot = {x:+x.toFixed(1), y:+y.toFixed(1), sp:+sp.toFixed(2)};
-      const wall = v==="freekick" && !over && y>94 && Math.abs(x - 150)<42;
-      const green = !over && !wide && !wood && !wall && lvInGreen(Z, x, y);
-      const row = y<72 ? "t" : "b", col = x<110 ? "l" : x>190 ? "r" : "c";
-      // anywhere else on target, the keeper: better ones read it more, and a soft flick is easy
+      done = true; cancelAnimationFrame(lvRaf); lv$(".lv-fhint")?.remove();
+      // where: the flick's direction (across) and its angle (steeper flicks go higher); how hard: the bar
+      const dx = q[0] - pts[0][0], dy = Math.max(1, pts[0][1] - q[1]), x = clamp(150 + dx/dy*110, -40, 340), row = Math.abs(dx/dy)<.9 ? "t" : "b";
+      const green = p>=lo && p<=hi, short = p<lo, long = p>hi;
+      const wide = x<30 || x>270, over = !wide && long && p - hi > (v==="long" ? .04 : .07);
+      const wall = v==="freekick" && short && Math.abs(x - 150)<60;
+      const y = over ? -14 : green ? (row==="t" ? 44 : 98) : short ? 104 : 46;
+      const wood = !wide && !over && (x<34 || x>266);
+      const col = x<110 ? "l" : x>190 ? "r" : "c";
+      // in the green it's a goal whatever he does; otherwise the keeper: short of the green is soft, past it is wild
       const kcol = green ? (col==="l" ? "r" : col==="r" ? "l" : pick(["l","r"])) : Math.random() < 1/3 + kq*.25 ? col : pick(["l","c","r"].filter(z=>z!==col));
-      const read = {t:{l:.5, c:.85, r:.5}, b:{l:.65, c:.92, r:.65}}[row][col];
-      const save = clamp((kcol===col ? read : col==="c" ? .25 : .06)*(kq/.5)*K.k + (sp<.6 ? .25 : 0), .03, .97);
-      let goal = green || (!over && !wide && !wood && !wall && Math.random()>save), tip = false;
+      const read = {t:{l:.5, c:.85, r:.5}, b:{l:.65, c:.92, r:.65}}[y<72 ? "t" : "b"][col];
+      const save = clamp((kcol===col ? read : col==="c" ? .25 : .06)*(kq/.5)*K.k + (short ? clamp((lo - p)*1.6, .15, .6) : long ? .12 : 0), .03, .97);
+      let goal = !wide && !wood && !over && !wall && (green || Math.random()>save), tip = false;
       if (goal && !green && Math.random()>m.q){ goal = false; tip = true; }   // in a match that's going against you, chances are harder
-      const wx = wall ? clamp(x, 128, 172) : x, ty = over ? -14 : wall ? 140 : y;
+      const wx = wall ? clamp(x, 128, 172) : x, ty = wall ? 140 : y;
       const [kx, ky, rot] = lvKeeperTo(clamp(wx, 36, 264), clamp(ty, 30, 116), !goal && !over && !wide && !wood && !wall ? "save" : green ? "wrong" : "near", kcol);
       await lvStrike(st);
       await Promise.all([
-        lvFly("#lvBall", [150, 166], [clamp(wx, -10, 310), ty], over ? 520 : sp>1.2 ? 420 : 520, {s0:1, s1:wall ? .85 : .6, h:row==="t" || over ? 14 : 4, curve:(col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6), spin:1.6}),
+        lvFly("#lvBall", [150, 166], [clamp(wx, -10, 310), ty], over ? 520 : green ? 420 : 520, {s0:1, s1:wall ? .85 : .6, h:y<72 || over ? 14 : 4, curve:(col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6), spin:1.6}),
         lvTween(330 + (1 - kq)*110, k=>{ const q2 = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q2, 84 + (ky-84)*q2, rot*q2, 1 + .06*q2); })
       ]);
       if (goal){ lvRipple(wx, ty); await lvWait(160); }
       res({goal, big: goal ? "Goal!" : over ? "Over the bar" : wide ? "Wide" : wood ? "Off the woodwork" : wall ? "Hit the wall" : "Saved",
-        small: green ? "Right in the green corner" : goal ? (kcol===col ? "Past the keeper's hands" : "Sent him the wrong way") : over ? "Flick a touch slower" : wide ? "Straighter" : wood ? "Inches away"
-          : wall ? "Lift it over them, or go wide of them" : tip ? "Fingertip save" : sp<.6 ? "Not enough on it: flick faster" : kcol===col ? "He read it: aim for the green" : "Brilliant save"});
+        small: green ? "Hit it in the green" : goal ? (kcol===col ? "Past the keeper's hands" : "Sent him the wrong way") : over ? "Too much power: flick in the green" : wide ? "Flick it straighter"
+          : wood ? "Inches away" : wall ? "Not enough on it to clear the wall" : tip ? "Fingertip save" : short ? "Not enough power: wait for the green" : "Too much on it: he got a hand to it"});
     };
+    lvKey = null;
   });
 }
 async function lvGameShot(st, m){

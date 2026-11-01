@@ -98,7 +98,7 @@ The Season screen keeps it short: this week's match (both badges, the competitio
 ## Mini-game lab (development)
 
 ### Matches, extra time and penalties
-- **Shooting:** flick up from the ball. The direction is where it goes, the speed how high, and it goes the moment the flick is long enough. Land it in a **green corner** and it's a goal, guaranteed; the green corners grow with your finishing (and shrink for long shots, free kicks and the end of an attacking move). Anywhere else on target, the keeper may save it.
+- **Shooting:** the power bar swings under the goal; flick up from the ball towards where you want it (across for the side, straighter for the top corners). Flick while the marker's in the **green** and it's a goal, guaranteed, if it's inside the posts. The green grows with your finishing (and is smaller for long shots, free kicks and the end of an attacking move). Short of the green is weak and easy to save; well past it flies over.
 - **Injuries:** the player card's *Injured* badge shows only an injury you have this week, with the weeks left. Injury treatment in the shop cures it: you're fit and available that week.
 - **Key moments:** every position draws from a wide pool: the original 16 match games plus 21 that started in the lab (volley, bicycle kick, chip, lob, top bins, bend it, flick penalty, through ball, switch the play, corner, through the gap, one-two, skill combo, race to the ball, dribble drag, air duel, shield the ball, offside trap, clear the cross, block it, fingertips), each played once in a match. Nothing repeats within a match until the pool's used up, and recent ones are less likely next time.
 - **Set pieces:** now and then a penalty (strikers and tens) or a free kick (wide men and midfielders).
