@@ -722,7 +722,11 @@ function lv3dLooks(st, kit, v){
   const gk = ["#65A30D", "#F97316", "#111827", "#7C3AED"].find(c=>!lvNear(c, kit.them) && !lvNear(c, kit.us)) || "#65A30D";
   const R = seeded(hashStr(String(st.f && st.f.opp || "x")));
   const them = n => ({skin:LV_SKIN[Math.floor(R()*LV_SKIN.length)], hair:["short","buzz","curly","none"][Math.floor(R()*4)], hairCol:LV_HAIR[Math.floor(R()*LV_HAIR.length)], c1:kit.them, c2:tr(kit.them), num:n, name:""});
+  const gkMe = ["#65A30D", "#F97316", "#7C3AED", "#111827"].find(c=>!lvNear(c, kit.them) && !lvNear(c, kit.us) && c!==gk) || "#F97316";
   return {v, crowd:kit.us,
+    // you in goal (saves), and the striker who takes it
+    gk:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:1, name:"You"}, gkMe, lvLight(gkMe) ? "#111827" : "#F4F4F5", {gk:true, gloves:"#C8F04A", num:1, shorts:"#111827", socks:gkMe}),
+    taker:{...them(9)},
     me:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:10, name:"You"}, kit.us, tr(kit.us), {shorts:tr(kit.us)==="#FFFFFF" ? "#F4F4F5" : tr(kit.us), socks:kit.us}),
     keeper:{...them(1), c1:gk, c2:lvLight(gk) ? "#111827" : "#F4F4F5", gk:true, gloves:"#C8F04A", shorts:"#111827", socks:gk},
     wall:them(4)};
@@ -1140,16 +1144,19 @@ function lvGameSave(st, m){
     lvSkippable(res);
     let dir = null, ty = LV_ROWS.b, tap = null, tapAt = 0, rel = 0, done = false, curl = 0, diving = null;
     const windUp = (pen ? 1100 : 650) + Math.random()*700, t0 = performance.now();
+    // in 3D: their striker runs up and shoots, and you're the keeper diving (g3d.js)
+    const g3 = typeof G3!=="undefined" ? G3.save(lv$(".lv-stage"), lv3dLooks(st, kit, pen ? "pen" : "box")) : null;
+    if (g3) g3.runup(windUp);
     const pickDir = ()=>{ const all = ["l","c","r"]; if (tap && Math.random()<.8) return pick(all.filter(z=>z!==tap)); return pick(["l","l","c","r","r"]); };   // strikers punish keepers who go early
     lvLoop(now=>{
       if (done) return false;
-      if (!dir && now-t0>=windUp){ dir = pickDir(); ty = pick([LV_ROWS.t, LV_ROWS.b]); rel = now; curl = (Math.random()*2-1)*(pen ? 4 : 12); lv$(".lv-cue")?.remove(); }
+      if (!dir && now-t0>=windUp){ dir = pickDir(); ty = pick([LV_ROWS.t, LV_ROWS.b]); rel = now; curl = (Math.random()*2-1)*(pen ? 4 : 12); lv$(".lv-cue")?.remove(); g3?.release(LV_COLS[dir], ty, curl, react); }
       if (dir){ const k = Math.min(1, (now-rel)/react), q = lvEaseOut(k); lvBallAt("#lvBall", 150 + (LV_COLS[dir]-150)*q + curl*Math.sin(Math.PI*q), 166 + (ty-166)*q, 1 - .38*q, 0, k*480, true); if (k>=1){ end(); return false; } }
     });
     const dive = z=>{
       if (tap || done) return; tap = z; tapAt = performance.now(); lv$("#lvKp")?.classList.add("dive");
       const kx = LV_COLS[z], rot = z==="l" ? -62 : z==="r" ? 62 : 0;
-      diving = lvTween(240, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (z==="c" ? -20 : 8)*q, rot*q, 1 + .06*q); });
+      diving = g3 ? g3.dive(kx, 84 + (z==="c" ? -20 : 8), rot, 240) : lvTween(240, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (z==="c" ? -20 : 8)*q, rot*q, 1 + .06*q); });
     };
     // the ball always finishes its flight and your dive always finishes, however late you went, before the verdict
     const end = async ()=>{
@@ -1158,11 +1165,15 @@ function lvGameSave(st, m){
       if (!dir) dir = pickDir();
       const saved = tap===dir && Math.random() > clamp((f.oppStr - a.def)/50, 0, .2);
       // a save stops it in your gloves; a goal ripples the net
-      lvBallAt("#lvBall", LV_COLS[dir] + (saved && dir!=="c" ? (dir==="l" ? 10 : -10) : 0), saved ? ty - 6 : ty, .62);
-      if (!saved) lvRipple(LV_COLS[dir], ty);
-      await lvWait(250);
+      const post = !saved && Math.random() > .92*m.q;
+      if (g3){ g3.release(LV_COLS[dir], ty, curl, 1); await g3.finish(saved, post); await lvWait(120); }
+      else {
+        lvBallAt("#lvBall", LV_COLS[dir] + (saved && dir!=="c" ? (dir==="l" ? 10 : -10) : 0), saved ? ty - 6 : ty, .62);
+        if (!saved) lvRipple(LV_COLS[dir], ty);
+        await lvWait(250);
+      }
       if (saved) return res({ok:true, big:"Saved!", small: pen ? "Penalty saved!" : tap && tapAt<rel ? "You guessed right" : "Great reactions", bonus: pen ? .55 : .35});
-      if (Math.random() > .92*m.q) return res({ok:true, big:"Off the post!", small:"Lucky", bonus:-.05});
+      if (post) return res({ok:true, big:"Off the post!", small:"Lucky", bonus:-.05});
       res({ok:false, big:"Goal", small: !tap ? "You didn't move" : tapAt<rel ? "You went too early" : "Wrong way", ga:1, bonus: pen ? -.1 : -.3});
     };
     lvEl.querySelectorAll(".lv-thirds button").forEach(b=>lvTap(b, ()=>dive(b.dataset.z)));

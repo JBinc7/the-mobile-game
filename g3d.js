@@ -17,6 +17,10 @@ const G3 = (() => {
       s.onload = ()=>res(!!window.THREE); s.onerror = ()=>{ loading = null; res(false); }; document.head.appendChild(s); });
   }
   const ready = () => on() && glOK() && !!window.THREE;
+  // a phone that can't draw the 3D mini-games smoothly gets the 2D ones for the rest of the session: timing games
+  // (saves, shots) have to be fair, and a slow picture shows the ball late
+  let slow = false; try{ slow = sessionStorage.getItem("efp-3d-slow")==="1"; }catch(e){}
+  const fast = () => ready() && !slow;
   function set(v){ try{ localStorage.setItem(KEY, v ? "1" : "0"); }catch(e){} if (v) load().then(()=>typeof render==="function" && S && render()); else { card.stop(); typeof render==="function" && S && render(); } }
 
   /* ---------- small helpers ---------- */
@@ -66,7 +70,8 @@ const G3 = (() => {
   }
   function makePlayer(look){
     const root = grp(), rig = {};
-    const skin = mat(look.skin, .55), shirt = mat(look.c1, .82), trim = mat(look.c2 || "#FFFFFF", .8), shorts = mat(look.shorts || (lum(look.c1) > .6 ? "#1F2937" : "#F4F4F5"), .85);
+    const sk = "skin|" + look.skin; if (!mats.has(sk)) mats.set(sk, new THREE.MeshStandardMaterial({color:col(look.skin), roughness:.58, emissive:col(look.skin).multiplyScalar(.1)}));
+    const skin = mats.get(sk), shirt = mat(look.c1, .82), trim = mat(look.c2 || "#FFFFFF", .8), shorts = mat(look.shorts || (lum(look.c1) > .6 ? "#1F2937" : "#F4F4F5"), .85);
     const socks = mat(look.socks || look.c1, .85), boot = mat(look.boots || "#111214", .35), dark = mat("#1A0F0A", .4);
     const hk = "hair|" + (look.hairCol || "#17130F"); if (!mats.has(hk)) mats.set(hk, new THREE.MeshStandardMaterial({color:col(look.hairCol || "#17130F"), map:hairMap(), roughness:.88}));
     const hairM = mats.get(hk);
@@ -77,50 +82,76 @@ const G3 = (() => {
     sh.scale.set(1.18, 1, .85); hips.add(sh);
     // the chest: a turned profile, broad at the shoulders and narrow at the waist, squashed front to back
     const chest = rig.chest = grp(0, .02, 0); hips.add(chest);
-    const torsoG = geo("torso", ()=>new THREE.LatheGeometry([[0,0],[.155,0],[.158,.07],[.168,.18],[.186,.3],[.198,.38],[.194,.44],[.17,.485],[.11,.51],[0,.515]].map(([r, y])=>new THREE.Vector2(r, y)), 28));
-    const torso = new THREE.Mesh(torsoG, shirt); torso.scale.set(1.3, 1, .74); chest.add(torso);
+    const torsoG = geo("torso2", ()=>new THREE.LatheGeometry([[0,0],[.152,0],[.155,.05],[.16,.12],[.172,.2],[.186,.28],[.196,.35],[.198,.4],[.19,.445],[.165,.48],[.12,.505],[.07,.515],[0,.518]].map(([r, y])=>new THREE.Vector2(r, y)), 40));
+    const torso = new THREE.Mesh(torsoG, shirt); torso.scale.set(1.28, 1, .72); chest.add(torso);
+    // the slope of the shoulders, from the neck down to the arms (no flat shelf)
+    const trap = new THREE.Mesh(sph(.1, 28, 16), shirt); trap.scale.set(2.05, .62, .82); trap.position.set(0, .455, -.012); chest.add(trap);
     // the name and number on the back, a curved panel just off the shirt
-    const nb = new THREE.Mesh(new THREE.CylinderGeometry(.191, .176, .4, 24, 1, true, Math.PI - .95, 1.9), new THREE.MeshStandardMaterial({map:backTex(look), transparent:true, roughness:.8, depthWrite:false}));
-    nb.scale.set(1.34, 1, .8); nb.position.y = .23; chest.add(nb);
-    // collar and the trim at the hem
-    const collar = new THREE.Mesh(geo("collar", ()=>new THREE.TorusGeometry(.075, .014, 8, 20)), trim); collar.rotation.x = Math.PI/2; collar.position.y = .5; collar.scale.set(1.15, 1, 1); chest.add(collar);
-    // the neck and the head
-    chest.add(mesh(geo("neck", ()=>new THREE.CylinderGeometry(.06, .07, .15, 16)), skin, 0, .555, -.005));
-    const head = rig.head = grp(0, .67, .005); head.scale.setScalar(1.1); chest.add(head);
-    const skull = new THREE.Mesh(sph(.104, 26, 20), skin); skull.scale.set(.9, 1.08, 1); head.add(skull);
-    const jaw = new THREE.Mesh(sph(.08, 20, 14), skin); jaw.scale.set(.95, .8, .95); jaw.position.set(0, -.055, .022); head.add(jaw);
-    [-1, 1].forEach(s=>{ const ear = new THREE.Mesh(sph(.026, 10, 8), skin); ear.scale.set(.45, 1, .8); ear.position.set(s*.093, -.004, -.004); head.add(ear);
-      const eye = mesh(sph(.011, 8, 6), dark, s*.034, .012, .088); head.add(eye);
-      const brow = new THREE.Mesh(geo("brow", ()=>new THREE.BoxGeometry(.034, .008, .01)), hairM); brow.position.set(s*.035, .034, .09); brow.rotation.z = -s*.12; head.add(brow); });
-    const nose = new THREE.Mesh(geo("nose", ()=>new THREE.ConeGeometry(.016, .042, 8)), skin); nose.position.set(0, -.01, .105); nose.rotation.x = Math.PI/2.4; head.add(nose);
-    const mouth = new THREE.Mesh(geo("mouth", ()=>new THREE.BoxGeometry(.03, .005, .006)), mat("#7A3B2E", .6)); mouth.position.set(0, -.052, .094); head.add(mouth);
+    const nb = new THREE.Mesh(new THREE.CylinderGeometry(.19, .176, .4, 28, 1, true, Math.PI - .95, 1.9), new THREE.MeshStandardMaterial({map:backTex(look), transparent:true, roughness:.8, depthWrite:false}));
+    nb.scale.set(1.31, 1, .76); nb.position.y = .23; chest.add(nb);
+    // collar
+    const collar = new THREE.Mesh(geo("collar", ()=>new THREE.TorusGeometry(.068, .013, 8, 24)), trim); collar.rotation.x = Math.PI/2.2; collar.position.set(0, .515, .004); collar.scale.set(1.15, 1, 1); chest.add(collar);
+    // the neck, and the head on it
+    chest.add(mesh(geo("neck2", ()=>new THREE.CylinderGeometry(.058, .07, .16, 18)), skin, 0, .565, -.004));
+    const head = rig.head = grp(0, .675, .006); head.scale.setScalar(1.08); chest.add(head);
+    // the head: an egg from crown to chin, a little narrower than it is deep, with a jaw and cheeks to give the face its shape
+    const skullG = geo("skull2", ()=>{ const g = new THREE.LatheGeometry([[0,-.118],[.032,-.115],[.055,-.103],[.072,-.085],[.086,-.06],[.096,-.03],[.102,.0],[.104,.03],[.1,.06],[.088,.088],[.066,.108],[.036,.12],[0,.124]].map(([r, y])=>new THREE.Vector2(r, y)), 40);
+      // shape it into a head: the jaw narrows to the chin, the chin comes forward, the face is flatter than the back
+      const P = g.attributes.position, v = new THREE.Vector3();
+      for (let i = 0; i < P.count; i++){ v.fromBufferAttribute(P, i); v.x *= .86; v.z *= .97;
+        if (v.y < -.02){ const t = Math.min(1, (-.02 - v.y)/.1); v.x *= 1 - .2*t*(v.z > 0 ? 1 : .5); if (v.z > 0) v.z += .012*t*Math.max(0, 1 - Math.abs(v.x)/.05); }
+        if (v.z > .05) v.z = .05 + (v.z - .05)*.88;
+        if (v.z < -.02 && v.y > -.04) v.z *= 1.04;   // the back of the head
+        P.setXYZ(i, v.x, v.y, v.z); }
+      g.computeVertexNormals(); return g; });
+    const skull = new THREE.Mesh(skullG, skin); head.add(skull);
+    [-1, 1].forEach(s=>{
+      // ears, flat against the head
+      const ear = new THREE.Mesh(sph(.03, 14, 10), skin); ear.scale.set(.32, 1, .66); ear.position.set(s*.087, -.006, -.008); ear.rotation.y = s*.3; head.add(ear);
+      // eyes: a little white, a dark iris, set under the brow
+      const white = mesh(sph(.0125, 14, 10), mat("#EDE7DF", .35), s*.032, .012, .087); white.scale.set(1.2, .72, .5); head.add(white);
+      head.add(mesh(sph(.0062, 12, 8), mat("#2A1A10", .25), s*.032, .012, .0915));
+      const lid = mesh(sph(.0142, 14, 8), skin, s*.032, .0175, .0865); lid.scale.set(1.25, .45, .55); head.add(lid);
+      // brows: thin and a little arched
+      const brow = new THREE.Mesh(geo("brow2", ()=>{ const g = new THREE.CapsuleGeometry(.0042, .026, 4, 6); g.rotateZ(Math.PI/2); return g; }), hairM); brow.position.set(s*.033, .031, .094); brow.rotation.z = -s*.1; head.add(brow);
+      head.add(mesh(sph(.009, 10, 8), skin, s*.011, -.03, .1));   // the wings of the nose
+    });
+    // the brow ridge, the nose, the lips
+    // the nose: a bridge from between the eyes down to a rounded tip
+    const nose = new THREE.Mesh(geo("nose3", ()=>{ const g = new THREE.CylinderGeometry(.006, .012, .042, 10); return g; }), skin); nose.position.set(0, -.006, .1); nose.rotation.x = .38; head.add(nose);
+    head.add(mesh(sph(.0115, 12, 10), skin, 0, -.028, .108));
+    const lipC = "#" + col(look.skin).lerp(col("#8A3A34"), .22).getHexString();
+    const lipU = new THREE.Mesh(geo("lip", ()=>{ const g = new THREE.CapsuleGeometry(.0055, .02, 4, 8); g.rotateZ(Math.PI/2); return g; }), mat(lipC, .45)); lipU.position.set(0, -.054, .088); head.add(lipU);
+    const lipL = new THREE.Mesh(geo("lip2", ()=>{ const g = new THREE.CapsuleGeometry(.0065, .018, 4, 8); g.rotateZ(Math.PI/2); return g; }), mat(lipC, .45)); lipL.position.set(0, -.064, .085); head.add(lipL);
     // hair, by style
     const hs = look.hair || "short";
     if (hs !== "none"){
       // the hair follows the skull: high at the forehead, above the ears, down to the nape (a cap tipped back)
-      const cap0 = (r, top = 1.36, tilt = -.46, sc = 1) => { const g = new THREE.Mesh(new THREE.SphereGeometry(r, 28, 16, 0, Math.PI*2, 0, top), hairM); g.scale.set(.9*sc, 1.08*sc, 1*sc); g.rotation.x = tilt; g.position.set(0, .002, -.002); return g; };
-      if (hs === "buzz"){ head.add(cap0(.1075, 1.4)); }
-      else if (hs === "short"){ head.add(cap0(.111)); const top = cap0(.116, .75, -.3); head.add(top); }
+      const cap0 = (r, top = 1.5, tilt = -.5) => { const g = new THREE.Mesh(new THREE.SphereGeometry(r, 30, 18, 0, Math.PI*2, 0, top), hairM); g.scale.set(.87, 1, .98); g.rotation.x = tilt; g.position.set(0, .02, -.003); return g; };
+      if (hs === "buzz"){ head.add(cap0(.1105, 1.52)); }
+      else if (hs === "short"){ head.add(cap0(.1145)); }
       else if (hs === "curly"){ const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(7);
-        head.add(cap0(.113, 1.4));
-        for (let i = 0; i < 52; i++){ const th = R()*Math.PI*2, ph = R()*1.2; const p = new THREE.Vector3(Math.sin(ph)*Math.cos(th), Math.cos(ph), Math.sin(ph)*Math.sin(th));
-          if (p.z > .35 && p.y < .55) continue; p.multiplyScalar(.118); head.add(mesh(sph(.022 + R()*.008, 8, 6), hairM, p.x*.92, p.y*1.08 + .006, p.z - .004)); } }
-      else if (hs === "long"){ head.add(cap0(.114, 1.45, -.5));
+        head.add(cap0(.116, 1.5));
+        for (let i = 0; i < 56; i++){ const th = R()*Math.PI*2, ph = R()*1.25; const p = new THREE.Vector3(Math.sin(ph)*Math.cos(th), Math.cos(ph), Math.sin(ph)*Math.sin(th));
+          if (p.z > .3 && p.y < .6) continue; p.multiplyScalar(.116); head.add(mesh(sph(.021 + R()*.008, 8, 6), hairM, p.x*.88, p.y + .02, p.z*.98 - .004)); } }
+      else if (hs === "long"){ head.add(cap0(.117, 1.55, -.55));
         const fall = new THREE.Mesh(geo("hairfall", ()=>new THREE.CylinderGeometry(.098, .122, .24, 20, 1, true, Math.PI*.2, Math.PI*1.6)), hairM);
         fall.material = mats.get("hairDS|" + look.hairCol) || (mats.set("hairDS|" + look.hairCol, new THREE.MeshStandardMaterial({color:col(look.hairCol || "#17130F"), map:hairMap(), roughness:.85, side:THREE.DoubleSide})), mats.get("hairDS|" + look.hairCol));
-        fall.position.set(0, -.085, -.014); head.add(fall); }
+        fall.position.set(0, -.07, -.014); fall.scale.set(.92, 1, .95); head.add(fall); }
     }
     // arms: shoulder → elbow → hand, with the sleeve over the top half
     rig.arm = {}; rig.elbow = {};
     [-1, 1].forEach(s=>{
-      const shp = rig.arm[s] = grp(s*.245, .43, -.005); chest.add(shp); shp.rotation.z = s*.12;
+      const shp = rig.arm[s] = grp(s*.238, .425, -.01); chest.add(shp); shp.rotation.z = s*.07;
       shp.add(mesh(sph(.066, 16, 12), shirt));   // the round of the shoulder, under the sleeve
       shp.add(mesh(limb(.29, .05, .056, .041), skin));   // the upper arm: biceps, narrowing to the elbow
       const slv = new THREE.Mesh(geo("sleeve", ()=>new THREE.CylinderGeometry(.068, .064, .16, 16, 1, true)), mat(look.c1, .82, {side:THREE.DoubleSide})); slv.position.y = -.07; shp.add(slv);
       const cuff = new THREE.Mesh(geo("cuff", ()=>new THREE.CylinderGeometry(.065, .065, .02, 16, 1, true)), mat(look.c2 || "#FFFFFF", .8, {side:THREE.DoubleSide})); cuff.position.y = -.15; shp.add(cuff);
       const el = rig.elbow[s] = grp(0, -.29, 0); shp.add(el); el.rotation.x = -.18;
       el.add(mesh(limb(.25, .041, .046, .03), skin));   // the forearm, thick below the elbow, thin at the wrist
-      const hand = mesh(sph(look.gk ? .055 : .042, 12, 10), look.gk ? mat(look.gloves || "#C8F04A", .6) : skin, 0, -.26, .005); hand.scale.set(look.gk ? 1 : .8, 1.15, look.gk ? .7 : .6); el.add(hand);
+      const hm = look.gk ? mat(look.gloves || "#C8F04A", .6) : skin, hand = mesh(sph(look.gk ? .056 : .044, 16, 12), hm, 0, -.275, .004); hand.scale.set(look.gk ? .95 : .72, 1.2, look.gk ? .62 : .5); el.add(hand);
+      const thumb = mesh(cap(look.gk ? .019 : .013, .03), hm, -s*.02, -.262, .024); thumb.rotation.x = .5; thumb.rotation.z = -s*.4; el.add(thumb);
+      if (look.gk){ const cuffG = new THREE.Mesh(geo("gcuff", ()=>new THREE.CylinderGeometry(.042, .038, .05, 14)), mat("#111827", .5)); cuffG.position.y = -.225; el.add(cuffG); }
     });
     // legs: hip → knee → foot, shorts over the thigh, socks up the shin, a boot
     rig.leg = {}; rig.knee = {};
@@ -141,8 +172,8 @@ const G3 = (() => {
   }
   // poses: k from 0 to 1 through the move
   const POSE = {
-    idle(r, t){ const b = Math.sin(t*1.8); r.chest.rotation.x = .02 + b*.012; r.arm[-1].rotation.x = b*.04; r.arm[1].rotation.x = -b*.04; r.arm[-1].rotation.z = -.14; r.arm[1].rotation.z = .14;
-      r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.2; r.head.rotation.y = Math.sin(t*.45)*.12; r.leg[-1].rotation.x = r.leg[1].rotation.x = 0; r.knee[-1].rotation.x = r.knee[1].rotation.x = 0; },
+    idle(r, t){ const b = Math.sin(t*1.8); r.chest.rotation.x = .02 + b*.012; r.arm[-1].rotation.x = b*.04; r.arm[1].rotation.x = -b*.04; r.arm[-1].rotation.z = -.09; r.arm[1].rotation.z = .09;
+      r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.28; r.head.rotation.y = Math.sin(t*.45)*.12; r.leg[-1].rotation.x = r.leg[1].rotation.x = 0; r.knee[-1].rotation.x = r.knee[1].rotation.x = 0; },
     // the shooter: lean, then the right leg swings back and through the ball
     kick(r, k){ const back = k < .45 ? k/.45 : 1 - (k - .45)/.55, thr = k < .45 ? 0 : (k - .45)/.55;
       r.leg[1].rotation.x = .9*back - 1.15*thr*(1 - thr*.3); r.knee[1].rotation.x = 1.4*back*(1 - thr) + .1;
@@ -156,6 +187,9 @@ const G3 = (() => {
     dive(r, k){ r.hips.position.y = .9; r.chest.rotation.x = .05; r.head.rotation.x = 0; r.arm[-1].rotation.z = -2.7*k - .55*(1 - k); r.arm[1].rotation.z = 2.7*k + .55*(1 - k);
       r.arm[-1].rotation.x = r.arm[1].rotation.x = -.3*(1 - k); r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.1;
       r.leg[-1].rotation.z = -.25*k; r.leg[1].rotation.z = .25*k; r.leg[-1].rotation.x = r.leg[1].rotation.x = -.1; r.knee[-1].rotation.x = r.knee[1].rotation.x = .3*k; },
+    // running: legs and arms swinging in time, a lean into it (k: how hard)
+    run(r, t, k = 1){ const w = Math.sin(t*11)*k; r.leg[1].rotation.x = w*.75; r.leg[-1].rotation.x = -w*.75; r.knee[1].rotation.x = .3 + Math.max(0, -w)*1.1; r.knee[-1].rotation.x = .3 + Math.max(0, w)*1.1;
+      r.arm[1].rotation.x = -w*.6; r.arm[-1].rotation.x = w*.6; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -1.1; r.arm[-1].rotation.z = -.15; r.arm[1].rotation.z = .15; r.chest.rotation.x = .18*k; r.hips.position.y = .94 + Math.abs(Math.cos(t*11))*.03; },
     cheer(r, t){ r.arm[-1].rotation.z = -2.6; r.arm[1].rotation.z = 2.6; r.arm[-1].rotation.x = r.arm[1].rotation.x = Math.sin(t*9)*.15; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.15;
       r.chest.rotation.x = -.1; r.hips.position.y = .94 + Math.abs(Math.sin(t*9))*.05; r.leg[1].rotation.x = r.leg[-1].rotation.x = 0; r.knee[1].rotation.x = r.knee[-1].rotation.x = .05; }
   };
@@ -250,20 +284,46 @@ const G3 = (() => {
     const pg = new THREE.CylinderGeometry(r, r, H + r, 16);
     [-1, 1].forEach(s=>{ const p = new THREE.Mesh(pg, post); p.position.set(s*X, (H + r)/2, 0); scene.add(p); });
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 2*X + 2*r, 16), post); bar.rotation.z = Math.PI/2; bar.position.set(0, H, 0); scene.add(bar);
-    // the net: a grid on the back, the roof and the sides; the back bulges where a goal goes in
-    const D = 1.9, n = .16, pts = [], base = [];
-    const seg = (a, b) => { pts.push(...a, ...b); };
-    for (let x = -X; x <= X + 1e-6; x += n){ seg([x, 0, -D], [x, H*.86, -D]); seg([x, H*.86, -D], [x, H, -.25]); }
-    for (let y = 0; y <= H*.86 + 1e-6; y += n) seg([-X, y, -D], [X, y, -D]);
-    for (let z = 0; z <= 1; z += .1){ const zz = -.25 - (D - .25)*z, yy = H - (H - H*.86)*z; seg([-X, yy, zz], [X, yy, zz]); }
-    [-1, 1].forEach(s=>{ for (let z = 0; z <= D + 1e-6; z += n) seg([s*X, 0, -z], [s*X, z < .25 ? H : H - (H*.14)*(z - .25)/(D - .25), -z]);
-      for (let y = 0; y <= H + 1e-6; y += n) seg([s*X, y, -.02], [s*X, y, -(y > H*.86 ? .25 + (D - .25)*(H - y)/(H*.14) : D)]); });
-    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); base.push(...pts);
-    const net = new THREE.LineSegments(g, new THREE.LineBasicMaterial({color:0xE8EEE8, transparent:true, opacity:.42}));
+    // the net: a grid on the back, the roof and the sides, fine enough to ripple
+    const D = 1.9, n = .14, pts = [];
+    const line = (a, b, k = 6) => { for (let i = 0; i < k; i++){ const t0 = i/k, t1 = (i + 1)/k; pts.push(a[0] + (b[0]-a[0])*t0, a[1] + (b[1]-a[1])*t0, a[2] + (b[2]-a[2])*t0, a[0] + (b[0]-a[0])*t1, a[1] + (b[1]-a[1])*t1, a[2] + (b[2]-a[2])*t1); } };
+    const Hb = H*.86;
+    for (let x = -X; x <= X + 1e-6; x += n){ line([x, 0, -D], [x, Hb, -D], 10); line([x, Hb, -D], [x, H, -.25], 6); }
+    for (let y = 0; y <= Hb + 1e-6; y += n) line([-X, y, -D], [X, y, -D], 40);
+    for (let z = 0; z <= 1; z += .12){ const zz = -.25 - (D - .25)*z, yy = H - (H - Hb)*z; line([-X, yy, zz], [X, yy, zz], 40); }
+    [-1, 1].forEach(s=>{ for (let z = 0; z <= D + 1e-6; z += n) line([s*X, 0, -z], [s*X, z < .25 ? H : H - (H - Hb)*(z - .25)/(D - .25), -z], 10);
+      for (let y = 0; y <= H + 1e-6; y += n) line([s*X, y, -.02], [s*X, y, -(y > Hb ? .25 + (D - .25)*(H - y)/(H - Hb) : D)], 8); });
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3)); const base = Float32Array.from(pts);
+    // which way each point of the net moves when it's hit: the back out (-z), the roof up, the sides out
+    const N = base.length/3, dir = new Int8Array(N), fix = new Uint8Array(N);
+    for (let i = 0; i < N; i++){ const x = base[i*3], y = base[i*3 + 1], z = base[i*3 + 2];
+      fix[i] = (y < .02 || z > -.03 || Math.abs(Math.abs(x) - X) < .005 && z > -.03) ? 1 : 0;   // the frame and the ground hold it
+      dir[i] = Math.abs(Math.abs(x) - X) < .005 ? (x < 0 ? 3 : 4) : z < -D + .01 ? 1 : 2; }
+    const net = new THREE.LineSegments(g, new THREE.LineBasicMaterial({color:0xE8EEE8, transparent:true, opacity:.45}));
     scene.add(net);
-    const shade = new THREE.Mesh(new THREE.PlaneGeometry(2*X, H*.86), new THREE.MeshBasicMaterial({color:0x04100A, transparent:true, opacity:.45})); shade.position.set(0, H*.43, -D - .02); scene.add(shade);
-    // push the net out around (x, y), by amount 0..1
-    return (x, y, amt) => { const p = g.attributes.position.array; for (let i = 0; i < p.length; i += 3){ if (base[i + 2] > -D + .3) continue; const d = Math.hypot(base[i] - x, base[i + 1] - y); p[i + 2] = base[i + 2] - amt*.55*Math.max(0, 1 - d/1.3); } g.attributes.position.needsUpdate = true; };
+    const shade = new THREE.Mesh(new THREE.PlaneGeometry(2*X, Hb), new THREE.MeshBasicMaterial({color:0x04100A, transparent:true, opacity:.45})); shade.position.set(0, Hb/2, -D - .02); scene.add(shade);
+    // a hit at (x, y, z) at time t0: a bulge where the ball went in, and ripples running out across the net
+    let hit = null;
+    return {D,
+      hit(x, y, z){ hit = {x, y, z, t0:performance.now()}; },
+      update(now){
+        if (!hit) return; const t = (now - hit.t0)/1000, p = g.attributes.position.array;
+        if (t > 2.2){ p.set(base); g.attributes.position.needsUpdate = true; hit = null; return; }
+        const pulse = t < .1 ? t/.1 : Math.exp(-(t - .1)*3.2), damp = Math.exp(-t*2.2), front = t*5.5;
+        for (let i = 0; i < N; i++){ if (fix[i]) continue;
+          const bx = base[i*3], by = base[i*3 + 1], bz = base[i*3 + 2], d = Math.hypot(bx - hit.x, by - hit.y, bz - hit.z);
+          const bulge = .7*pulse*Math.exp(-d*d/.4), wave = d < front ? damp*Math.exp(-d/2.4)*Math.sin(d*8 - t*22) : 0;
+          // the edges move less than the middle
+          const e = Math.min(1, by/.4, (H - by)/.3 + .3, (X - Math.abs(bx))/.4 + .3), m = (bulge + .06*wave)*e;
+          const k = i*3; p[k] = bx; p[k + 1] = by; p[k + 2] = bz;
+          if (dir[i]===1){
+            // the back: pushed out, the mesh drawn in towards the ball (a dent you can see from the front), and a wave across it
+            const pull = .22*pulse*e*Math.exp(-d*d/.8); p[k + 2] = bz - m; p[k] = bx + (hit.x - bx)*pull; p[k + 1] = by + (hit.y - by)*pull + .14*wave*e;
+          } else if (dir[i]===2){ p[k + 1] = by + m*.8; p[k] += .05*wave*e; }
+          else { p[k] = bx + (dir[i]===3 ? -m : m)*.9; p[k + 1] = by + .08*wave*e; }
+        }
+        g.attributes.position.needsUpdate = true;
+      }};
   }
   let crowdTex = null, boardTex = null;
   function stands(scene, kc){
@@ -293,85 +353,158 @@ const G3 = (() => {
     const b = new THREE.Mesh(new THREE.SphereGeometry(.11, 24, 16), new THREE.MeshStandardMaterial({map:ballTex, roughness:.45}));
     return b;
   }
-  function shot(stage, o){
-    if (!stage || !ready()) return null;
+  /* the stadium for a shot or a save: the goal, the ball on its spot, the man taking it and the man in goal.
+     role "shot": you take it (o.me) against their keeper (o.keeper); role "save": their striker (o.taker) against you (o.gk) */
+  function world(stage, o, role){
     if (!SR){ SR = {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 120)}; }
     const {r, scene, cam} = SR; clear(scene); scene.fog = null; scene.background = new THREE.Color(0x07120C);
     const D = DIST[o.v] ?? 13;
-    lights(scene, {hemi:1.25, key:2.3, keyZ:8, rim:.9, fill:1});
-    pitch(scene, D); const bulge = goalFrame(scene); stands(scene, o.crowd || "#F5C542");
+    lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1});
+    pitch(scene, D); const net = goalFrame(scene); stands(scene, o.crowd || "#F5C542");
     const B = ball(); B.position.set(0, .11, D); scene.add(B);
+    const bs = blob(.36, .36); bs.position.set(0, .006, D); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner
     const TN = 14, trailPos = new Float32Array(TN*3), trailG = new THREE.BufferGeometry(); trailG.setAttribute("position", new THREE.BufferAttribute(trailPos, 3));
     const trail = new THREE.Line(trailG, new THREE.LineBasicMaterial({color:0xFFFFFF, transparent:true, opacity:.5})); trail.visible = false; trail.frustumCulled = false; scene.add(trail);
-    const trailPush = () => { trailPos.copyWithin(3, 0, (TN - 1)*3); trailPos[0] = B.position.x; trailPos[1] = B.position.y; trailPos[2] = B.position.z; trailG.attributes.position.needsUpdate = true; }; const bs = blob(.36, .36); bs.position.set(0, .006, D); scene.add(bs);
-    // you: just behind the ball, a little to its left, seen from behind
-    const me = makePlayer(o.me); me.root.position.set(-.62, 0, D + .6); me.root.rotation.y = Math.PI + .3; scene.add(me.root);
-    // their keeper, on his line (off it, one-on-one)
+    const trailPush = () => { if (!trail.visible){ for (let i = 0; i < TN; i++) trailPos.set([B.position.x, B.position.y, B.position.z], i*3); trail.visible = true; }
+      trailPos.copyWithin(3, 0, (TN - 1)*3); trailPos[0] = B.position.x; trailPos[1] = B.position.y; trailPos[2] = B.position.z; trailG.attributes.position.needsUpdate = true; };
+    // the taker: a step behind the ball and to its left, side-on to it
+    const taker = makePlayer(role==="shot" ? o.me : o.taker); taker.root.position.set(-.72, 0, D + .62); taker.root.rotation.y = Math.PI + .3; scene.add(taker.root);
+    // the keeper on his line (off it, one-on-one)
     const kz = o.v==="oneonone" ? 2.6 : o.v==="pen" ? .1 : .4;
-    const kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); scene.add(kp);
+    const kp = grp(0, .94, kz), K = makePlayer(role==="shot" ? o.keeper : o.gk); K.root.position.y = -.94; kp.add(K.root); scene.add(kp);
     const ks = blob(1, .7); ks.position.set(0, .006, kz); scene.add(ks);
     // a wall for free kicks, 9.15 m out
-    const wall = []; if (o.v==="freekick"){ for (let i = 0; i < 4; i++){ const w = makePlayer(o.wall); w.root.position.set(-.75 + i*.5, 0, D - 9.15); scene.add(w.root); POSE.idle(w.rig, i); w.rig.arm[-1].rotation.x = w.rig.arm[1].rotation.x = -.6; w.rig.arm[-1].rotation.z = .35; w.rig.arm[1].rotation.z = -.35; wall.push(w); } }
-    // the camera behind your shoulder, low enough to see the whole goal; the ball sits where your finger goes (92% down)
-    const camAt = new THREE.Vector3(.4, 1.7, D + 4.2), look = new THREE.Vector3(0, 1.05, 0);
-    cam.fov = o.v==="long" || o.v==="freekick" ? 30 : 38; cam.position.copy(camAt); cam.lookAt(look); cam.clearViewOffset();
+    if (o.v==="freekick") for (let i = 0; i < 4; i++){ const w = makePlayer(o.wall); w.root.position.set(-.75 + i*.5, 0, D - 9.15); scene.add(w.root); POSE.idle(w.rig, i);
+      w.rig.arm[-1].rotation.x = w.rig.arm[1].rotation.x = -.6; w.rig.arm[-1].rotation.z = .35; w.rig.arm[1].rotation.z = -.35; }
+    // the camera: high behind the ball and dead centre, so the taker sits below the goal and both corners are clear.
+    // The picture's shifted so the ball lands at (50%, 92%) of the stage, where your finger goes
+    const camAt = new THREE.Vector3(0, 2.75, D + 4.7);
+    { // angles below the horizontal to the ball and to just over the bar; find the tilt c that puts them at 92% and 13% down
+      const aB = Math.atan2(camAt.y - .11, camAt.z - D), aG = Math.atan2(camAt.y - 2.75, camAt.z), fB = .844, fG = -.74;
+      let lo = aG + 1e-4, hi = aB - 1e-4; for (let i = 0; i < 50; i++){ const c = (lo + hi)/2, r0 = Math.tan(aB - c)/Math.tan(aG - c); if (r0 < fB/fG) lo = c; else hi = c; }
+      const c = (lo + hi)/2, T = Math.tan(aB - c)/fB;
+      cam.fov = 2*Math.atan(T)*180/Math.PI; cam.position.copy(camAt); cam.lookAt(0, camAt.y - Math.tan(c)*10, camAt.z - 10); cam.clearViewOffset(); cam.updateProjectionMatrix(); }
     const host = stage; host.classList.add("g3"); host.prepend(r.domElement); r._w = 0;
-    const anims = new Set(); let t0 = performance.now(), raf = 0, stopped = false, mode = "idle";
-    const aim = () => { // shift the picture so the ball lands at (50%, 92%) of the stage, where the drag starts
-      cam.clearViewOffset(); cam.updateMatrixWorld(); const p = new THREE.Vector3(0, .11, D).project(cam), w = r._w, h = r._h;
-      const dx = (p.x*.5)*w, dy = (-p.y*.5 + .5 - .922)*h; cam.setViewOffset(w, h, dx, dy, w, h); };
+    const anims = new Set(); let t0 = performance.now(), raf = 0, stopped = false;
+    const W = {r, scene, cam, B, bs, trail, trailPush, taker, K, kp, ks, kz, D, net, mode:"idle", t0};
+    const aim = () => {};
+    // watch how fast it draws: too slow, and drop the resolution; still too slow, and the next moments are 2D
+    let nf = 0, last = 0, sum = 0, cnt = 0;
+    const watch = now => { if (last && ++nf > 4){ sum += now - last; cnt++;
+        if (cnt >= 12){ const avg = sum/cnt; sum = cnt = 0;
+          if (avg > 45){ if (r.getPixelRatio() > 1){ r.setPixelRatio(1); r._w = 0; } else { slow = true; try{ sessionStorage.setItem("efp-3d-slow", "1"); }catch(e){} } } } }
+      last = now; };
     const frame = now => {
-      raf = 0; if (stopped) return; if (!r.domElement.isConnected){ stop(); return; }
+      raf = 0; if (stopped) return; if (!r.domElement.isConnected){ W.stop(); return; }
+      watch(now);
       if (fit(r, cam, host)) aim();
       const t = (now - t0)/1000;
-      if (mode==="idle"){ POSE.idle(me.rig, t); POSE.ready(K.rig, t); }
-      anims.forEach(f=>f(now));
+      if (W.mode==="idle"){ POSE.idle(taker.rig, t); POSE.ready(K.rig, t); }
+      anims.forEach(f=>f(now)); net.update(now);
       r.render(scene, cam); raf = requestAnimationFrame(frame);
     };
+    try{ r.compile(scene, cam); }catch(e){}
     raf = requestAnimationFrame(frame);
-    const stop = () => { stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); r.domElement.remove(); };
+    W.stop = () => { stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); r.domElement.remove(); };
     // an animation step run every frame for ms milliseconds (several can run at once)
-    const tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
-    const ease = k => 1 - Math.pow(1 - k, 2);
-    /* res: {wx, ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall, saved} in the 2D shot's numbers */
+    W.tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
+    // the ball into the net: it hits the back of the net, which bulges and ripples, and drops
+    W.inNet = async (spinAxis) => { const p0 = B.position.clone(), back = -net.D + .12;
+      await W.tween(260, k=>{ const e = ease(k); B.position.set(p0.x*(1 - .1*e), Math.max(.11, p0.y - .25*k*k), p0.z + (back - p0.z)*e); trailPush(); B.rotateOnAxis(spinAxis, -.2*(1 - k)); });
+      net.hit(B.position.x, B.position.y, -net.D);
+      W.tween(300, k=>{ trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; });
+      const p1 = B.position.clone();
+      await W.tween(420, k=>{ B.position.set(p1.x, Math.max(.11, p1.y - 1.4*k*k), p1.z + .35*Math.sin(k*Math.PI)*.6); });
+    };
+    return W;
+  }
+  const ease = k => 1 - Math.pow(1 - k, 2);
+  // a point of the 2D goal (x 30-270 post to post, y 20 bar to 124 line) in the 3D goal mouth
+  const kTarget = (kx, ky) => new THREE.Vector3(gx(kx), Math.max(.55, gy(ky)), 0);
+
+  /* your shot. play(q) takes the 2D shot's numbers {wx, ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall}
+     and plays the strike, the flight, the keeper and what happens next */
+  function shot(stage, o){
+    if (!stage || !fast()) return null;
+    const W = world(stage, o, "shot"), {B, bs, taker, K, kp, ks, kz, D, cam} = W;
     async function play(q){
-      mode = "shoot";
-      // the strike: the leg swings back and through
-      await tween(240, k=>{ POSE.kick(me.rig, k*.55); POSE.ready(K.rig, (performance.now() - t0)/1000); });
+      W.mode = "shoot";
+      await W.tween(240, k=>{ POSE.kick(taker.rig, k*.55); POSE.ready(K.rig, (performance.now() - W.t0)/1000); });
       const tgt = new THREE.Vector3(gx(q.wx), Math.max(.11, gy(q.ty)), 0);
       if (q.wall) tgt.set(gx(q.wx), 1.2, D - 9.15 + .35);
       const from = B.position.clone(), arcH = (q.h || 0)/104*2.44, cv = (q.curve || 0)/120*3.66;
-      const kTo = new THREE.Vector3(gx(q.kx), Math.max(.55, gy(q.ky)), kz), kFrom = kp.position.clone(), roll = -(q.rot || 0)*Math.PI/180;
-      const fov0 = cam.fov;
+      const kTo = kTarget(q.kx, q.ky).setZ(kz), kFrom = kp.position.clone(), roll = -(q.rot || 0)*Math.PI/180, fov0 = cam.fov;
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
       await Promise.all([
-        tween(260, k=>POSE.kick(me.rig, .55 + .45*k)),
-        tween(q.ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
-          B.rotateOnAxis(spinAxis, -.35); if (!trail.visible){ for (let i = 0; i < TN; i++) trailPos.set([B.position.x, B.position.y, B.position.z], i*3); trail.visible = true; } trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
-          cam.fov = fov0 - 4*ease(k); cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
-        tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; POSE.dive(K.rig, Math.abs(roll) > .2 ? e : e*.4); ks.position.x = kp.position.x; })
+        W.tween(260, k=>POSE.kick(taker.rig, .55 + .45*k)),
+        W.tween(q.ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
+          B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
+          cam.fov = fov0 - 3*e; cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
+        W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; POSE.dive(K.rig, Math.abs(roll) > .2 ? e : e*.4); ks.position.x = kp.position.x; })
       ]);
-      // what happens next: in the net, off the keeper, off the post, over, wide, off the wall
-      const p0 = B.position.clone(); tween(300, k=>{ trailPush(); trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; });
+      const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
       if (q.goal){
-        mode = "goal";
-        await tween(420, k=>{ const e = ease(k); B.position.set(p0.x, Math.max(.11, p0.y - .4*k*k), p0.z - 1.55*e); bulge(p0.x, p0.y, Math.sin(Math.min(1, k*1.6)*Math.PI*.5)*(1 - Math.max(0, k - .6))); B.rotateOnAxis(spinAxis, -.12*(1 - k)); });
-        const tc = performance.now(); tween(900, k=>{ POSE.cheer(me.rig, (performance.now() - tc)/1000); bulge(p0.x, p0.y, Math.max(0, .4 - k)*.5); });
-      } else if (q.over || q.wide){
-        await tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
-      } else if (q.wood){
-        await tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
-      } else if (q.wall){
-        await tween(420, k=>{ B.position.set(p0.x + .6*k, Math.max(.11, p0.y + .3*k - 1.2*k*k), p0.z + 3.5*ease(k)); });
-      } else {   // saved: pushed away
-        await tween(460, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.6*ease(k), Math.max(.11, p0.y + .25*k - 1.1*k*k), p0.z + 1.2*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
+        W.mode = "goal";
+        const tc = performance.now(); W.tween(1400, k=>POSE.cheer(taker.rig, (performance.now() - tc)/1000));
+        await W.inNet(spinAxis);
+      } else if (q.over || q.wide){ fade();
+        await W.tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
+      } else if (q.wood){ fade();
+        await W.tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
+      } else if (q.wall){ fade();
+        await W.tween(420, k=>{ B.position.set(p0.x + .6*k, Math.max(.11, p0.y + .3*k - 1.2*k*k), p0.z + 3.5*ease(k)); });
+      } else { fade();   // saved: pushed away
+        await W.tween(460, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.6*ease(k), Math.max(.11, p0.y + .25*k - 1.1*k*k), p0.z + 1.2*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
       }
     }
-    return {play, stop};
+    return {play, stop:W.stop};
+  }
+
+  /* you in goal: their striker runs up and shoots; you dive.
+     runup(ms) brings him in; release(x, y, curl, ms) is his shot to that point of the 2D goal; dive(x, y, rot, ms) is you;
+     finish(saved) is the ball in your gloves, or in the net */
+  function save(stage, o){
+    if (!stage || !fast()) return null;
+    const W = world(stage, o, "save"), {B, bs, taker, K, kp, ks, kz, D} = W;
+    // he starts further back for his run-up
+    const start = new THREE.Vector3(-1.5, 0, D + 2.6), plant = taker.root.position.clone(); taker.root.position.copy(start);
+    let flying = null, spinAxis = new THREE.Vector3(1, 0, 0), released = false;
+    return {
+      stop:W.stop,
+      runup(ms){ W.mode = "run"; const t1 = performance.now();
+        W.tween(Math.max(300, ms - 200), k=>{ const e = k*k*(3 - 2*k); taker.root.position.lerpVectors(start, plant, e); POSE.run(taker.rig, (performance.now() - t1)/1000, 1 - k*.6); POSE.ready(K.rig, (performance.now() - W.t0)/1000); }); },
+      release(x, y, curl, ms){
+        if (released) return; released = true; W.mode = "shoot";
+        const tgt = new THREE.Vector3(gx(x), Math.max(.11, gy(y)), 0), from = B.position.clone(), cv = (curl || 0)/120*3.66;
+        spinAxis = new THREE.Vector3(1, curl ? -.4*Math.sign(curl) : 0, 0).normalize();
+        W.tween(200, k=>POSE.kick(taker.rig, .45 + .55*k));
+        flying = W.tween(ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + .25*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
+          B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); });
+        return flying;
+      },
+      dive(x, y, rot, ms){
+        const kTo = kTarget(x, y).setZ(kz), kFrom = kp.position.clone(), roll = -(rot || 0)*Math.PI/180;
+        return W.tween(ms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; POSE.dive(K.rig, Math.abs(roll) > .2 ? e : e*.3); ks.position.x = kp.position.x; });
+      },
+      async finish(saved, post){
+        if (flying) await flying;
+        const p0 = B.position.clone();
+        if (post){   // off the post and away
+          W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
+          const sx = p0.x < 0 ? -1 : 1, at = new THREE.Vector3(sx*3.6, Math.min(2.2, Math.max(.4, p0.y)), 0);
+          await W.tween(120, k=>B.position.lerpVectors(p0, at, k));
+          await W.tween(420, k=>{ B.position.set(at.x - sx*1.4*ease(k), Math.max(.11, at.y + .3*k - 1.6*k*k), at.z + 3*ease(k)); });
+        } else if (saved){   // held, or pushed round the post
+          W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
+          const hand = new THREE.Vector3(); K.rig.elbow[p0.x < 0 ? -1 : 1].getWorldPosition(hand);
+          await W.tween(220, k=>{ B.position.lerpVectors(p0, hand.clone().add(new THREE.Vector3(0, 0, .25)), ease(k)); });
+        } else await W.inNet(spinAxis);
+      }
+    };
   }
 
   // three.js is fetched once the game's on screen, so it's there by the first shot
   if (typeof window !== "undefined") window.addEventListener("load", ()=>setTimeout(()=>load().then(ok=>{ if (ok && typeof S!=="undefined" && S && typeof render==="function" && document.querySelector(".board .card-top")) G3.cardNow(); }), 400));
-  return {on, set, load, ready, glOK, lookOf, card:card, shot, cardNow(){ const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
+  return {on, set, load, ready, glOK, lookOf, card:card, shot, save, cardNow(){ const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
 })();
