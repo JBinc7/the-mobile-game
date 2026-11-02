@@ -49,7 +49,7 @@ function lgHoldOn(el, on){
 }
 // a side-on view: the stand behind, the advertising boards, and the grass
 function lgSideView(inner = ""){
-  return `<svg viewBox="0 0 300 180" aria-hidden="true"><defs>${LV_DEFS}<linearGradient id="lgSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#081A12"/><stop offset="1" stop-color="#10301F"/></linearGradient>
+  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="sideview"><defs>${LV_DEFS}<linearGradient id="lgSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#081A12"/><stop offset="1" stop-color="#10301F"/></linearGradient>
       <radialGradient id="lgFl" cx="50%" cy="0%" r="75%"><stop offset="0" stop-color="#FFF6D6" stop-opacity=".25"/><stop offset="1" stop-color="#FFF6D6" stop-opacity="0"/></radialGradient>
       <linearGradient id="lgTurf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#17542E"/><stop offset="1" stop-color="#23783F"/></linearGradient></defs>
     <rect width="300" height="180" fill="url(#lgSky)"/>${lvCrowd()}<rect width="300" height="180" fill="url(#lgFl)"/>

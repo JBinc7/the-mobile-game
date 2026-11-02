@@ -369,7 +369,7 @@ const G3 = (() => {
     r.domElement.className = "g3-canvas"; r.domElement.setAttribute("aria-hidden", "true");
     return r;
   }
-  function fit(r, cam, el){ const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight); if (r._w===w && r._h===h) return false; r._w = w; r._h = h; r.setSize(w, h, false); cam.aspect = w/h; cam.updateProjectionMatrix(); return true; }
+  function fit(r, cam, el){ const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight); if (r._w===w && r._h===h) return false; r._w = w; r._h = h; r.setSize(w, h, false); if (cam.isPerspectiveCamera) cam.aspect = w/h; cam.updateProjectionMatrix(); return true; }
   function lights(scene, o = {}){
     scene.add(new THREE.HemisphereLight(0xE6EEFF, 0x1A3A22, o.hemi ?? 1.1));
     const a = new THREE.DirectionalLight(0xFFF1D6, o.key ?? 2.2); a.position.set(-4, 7, o.keyZ ?? -5); scene.add(a);
@@ -427,10 +427,11 @@ const G3 = (() => {
   const DIST = {pen:11, box:13.5, oneonone:8.5, long:24, freekick:22, chip:9, volley:12};
   const gx = x => (x - 150)/120*3.66, gy = y => (124 - y)/104*2.44;
   let SR = null;
-  function pitch(scene){
+  function pitch(scene, lines = true){
     // mown stripes across the pitch, then the lines as thin strips
     const g1 = mat("#1D6B3A", .95), g2 = mat("#22793F", .95), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
     for (let i = -2; i < 14; i++){ const s = new THREE.Mesh(new THREE.PlaneGeometry(90, 4), i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); scene.add(s); }
+    if (!lines) return;
     const strip = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), line); m.rotation.x = -Math.PI/2; m.position.set(x, .01, z); scene.add(m); };
     const W = .12;
     strip(0, 0, 70, W);                                       // the goal line
@@ -547,10 +548,11 @@ const G3 = (() => {
      its spot at `ballAt`), the lights, the animation loop and the speed watch. Each moment adds its players and camera */
   function base(stage, o, ballAt){
     if (!SR){ SR = {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)}; }
-    const {r, scene, cam} = SR; clear(scene); scene.fog = null; scene.background = new THREE.Color(0x07120C);
-    cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset();
+    if (SR.cur){ SR.cur.stop(); SR.cur = null; }   // one scene at a time: the last one stops
+    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = new THREE.Color(0x07120C);
+    if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
     lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1});
-    pitch(scene); const net = goalFrame(scene); stands(scene, o.crowd || "#F5C542");
+    pitch(scene, !o.noLines); const net = goalFrame(scene); stands(scene, o.crowd || "#F5C542");
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner
@@ -560,7 +562,7 @@ const G3 = (() => {
       trailPos.copyWithin(3, 0, (TN - 1)*3); trailPos[0] = B.position.x; trailPos[1] = B.position.y; trailPos[2] = B.position.z; trailG.attributes.position.needsUpdate = true; };
     const host = stage; host.classList.add("g3"); host.prepend(r.domElement); r._w = 0;
     const anims = new Set(); let t0 = performance.now(), raf = 0, stopped = false;
-    const W = {r, scene, cam, B, bs, trail, trailPush, net, mode:"idle", t0, idle:null};
+    const W = {r, scene, cam, B, bs, trail, trailPush, net, mode:"idle", t0, idle:null}; SR.cur = W;
     // the ball's shadow follows it, smaller as it rises
     W.ballTo = (x, y, z) => { B.position.set(x, y, z); bs.position.set(x, .006, z); bs.scale.setScalar(Math.max(.3, 1 - y*.25)); };
     W.fadeTrail = () => W.tween(300, k=>{ trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; trail.material.opacity = .5; });
@@ -581,7 +583,7 @@ const G3 = (() => {
       r.render(scene, cam); raf = requestAnimationFrame(frame);
     };
     W.start = () => { try{ r.compile(scene, cam); }catch(e){} raf = requestAnimationFrame(frame); };
-    W.stop = () => { stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); r.domElement.remove(); };
+    W.stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); if (r.domElement.parentNode===host) r.domElement.remove(); if (SR.cur===W) SR.cur = null; };
     // an animation step run every frame for ms milliseconds (several can run at once)
     W.tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
     // the ball into the net: it hits the back of the net, which stretches round it and throws it back out, and it drops
@@ -851,10 +853,145 @@ const G3 = (() => {
       }};
   }
 
+
+  /* ---------- level 3: every other mini-game, mirrored into 3D ----------
+     The 2D game keeps running underneath, exactly as it was; each frame its players and ball are read off the 2D picture
+     and stood in a 3D stadium. For the views from above, a camera looking down at 50° with no perspective puts every
+     point of the grass exactly where it was in 2D, so the game's taps, drags and buttons still land where they should */
+  const MK = .045, ELEV = 50*Math.PI/180, SE = Math.sin(ELEV), CE = Math.cos(ELEV);
+  // each view: which way the 2D picture's x and y run on the grass, and where its middle is (the goal at the origin)
+  const VIEWS = {
+    top:   {ex:[1, 0, 0],  ey:[0, 0, 1],  o:[0, 0, (90 - 3)*MK/SE]},
+    bottom:{ex:[-1, 0, 0], ey:[0, 0, -1], o:[0, 0, (177 - 90)*MK/SE]},
+    side:  {ex:[0, 0, -1], ey:[1, 0, 0],  o:[0, 0, (297 - 150)*MK]},
+    none:  {ex:[0, 0, -1], ey:[1, 0, 0],  o:[0, 0, 52]},
+    // side-on games (2D's grass from y 126 to 180, the action along y 166): lower down, and no goal
+    sideview:{ex:[1, 0, 0], ey:[0, 0, 1], o:[0, 0, 40], elev:20, track:166}
+  };
+  /* the goal view (2D's front-on goal: posts at x 30 and 270, the bar at y 20, the ball's spot at y 166) mirrored
+     with a shot camera framed the same way, so each 2D point is found in 3D by casting through it: the keeper onto his
+     line, the wall onto the grass, the ball at the depth its 2D size says it's reached */
+  let MLOOKS = {me:null, anyone:()=>({skin:"#D9A37A"})};
+  function mirrorGoal(stage, svg){
+    // the distance whose framing puts the posts where 2D has them
+    const fr = D => { const c = new THREE.PerspectiveCamera(40, 300/180, .1, 160); frameCam(c, new THREE.Vector3(0, 2.75, D + 4.7), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.44, 0), .111); c.updateMatrixWorld(); return c; };
+    let lo = 4, hi = 40; for (let i = 0; i < 30; i++){ const D = (lo + hi)/2, x = new THREE.Vector3(3.66, 1.2, 0).project(fr(D)).x; if (x > .8) lo = D; else hi = D; }
+    const D = (lo + hi)/2, W = base(stage, {}, new THREE.Vector3(0, .11, D)), {scene, cam} = W, c0 = fr(D); W.looks = MLOOKS;
+    cam.fov = c0.fov; cam.position.copy(c0.position); cam.quaternion.copy(c0.quaternion); cam.updateProjectionMatrix();
+    const rc = new THREE.Raycaster(), hit = new THREE.Vector3(), plane = new THREE.Plane(), nz = new THREE.Vector3(0, 0, 1), ny = new THREE.Vector3(0, 1, 0);
+    const cast = (x, y, onZ) => { rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam); if (onZ != null) plane.set(nz, -onZ); else plane.set(ny, 0); return rc.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
+    // their keeper (or you, in goal), on his line
+    const kz = .4, kp = grp(0, .94, kz), K = makePlayer(svg.dataset.kme ? W.looks.me && {...W.looks.me, gk:true, c1:"#F97316"} || {skin:"#B57D52", c1:"#F97316", c2:"#111827", gk:true, num:1} : {skin:"#D9A37A", c1:"#65A30D", c2:"#111827", gk:true, num:1, hair:"short", hairCol:"#17130F"});
+    K.root.position.y = -.94; kp.add(K.root); scene.add(kp);
+    const men = new Map(), seen = new Set(), T = () => performance.now()/1000;
+    const kme = !!svg.dataset.kme, tk = W.add(kme ? {...W.looks.anyone({}), c1:"#E5E7EB", c2:"#1F2937", num:9} : {...W.looks.me, c1:W.looks.me.c1}, -.72, D + .62, Math.PI + .3);
+    let kickAt = 0, s0 = null;
+    W.idle = () => {
+      const sv = svg.getScreenCTM(); if (!sv) return; const inv = sv.inverse(); seen.clear();
+      // the strike: 2D's boot swinging in (a shot), or the ball setting off (a shot at you)
+      const now = performance.now(), b0 = svg.querySelector("#lvBall"), bs0 = b0 ? Math.hypot(...(m => [m.a, m.b])(inv.multiply(b0.getScreenCTM()))) : 1;
+      if (s0==null) s0 = bs0;
+      if (!kickAt && (svg.querySelector(".lv-boot") || bs0 < s0 - .01)) kickAt = now;
+      if (kickAt) pose(tk, "kick", Math.min(1, (now - kickAt)/300)); else pose(tk, "idle", T());
+      const kel = svg.querySelector("#lvKp");
+      if (kel && kel.getClientRects().length){ const m = inv.multiply(kel.getScreenCTM()), rot = Math.atan2(m.b, m.a), p = cast(m.e, m.f, kz);
+        if (p){ kp.position.set(p.x, Math.max(.55, p.y), kz); kp.rotation.z = -rot; } kp.visible = true;
+        if (Math.abs(rot) > .2 || kel.classList.contains("dive")) pose(K, "dive", Math.min(1, Math.abs(rot)/1.1 + .3)); else pose(K, "ready", T()); } else kp.visible = false;
+      // the ball: how far it's come from its 2D size, then cast through the picture at that depth
+      const bb = svg.querySelector("#lvBall > .lv-bb") || svg.querySelector("g[id] > .lv-bb");
+      if (bb){ const g = bb.parentNode, m = inv.multiply(g.getScreenCTM()), s = Math.hypot(m.a, m.b), q = clamp((1 - s)/.4, 0, 1.15), tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || "");
+        const lift = tz ? -(+tz[1])*s : 0, p = cast(m.e, m.f - lift, D*(1 - q)); if (p){ W.B.position.set(p.x, Math.max(.11, p.y), p.z); W.bs.position.set(p.x, .006, p.z); } W.B.rotation.x -= .08; }
+      // anyone else: a wall, a striker, on the grass
+      svg.querySelectorAll(".lv-man").forEach(el=>{ if (!el.getClientRects().length) return; seen.add(el); let M = men.get(el);
+        if (!M){ const k = el.dataset.k || "#1D4ED8"; M = W.add({...W.looks.anyone(el), c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || "#FFFFFF", num:el.dataset.n || ""}, 0, 0, 0); men.set(el, M); }
+        const m = inv.multiply(el.getScreenCTM()), p = cast(m.e, m.f); if (p) M.at.position.copy(p);
+        pose(M, el.closest(".lv-wall") || p && p.z > 3 ? "wall" : "idle", T()); });
+      men.forEach((M, el)=>{ M.at.visible = seen.has(el); });
+    };
+    W.start(); return W;
+  }
+
+  function mirror(stage){
+    if (!stage || !fast() || stage.classList.contains("g3")) return null;
+    const svg = stage.querySelector(":scope > svg[data-view]"); if (!svg) return null;
+    const vk = svg.dataset.view, V = VIEWS[vk];
+    if (vk==="goal") return mirrorGoal(stage, svg);
+    if (!V) return null;
+    const EL = (V.elev || 50)*Math.PI/180, SE = Math.sin(EL), CE = Math.cos(EL);
+    const ex = new THREE.Vector3(...V.ex), ey = new THREE.Vector3(...V.ey), O = new THREE.Vector3(...V.o);
+    const G = (x, y, h = 0, out = new THREE.Vector3()) => out.copy(O).addScaledVector(ex, (x - 150)*MK).addScaledVector(ey, (y - 90)*MK/SE).setY(h);
+    SR ||= {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)};
+    const cam = SR.ortho ||= new THREE.OrthographicCamera(-150*MK, 150*MK, 90*MK, -90*MK, .1, 400);
+    const W = base(stage, {cam, noLines:true}, G(150, 90, .11)), {scene} = W;
+    if (V.track){ // side-on: the middle of the picture is the grass behind the line of play, and there's no goal in it
+      O.copy(new THREE.Vector3(...V.o)).addScaledVector(ey, (90 - V.track)*MK/SE); scene.children.forEach(o=>{ if (o.isLineSegments || (o.isMesh && o.geometry && o.geometry.type==="CylinderGeometry")) o.visible = false; });
+      const back = G(150, 124), bd = scene.children.find(o=>o.isMesh && o.material && o.material.map===boardTex), cr = scene.children.find(o=>o.isMesh && o.material && o.material.map===crowdTex);
+      if (bd){ bd.position.set(back.x, .45, back.z); bd.scale.set(.6, 1, 1); }
+      if (cr){ cr.position.set(back.x, 5.4, back.z - .05); cr.rotation.x = 0; cr.scale.set(.42, .45, 1); } }
+    // the 2D pitch's own markings (its boxes, arcs and centre circle), traced onto the grass
+    const mk = svg.querySelector('g[fill="none"]');
+    if (mk){ const pts = [];
+      mk.querySelectorAll("rect, path, circle, line").forEach(el=>{ if (!el.getTotalLength) return; const L = el.getTotalLength(), n = Math.max(2, Math.ceil(L/4)); let prev = null;
+        for (let i = 0; i <= n; i++){ const q = el.getPointAtLength(L*i/n), v = G(q.x, q.y, .02); if (prev) pts.push(prev.x, prev.y, prev.z, v.x, v.y, v.z); prev = v; } });
+      const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+      scene.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({color:0xF2F5EF, transparent:true, opacity:.85}))); }
+    W.B.scale.setScalar(1.8); W.bs.scale.setScalar(1.8); scene.fog = null;   // (the camera's 80 m off: the stadium's fog would hide everything)
+    // the camera: up and back on the near side (2D's bottom edge), looking at the middle of the picture
+    const f = ey.clone().multiplyScalar(-CE).add(new THREE.Vector3(0, -SE, 0));
+    cam.position.copy(O).addScaledVector(f, -80); cam.up.set(0, 1, 0); cam.lookAt(O); cam.updateProjectionMatrix();
+    // the players: one 3D footballer for each 2D one, matched on the element
+    const men = new Map(), balls = new Map(), seen = new Set(), sm = new DOMMatrix();
+    const T = () => performance.now()/1000;
+    const lookFor = el => { const k = el.dataset.k || "#1D4ED8", you = el.classList.contains("lv-you");
+      const L = you && o0.me ? {...o0.me, c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || o0.me.c2} : {...o0.anyone(el), c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || (lum(k) > .5 ? "#1F2937" : "#FFFFFF"), num:el.dataset.n || ""};
+      if (el.closest("#lvGk") || el.dataset.gk) L.gk = true; return L; };
+    const o0 = W.looks = {me:null, anyone:null};
+    W.idle = () => {
+      const now = performance.now(), sv = svg.getScreenCTM(); if (!sv) return; const inv = sv.inverse();
+      seen.clear();
+      // where the ball is (the first one), so the players can face it
+      let ballAt = null;
+      svg.querySelectorAll("g[id] > .lv-bb").forEach((bb, i)=>{
+        const g = bb.parentNode; if (!g.getClientRects().length) return; const m = inv.multiply(g.getScreenCTM());
+        const tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || ""), z = tz ? -(+tz[1])*Math.hypot(m.a, m.b) : 0;
+        let B = balls.get(g); if (!B){ B = i===0 && !balls.size ? W.B : (()=>{ const b = ball(); b.scale.setScalar(1.8); scene.add(b); return b; })(); balls.set(g, B); }
+        if (V.track) G(m.e, V.track, .11*1.8 + Math.max(0, V.track - m.f + z)*MK/CE, B.position); else G(m.e, m.f, .11*1.8 + Math.max(0, z)*MK/CE, B.position);
+        B.rotation.x -= .05; seen.add(g); if (!ballAt) ballAt = B.position.clone();
+        if (B===W.B) W.bs.position.set(B.position.x, .006, B.position.z);
+      });
+      balls.forEach((B, g)=>{ B.visible = seen.has(g); });
+      svg.querySelectorAll(".lv-man").forEach(el=>{
+        if (!el.getClientRects().length) return; seen.add(el);
+        let M = men.get(el);
+        if (!M){ M = W.add(lookFor(el), 0, 0, 0); M.root.scale.setScalar(1.3); M.last = null; M.v = 0; M.yaw = null; men.set(el, M); }
+        const m = inv.multiply(el.getScreenCTM()), p = G(m.e, m.f), at = M.at;
+        // facing: the way he's moving, or towards the ball
+        if (M.last){ const d = p.clone().sub(M.last), sp = d.length()/Math.max(.001, (now - M.lt)/1000); M.v = M.v*.8 + sp*.2; if (d.lengthSq() > 1e-6) M.yaw = Math.atan2(d.x, d.z); }
+        else if (ballAt) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
+        if (M.v < .6 && ballAt && p.distanceTo(ballAt) > .5) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
+        M.last = p.clone(); M.lt = now; at.position.copy(p); if (M.yaw!=null) at.rotation.y += Math.atan2(Math.sin(M.yaw - at.rotation.y), Math.cos(M.yaw - at.rotation.y))*.3;
+        // what he's doing: the 2D picture's own animations (kick, hop, cheer), a dive (his tilt), running, or standing
+        const cls = el.classList, anc = el.parentNode && el.parentNode.classList, rot = Math.atan2(m.b, m.a);
+        const flag = (k, on) => { if (on){ M[k] ||= now; return (now - M[k])/1000; } M[k] = 0; return -1; };
+        const kick = flag("kickAt", cls.contains("kick")), hop = flag("hopAt", cls.contains("hop")), cheer = flag("cheerAt", cls.contains("cheer") || (el.closest(".cheer") != null));
+        M.root.rotation.z = 0;
+        if (kick >= 0) pose(M, "kick", Math.min(1, kick/.33));
+        else if (hop >= 0){ pose(M, "header", Math.min(1, hop/.46)); at.position.y = Math.sin(Math.min(1, hop/.46)*Math.PI)*.4; }
+        else if (cheer >= 0) pose(M, "cheer", cheer);
+        else if (Math.abs(rot) > .35 || (anc && anc.contains("dive")) || el.closest(".dive")){ pose(M, "dive", Math.min(1, Math.abs(rot)/1.1)); M.root.rotation.z = -rot; }
+        else if (M.v > .7 || el.querySelector(".lv-legs.run")) pose(M, "run", T()*(.8 + Math.min(1.4, M.v/5)));
+        else pose(M, "idle", T() + (M.root.id%7));
+      });
+      men.forEach((M, el)=>{ M.at.visible = seen.has(el); if (!el.isConnected){ scene.remove(M.at); men.delete(el); } });
+    };
+    W.start();
+    return W;
+  }
+
   // three.js is fetched once the game's on screen, so it's there by the first shot
   if (typeof window !== "undefined") window.addEventListener("load", ()=>setTimeout(()=>load().then(ok=>{
     if (!ok) return; if (typeof S!=="undefined" && S && document.querySelector(".board .card-top")) G3.cardNow();
     loadPeople().then(got=>{ if (got && typeof S!=="undefined" && S && document.querySelector(".board .card-top")) G3.cardNow(); });
   }), 400));
-  return {on, set, load, ready, glOK, lookOf, card:card, shot, save, header, tackle, cross, cardNow(){ const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
+  return {on, set, load, ready, glOK, lookOf, card:card, shot, save, header, tackle, cross, mirror:(stage, looks)=>{ MLOOKS = looks || MLOOKS; const W = mirror(stage); if (W && looks) Object.assign(W.looks ||= {}, looks); return W; }, cardNow(){ const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
 })();

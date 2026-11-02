@@ -54,6 +54,8 @@ function lvShow(html){
   cancelAnimationFrame(lvRaf); lvKey = null; lvEl.innerHTML = `<div class="lv-in enter">${html}</div>`; lvEl.scrollTop = 0;
   const box = lvEl.firstElementChild; setTimeout(()=>box.classList.remove("enter"), 450);
   if (lvCountNext && box.querySelector(".lv-stage")){ lvCountNext = false; lvCountdown(); }
+  // in 3D: any mini-game without its own 3D scene is mirrored into one (g3d.js), once this one's had the chance to make its own
+  if (typeof G3!=="undefined" && G3.ready()) setTimeout(()=>{ const stg = box.querySelector(".lv-stage"); if (stg && stg.isConnected && !stg.classList.contains("g3")) G3.mirror(stg, lv3dMirrorLooks()); }, 0);
   (lvEl.querySelector("[data-lv-focus]") || lvEl.querySelector("button:not([data-lv-skip]):not(.lv-tap)"))?.focus({preventScroll:true});   // never "Sim the rest" or a tap zone: an outline there looks like a hint
 }
 const lv$ = s => lvEl.querySelector(s);
@@ -164,7 +166,7 @@ function lvMan(x, y, kit, o={}){
     <path d="M-2.2 ${f(H - 1.6)}q.7-.35 1.4-.05M.8 ${f(H - 1.65)}q.7-.3 1.4.05" stroke="${hair || "#3A2A20"}" stroke-width=".42" stroke-linecap="round" fill="none"/>
     <path d="M.15 ${f(H - .4)}L.55 ${f(H + .9)}L-.05 ${f(H + 1)}" stroke="#000" stroke-opacity=".22" stroke-width=".32" fill="none"/>
     <path d="M-.85 ${f(H + 1.85)}q.85.35 1.7 0" stroke="#6B3B2E" stroke-width=".38" fill="none" opacity=".75"/>`;
-  return `<g ${o.id?`id="${o.id}"`:""} class="lv-man${me ? " lv-you" : ""}" transform="translate(${x} ${y}) scale(${o.s||1})">
+  return `<g ${o.id?`id="${o.id}"`:""} class="lv-man${me ? " lv-you" : ""}" data-k="${kit}"${o.num ? ` data-n="${o.num}"` : ""}${o.run ? ` data-run="1"` : ""} transform="translate(${x} ${y}) scale(${o.s||1})">
     ${o.noShadow ? "" : `<ellipse cy="1" rx="8.6" ry="2.6" fill="rgba(0,0,0,.35)"/>`}
     ${o.ring ? `<circle cy="-20" r="22" fill="none" stroke="${o.ring}" stroke-width="2.5" opacity=".9"/><circle cy="-20" r="22" fill="${o.ring}" opacity=".08"/>` : ""}
     <g class="lv-fig">
@@ -281,7 +283,7 @@ function lvField(goal, inner=""){
     : goal==="bottom" ? `<rect x="133" y="175" width="34" height="5" fill="rgba(6,18,11,.6)"/><rect x="133" y="175" width="34" height="5" fill="url(#lvNetS)"/><path d="M132 173.5v6.5M168 173.5v6.5" stroke="#F4F7F2" stroke-width="2.6"/><circle cx="150" cy="150" r="1.4" fill="rgba(255,255,255,.6)"/>`
     : goal==="side" ? `<rect x="295" y="74" width="5" height="32" fill="rgba(6,18,11,.6)"/><rect x="295" y="74" width="5" height="32" fill="url(#lvNetS)"/><path d="M293.5 73h6.5M293.5 107h6.5" stroke="#F4F7F2" stroke-width="2.6"/>` : "";
   // mown stripes, a little grass texture, the lines, and the floodlights fading towards the corners
-  return `<svg viewBox="0 0 300 180" aria-hidden="true"><defs>${LV_DEFS}<radialGradient id="lvVg" cx="50%" cy="45%" r="72%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".34"/></radialGradient>
+  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="${goal || "none"}"><defs>${LV_DEFS}<radialGradient id="lvVg" cx="50%" cy="45%" r="72%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".34"/></radialGradient>
       <linearGradient id="lvSun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFF6D6" stop-opacity=".07"/><stop offset=".5" stop-color="#FFF6D6" stop-opacity="0"/></linearGradient>
       <pattern id="lvGr" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M1 6.5 2.4 4M4.6 3.5 6 1" stroke="#fff" stroke-opacity=".05" stroke-width="1"/></pattern></defs>
     <rect width="300" height="180" fill="#195C33"/>
@@ -302,7 +304,7 @@ function lvGoalSvg(kc, wall, me, o={}){
   const you = me && typeof S!=="undefined" && S && S.player;
   const skin = you ? LV_SKIN[S.player.skin ?? 1] : "#D9A37A", hair = you ? (S.player.hair==="none" ? null : HAIRC[S.player.hairColour]) : "#1A120D";
   const ink = lvLight(kc) ? "#15171A" : "#FFFFFF", trim = LV_TRIM[kc] && !lvNear(LV_TRIM[kc], kc) ? LV_TRIM[kc] : lvLight(kc) ? "#1F2937" : "#E5E7EB";
-  return `<svg viewBox="0 0 300 180" aria-hidden="true">
+  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="goal"${me ? ` data-kme="1"` : ""}>
     <defs>${LV_DEFS}<pattern id="lvNet" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1"/></pattern>
       <linearGradient id="lvPostV" x1="0" x2="1"><stop offset="0" stop-color="#BFC6C1"/><stop offset=".5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3ABA6"/></linearGradient>
       <linearGradient id="lvPostH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3ABA6"/></linearGradient>
@@ -716,6 +718,13 @@ function lvKeeper(st, fin){
   return {name, r:Math.round(r), q:clamp(.5 + (r - 75)/80 + (r - fin)/80, .1, .88)};
 }
 // a tag on the goal saying who's in it and how good he is
+// who's who in a mirrored 3D mini-game: you as yourself, everyone else a face of their own (kept per element)
+function lv3dMirrorLooks(){
+  const you = typeof S!=="undefined" && S && S.player && !S.newing ? S.player : null;
+  let n = 0;
+  return {me:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:10, name:"You"}, "#1D4ED8", "#FFFFFF"),
+    anyone:el => { const R = seeded(hashStr((el.id || "") + "|" + (++n))); return {skin:LV_SKIN[Math.floor(R()*LV_SKIN.length)], hair:["short","buzz","curly","none"][Math.floor(R()*4)], hairCol:LV_HAIR[Math.floor(R()*LV_HAIR.length)], name:""}; }};
+}
 // who's in the 3D shot (g3d.js): you in your kit, their keeper in his, their players in a free kick's wall
 function lv3dLooks(st, kit, v){
   const you = typeof S!=="undefined" && S && S.player && !S.newing ? S.player : null;
