@@ -68,7 +68,7 @@ const G3 = (() => {
     x.font = `900 250px ${font}`; x.fillText(String(look.num ?? ""), 256, 400);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
   }
-  function makePlayer(look){
+  function makeToy(look){
     const root = grp(), rig = {};
     const sk = "skin|" + look.skin; if (!mats.has(sk)) mats.set(sk, new THREE.MeshStandardMaterial({color:col(look.skin), roughness:.58, emissive:col(look.skin).multiplyScalar(.1)}));
     const skin = mats.get(sk), shirt = mat(look.c1, .82), trim = mat(look.c2 || "#FFFFFF", .8), shorts = mat(look.shorts || (lum(look.c1) > .6 ? "#1F2937" : "#F4F4F5"), .85);
@@ -199,9 +199,160 @@ const G3 = (() => {
       r.chest.rotation.x = .35*k; r.head.rotation.x = .3*k; r.arm[-1].rotation.z = -.5*k; r.arm[1].rotation.z = .9*k; r.arm[-1].rotation.x = 1.1*k; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.25; },
     // brought down: arms out to break the fall
     fall(r, k){ r.arm[-1].rotation.x = r.arm[1].rotation.x = -1.6*k; r.arm[-1].rotation.z = -.4; r.arm[1].rotation.z = .4; r.leg[1].rotation.x = .5*k; r.knee[1].rotation.x = .8*k; r.chest.rotation.x = .2*k; },
+    wall(r, t){ POSE.idle(r, t); r.arm[-1].rotation.x = r.arm[1].rotation.x = -.6; r.arm[-1].rotation.z = .35; r.arm[1].rotation.z = -.35; },
     cheer(r, t){ r.arm[-1].rotation.z = -2.6; r.arm[1].rotation.z = 2.6; r.arm[-1].rotation.x = r.arm[1].rotation.x = Math.sin(t*9)*.15; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.15;
       r.chest.rotation.x = -.1; r.hips.position.y = .94 + Math.abs(Math.sin(t*9))*.05; r.leg[1].rotation.x = r.leg[-1].rotation.x = 0; r.knee[1].rotation.x = r.knee[-1].rotation.x = .05; }
   };
+
+  /* ---------- real footballers ----------
+     Two footballers from the Microsoft Rocketbox Avatar Library (MIT; vendor/people), with motion-captured idle,
+     breathing, running and celebrating. Each is dressed in the kit of the side he's playing for (the shirt in its
+     colour, the trim in its second, the name and number on the back), and you look like your player: the footballer
+     closer to your skin tone, tinted to it. Until they've loaded (or if they can't), the drawn players stand in */
+  const PEOPLE = {m02:{glb:"sm02", tex:"m301", skin:"#C08368"}, m03:{glb:"sm03", tex:"m300", skin:"#9A6746", hair:true}};
+  let peopleP = null, people = null, clips = null;
+  const img = src => new Promise((res, rej)=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = rej; i.src = src; });
+  const script = src => new Promise((res, rej)=>{ const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  function loadPeople(){
+    return peopleP ||= (async ()=>{
+      try{
+        if (!window.GLTFLoader) await script("vendor/GLTFLoader.js");
+        if (!window.SkeletonUtils) await script("vendor/SkeletonUtils.js");
+        const L = new GLTFLoader(), dir = "vendor/people/", out = {};
+        for (const [k, P] of Object.entries(PEOPLE)){
+          const [g, body, head, bn, hn, hair] = await Promise.all([L.loadAsync(dir + P.glb + ".glb"), img(dir + P.tex + "_body.jpg"), img(dir + P.tex + "_head.jpg"),
+            img(dir + P.tex + "_body_n.jpg"), img(dir + P.tex + "_head_n.jpg"), P.hair ? img(dir + P.tex + "_hair.png") : null]);
+          if (g.animations.length) clips = Object.fromEntries(g.animations.map(a=>[a.name, a]));
+          const T = (i, srgb) => { const t = new THREE.Texture(i); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true; return t; };
+          out[k] = {...P, key:k, scene:g.scene, body, head, bodyN:T(bn), headN:T(hn), hairT:hair && T(hair, true)};
+        }
+        people = out; return true;
+      }catch(e){ console.warn("players", e); return false; }
+    })();
+  }
+  const hex = c => { const h = String(c || "#888888").replace("#", ""); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
+  const isSkin = (r, g, b) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b), v = mx/255, s = mx ? (mx - mn)/mx : 0; if (s < .14 || s > .72 || v < .16 || mx !== r) return false; const h = 60*((g - b)/(mx - mn)); return h > 4 && h < 48; };
+  const isTrim = (r, g, b) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b); return mx===r && mx > 100 && (mx - mn)/mx > .64 && g < r*.62; };
+  // a texture from an image, painted by fn on a canvas (cached by key)
+  const texCache = new Map();
+  function painted(key, im, fn){
+    if (texCache.has(key)) return texCache.get(key);
+    const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0);
+    fn(c, x); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache.set(key, t); return t;
+  }
+  const tint = (M, look) => { const a = hex(M.skin), b = hex(look.skin); return a.map((v, i)=>Math.max(.45, Math.min(1.6, b[i]/v))); };
+  // the face and the hands: the skin tinted to yours
+  function headTex(M, look){
+    const tn = tint(M, look);
+    return painted(`h|${M.key}|${look.skin}`, M.head, (c, x)=>{ const d = x.getImageData(0, 0, c.width, c.height), p = d.data;
+      for (let i = 0; i < p.length; i += 4) if (isSkin(p[i], p[i+1], p[i+2])){ p[i] = Math.min(255, p[i]*tn[0]); p[i+1] = Math.min(255, p[i+1]*tn[1]); p[i+2] = Math.min(255, p[i+2]*tn[2]); }
+      x.putImageData(d, 0, 0); });
+  }
+  // the kit: shirt, trim, shorts and hooped socks recoloured; boots kept; skin tinted; name and number on the back
+  function kitTex(M, look){
+    const c1 = hex(look.c1), c2 = hex(look.c2 || "#FFFFFF"), sh = hex(look.shorts || look.c2 || "#FFFFFF"), so = hex(look.socks || look.c1), tn = tint(M, look);
+    return painted(`k|${M.key}|${look.skin}|${look.c1}|${look.c2}|${look.shorts}|${look.socks}|${look.num}|${look.name}`, M.body, (c, x)=>{
+      const W = c.width, H = c.height, s = W/1024, d = x.getImageData(0, 0, W, H), p = d.data;
+      for (let y = 0; y < H; y++) for (let X = 0; X < W; X++){
+        const i = (y*W + X)*4, r = p[i], g = p[i+1], b = p[i+2], u = X/s, v = y/s;
+        if (v > 735 && ((u > 226 && u < 336) || (u > 688 && u < 800) || (v > 866 && ((u > 226 && u < 408) || (u > 616 && u < 800))))) continue;   // the boots
+        if (isSkin(r, g, b)){ p[i] = Math.min(255, r*tn[0]); p[i+1] = Math.min(255, g*tn[1]); p[i+2] = Math.min(255, b*tn[2]); continue; }
+        const L = (r*.3 + g*.59 + b*.11)/255, trim = isTrim(r, g, b);
+        let o;
+        if (v < 205 && (u < 300 || u > 724)) o = trim ? c1 : sh;                          // shorts, with a trim in the shirt colour
+        else if (v > 316 && v < 578 && (u < 262 || u > 762)) o = L > .27 ? so : c2;        // socks, hooped
+        else o = trim ? c2 : c1;                                                            // the shirt and its trim
+        const f = trim ? .95 : .94 + .04*Math.min(1, L*1.4);
+        p[i] = o[0]*f; p[i+1] = o[1]*f; p[i+2] = o[2]*f;
+      }
+      x.putImageData(d, 0, 0);
+      const ink = `rgb(${c2.join(",")})`, font = "Big Shoulders Display, Impact, sans-serif";
+      // the sponsor: the game's
+      x.fillStyle = `rgb(${c1.map(v=>v*.95).join(",")})`; x.fillRect(440*s, 615*s, 150*s, 80*s); x.fillRect(456*s, 570*s, 116*s, 46*s);   // the old sponsor and badge
+      x.fillStyle = ink; x.textAlign = "center"; x.textBaseline = "middle"; x.font = `900 ${34*s}px ${font}`; x.fillText("PYRAMID", 512*s, 652*s, 140*s);
+      // the back (upside down in the texture): the name over the number
+      x.save(); x.translate(512*s, 300*s); x.rotate(Math.PI);
+      const name = String(look.name || "").toUpperCase().slice(0, 14);
+      if (name){ x.font = `800 ${(name.length > 9 ? 30 : 36)*s}px ${font}`; x.fillText(name, 0, -98*s, 200*s); }
+      x.font = `900 ${150*s}px ${font}`; x.fillText(String(look.num ?? ""), 0, 0); x.restore();
+      // and on the shorts
+      x.font = `900 ${34*s}px ${font}`; x.fillStyle = `rgb(${(lum("#" + sh.map(v=>v.toString(16).padStart(2, "0")).join("")) > .5 ? [21, 23, 26] : [245, 245, 245]).join(",")})`; x.fillText(String(look.num ?? ""), 175*s, 172*s);
+    });
+  }
+  const matCache = new Map();
+  const matFor = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
+  function makeReal(look){
+    const M = lum(look.skin) < .33 ? people.m03 : people.m02;   // the two lightest skin tones: m02; the rest: m03
+    const model = SkeletonUtils.clone(M.scene), root = grp(); root.add(model);
+    const body = kitTex(M, look), head = headTex(M, look);
+    model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false;
+      const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
+        : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:M.headN, roughness:.62}))
+        : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:M.bodyN, roughness:.78})));
+      o.material = ms.length===1 ? ms[0] : ms; });
+    const bones = {}, byName = {}; model.traverse(o=>{ if (o.isBone){ bones[o.name.replace(/^Bip01_?/, "") || "root"] = o; byName[o.name] = o; } });
+    // a keeper's gloves
+    if (look.gk) ["L_Hand", "R_Hand"].forEach(n=>{ const b = bones[n]; if (!b) return; const gl = new THREE.Mesh(sph(5.2, 14, 10), mat(look.gloves || "#C8F04A", .6)); gl.scale.set(1.9, .75, 1.25); gl.position.set(7, 0, 0); b.add(gl); });
+    const shadow = blob(.9, .6); root.add(shadow);
+    return {root, model, real:true, act:{}, bones, byName, shadow, rig:null};
+  }
+  // which player to make: a real footballer once they've loaded, the drawn one till then
+  function makePlayer(look){ return people && !look.toy ? makeReal(look) : makeToy(look); }
+
+  /* poses for the real footballers: a captured clip, then the joints moved on top of it. Moves are in the player's
+     own frame: x to his left, y up, z the way he faces */
+  const AX = {x:null, y:null, z:null};
+  let Q1, Q2, V1;
+  function rotW(P, bone, axis, ang){
+    if (!bone || !ang) return;
+    Q1 ||= new THREE.Quaternion(); Q2 ||= new THREE.Quaternion(); V1 ||= new THREE.Vector3();
+    P.root.getWorldQuaternion(Q2); V1.copy(axis).applyQuaternion(Q2); Q1.setFromAxisAngle(V1, ang);
+    bone.getWorldQuaternion(Q2); Q2.premultiply(Q1);   // the bone's new world rotation
+    bone.parent.getWorldQuaternion(Q1); bone.quaternion.copy(Q1.invert().multiply(Q2)); bone.updateMatrixWorld(true);
+  }
+  // a clip at time t, set on every bone it moves, every time (so the moves put on top never pile up from frame to frame)
+  function clip(P, name, t){
+    const c = clips && clips[name]; if (!c) return;
+    const L = P.act[name] ||= c.tracks.map(tr=>{ const [bn, prop] = tr.name.split("."), b = P.byName[bn]; return b && (prop==="quaternion" || prop==="position") ? [b, prop, tr.createInterpolant()] : null; }).filter(Boolean);
+    const tt = ((t % c.duration) + c.duration) % c.duration;
+    for (const [b, prop, it] of L){ const v = it.evaluate(tt); if (prop==="quaternion") b.quaternion.fromArray(v); else b.position.fromArray(v); }
+    P.model.position.y = 0; P.model.updateMatrixWorld(true);
+  }
+  const XA = () => AX.x ||= new THREE.Vector3(1, 0, 0), YA = () => AX.y ||= new THREE.Vector3(0, 1, 0), ZA = () => AX.z ||= new THREE.Vector3(0, 0, 1);
+  // legs swing forward with a negative turn about x; the trunk leans forward with a positive one; arms rise out to the side
+  // about z (the left arm positive, the right negative)
+  const fwd = (P, b, a) => rotW(P, P.bones[b], XA(), -a), lean = (P, b, a) => rotW(P, P.bones[b], XA(), a);
+  const raise = (P, side, a) => rotW(P, P.bones[side + "_UpperArm"], ZA(), side==="L" ? a : -a);
+  const REAL = {
+    idle(P, t){ clip(P, "idle", t); },
+    run(P, t){ clip(P, "run", t); },
+    cheer(P, t){ clip(P, "cheer2", t); },
+    // a keeper on his toes: knees bent, weight forward, hands out
+    ready(P, t){ clip(P, "breathe", t); P.model.position.y = -.1;
+      ["L", "R"].forEach(s=>{ fwd(P, s + "_Thigh", .6); fwd(P, s + "_Calf", -1.0); fwd(P, s + "_Foot", .35); raise(P, s, .5); fwd(P, s + "_UpperArm", .55); fwd(P, s + "_Forearm", .7); });
+      lean(P, "Spine1", .28); lean(P, "Head", -.2); },
+    // the strike: the right leg back, then through the ball
+    kick(P, k){ clip(P, "breathe", .3); P.model.position.y = 0;
+      const back = k < .45 ? k/.45 : 1 - (k - .45)/.55, thr = k < .45 ? 0 : (k - .45)/.55;
+      fwd(P, "R_Thigh", -.8*back + 1.15*thr*(1 - thr*.3)); fwd(P, "R_Calf", -1.3*back*(1 - thr) - .1);
+      fwd(P, "L_Thigh", .15); fwd(P, "L_Calf", -.25); lean(P, "Spine1", -.12 - .1*thr); rotW(P, P.bones.Spine1, YA(), -.2*back + .15*thr);
+      raise(P, "L", .45 + .3*thr); raise(P, "R", .3 + .2*back); },
+    // diving: the arms stretched up past the head
+    dive(P, k){ clip(P, "breathe", 0); P.model.position.y = 0;
+      raise(P, "L", 2.6*k); raise(P, "R", 2.6*k); fwd(P, "L_Thigh", .15*k); fwd(P, "R_Thigh", .15*k); fwd(P, "L_Calf", -.3*k); fwd(P, "R_Calf", -.3*k); },
+    // a header: arms up for balance, the neck snapping through
+    header(P, k){ clip(P, "breathe", 0); raise(P, "L", 1.2); raise(P, "R", 1.2); fwd(P, "L_UpperArm", .4); fwd(P, "R_UpperArm", .4);
+      lean(P, "Spine1", -.35 + .75*k); lean(P, "Head", -.3 + .6*k); fwd(P, "L_Calf", -.7*Math.sin(k*Math.PI)); fwd(P, "R_Calf", -.7*Math.sin(k*Math.PI)); },
+    // a slide tackle: (the body's leant back outside) the leading leg along the grass, the other folded under
+    slide(P, k){ clip(P, "breathe", 0); fwd(P, "R_Thigh", .62*k); fwd(P, "L_Thigh", -.15*k); fwd(P, "L_Calf", -1.5*k);
+      lean(P, "Spine1", .35*k); lean(P, "Head", .3*k); raise(P, "L", .5*k); fwd(P, "L_UpperArm", -1.1*k); raise(P, "R", .9*k); },
+    // brought down: arms out to break the fall
+    fall(P, k){ clip(P, "breathe", 0); fwd(P, "L_UpperArm", 1.6*k); fwd(P, "R_UpperArm", 1.6*k); fwd(P, "R_Thigh", -.5*k); fwd(P, "R_Calf", -.8*k); lean(P, "Spine1", .2*k); },
+    // in the wall: hands in front, braced
+    wall(P, t){ clip(P, "idle", t); ["L", "R"].forEach(s=>{ fwd(P, s + "_UpperArm", .35); raise(P, s, -.18); fwd(P, s + "_Forearm", 1.25); }); }
+  };
+  // pose any player, real or drawn
+  function pose(P, name, a, b){ if (!P) return; if (P.real) REAL[name](P, a, b); else POSE[name](P.rig, a, b); }
 
   // your player, as the game describes him, in a kit (club colours, or the kit of the moment)
   function lookOf(pl, c1, c2, o = {}){
@@ -243,16 +394,16 @@ const G3 = (() => {
       const t = (now - t0)/1000;
       if (!drag) spin += Math.min(.05, (now - (frame.last || now))/1000)*.38;   // a slow turn, about one every 17 seconds
       frame.last = now;
-      P.root.rotation.y = Math.PI + spin; POSE.idle(P.rig, t);
+      P.root.rotation.y = Math.PI + spin; pose(P, "idle", t);
       R.render(scene, cam); raf = requestAnimationFrame(frame);
     }
     function stop(){ if (raf) cancelAnimationFrame(raf); raf = 0; if (io){ io.disconnect(); io = null; } }
     function mount(el, pl, club){
       if (!el || !ready()) return false;
       if (!R){ R = makeRenderer(); scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(26, 1, .1, 50); }
-      const k = JSON.stringify([pl.skin, pl.hair, pl.hairColour, pl.number, pl.name, club.c1, club.c2]);
+      const k = JSON.stringify([pl.skin, pl.hair, pl.hairColour, pl.number, pl.name, club.c1, club.c2, !!people]);
       if (k !== key){ key = k; clear(scene); lights(scene, {key:2.4, keyZ:-6, rim:1.6});
-        P = makePlayer(lookOf(pl, club.c1, club.c2)); P.rig.shadow.visible = false; scene.add(P.root); }
+        P = makePlayer(lookOf(pl, club.c1, club.c2)); (P.rig ? P.rig.shadow : P.shadow).visible = false; scene.add(P.root); }
       // framed from the thighs up, the way the 2D card was
       cam.position.set(0, 1.47, 2.25); cam.lookAt(0, 1.31, 0);
       host = el; el.classList.add("g3"); el.prepend(R.domElement); R._w = 0;
@@ -468,13 +619,12 @@ const G3 = (() => {
     const kp = grp(0, .94, kz), K = makePlayer(role==="shot" ? o.keeper : o.gk); K.root.position.y = -.94; kp.add(K.root); scene.add(kp);
     const ks = blob(1, .7); ks.position.set(0, .006, kz); scene.add(ks);
     // a wall for free kicks, 9.15 m out
-    if (o.v==="freekick") for (let i = 0; i < 4; i++){ const w = makePlayer(o.wall); w.root.position.set(-.75 + i*.5, 0, D - 9.15); scene.add(w.root); POSE.idle(w.rig, i);
-      w.rig.arm[-1].rotation.x = w.rig.arm[1].rotation.x = -.6; w.rig.arm[-1].rotation.z = .35; w.rig.arm[1].rotation.z = -.35; }
+    if (o.v==="freekick") for (let i = 0; i < 4; i++){ const w = makePlayer(o.wall); w.root.position.set(-.75 + i*.5, 0, D - 9.15); scene.add(w.root); pose(w, "wall", i); }
     // the camera: high behind the ball and dead centre, so the taker sits below the goal and both corners are clear;
     // the ball where your finger goes (92% down), just over the bar 13% down
     frameCam(cam, new THREE.Vector3(0, 2.75, D + 4.7), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.75, 0), .13);
     Object.assign(W, {taker, K, kp, ks, kz, D});
-    W.idle = t => { POSE.idle(taker.rig, t); POSE.ready(K.rig, t); };
+    W.idle = t => { pose(taker, "idle", t); pose(K, "ready", t); };
     W.start();
     return W;
   }
@@ -497,23 +647,23 @@ const G3 = (() => {
       W.mode = "shoot"; W.tween(250, k=>{ aimL.material.opacity = .85*(1 - k); aimM.material.opacity = .9*(1 - k); }).then(()=>{ aimL.visible = aimM.visible = false; });
       // the harder the strike, the quicker the leg comes through
       const sw = clamp(300 - (q.power ?? .7)*120, 170, 300);
-      await W.tween(sw, k=>{ POSE.kick(taker.rig, k*.55); POSE.ready(K.rig, (performance.now() - W.t0)/1000); });
+      await W.tween(sw, k=>{ pose(taker, "kick", k*.55); pose(K, "ready", (performance.now() - W.t0)/1000); });
       const tgt = new THREE.Vector3(gx(q.wx), Math.max(.11, gy(q.ty)), 0);
       if (q.wall) tgt.set(gx(q.wx), 1.2, D - 9.15 + .35);
       const from = B.position.clone(), arcH = (q.h || 0)/104*2.44, cv = (q.curve || 0)/120*3.66;
       const kTo = kTarget(q.kx, q.ky).setZ(kz), kFrom = kp.position.clone(), roll = -(q.rot || 0)*Math.PI/180, fov0 = cam.fov;
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
       await Promise.all([
-        W.tween(sw*1.05, k=>POSE.kick(taker.rig, .55 + .45*k)),
+        W.tween(sw*1.05, k=>pose(taker, "kick", .55 + .45*k)),
         W.tween(q.ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
           cam.fov = fov0 - 3*e; cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
-        W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; POSE.dive(K.rig, Math.abs(roll) > .2 ? e : e*.4); ks.position.x = kp.position.x; })
+        W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); ks.position.x = kp.position.x; })
       ]);
       const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
       if (q.goal){
         W.mode = "goal";
-        const tc = performance.now(); W.tween(1400, k=>POSE.cheer(taker.rig, (performance.now() - tc)/1000));
+        const tc = performance.now(); W.tween(1400, k=>pose(taker, "cheer", (performance.now() - tc)/1000));
         await W.inNet(spinAxis);
       } else if (q.over || q.wide){ fade();
         await W.tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
@@ -544,19 +694,19 @@ const G3 = (() => {
       toGoal(cx, cy){ const r = W.r.domElement.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((cx - r.left)/r.width*2 - 1, -(cy - r.top)/r.height*2 + 1), W.cam);
         return rc.ray.intersectPlane(plane, hitP) ? [150 + hitP.x/3.66*120, 124 - hitP.y/2.44*104] : null; },
       runup(ms){ W.mode = "run"; const t1 = performance.now();
-        W.tween(Math.max(300, ms - 200), k=>{ const e = k*k*(3 - 2*k); taker.root.position.lerpVectors(start, plant, e); POSE.run(taker.rig, (performance.now() - t1)/1000, 1 - k*.6); POSE.ready(K.rig, (performance.now() - W.t0)/1000); }); },
+        W.tween(Math.max(300, ms - 200), k=>{ const e = k*k*(3 - 2*k); taker.root.position.lerpVectors(start, plant, e); pose(taker, "run", (performance.now() - t1)/1000, 1 - k*.6); pose(K, "ready", (performance.now() - W.t0)/1000); }); },
       release(x, y, curl, ms){
         if (released) return; released = true; W.mode = "shoot";
         const tgt = new THREE.Vector3(gx(x), Math.max(.11, gy(y)), 0), from = B.position.clone(), cv = (curl || 0)/120*3.66;
         spinAxis = new THREE.Vector3(1, curl ? -.4*Math.sign(curl) : 0, 0).normalize();
-        W.tween(200, k=>POSE.kick(taker.rig, .45 + .55*k));
+        W.tween(200, k=>pose(taker, "kick", .45 + .55*k));
         flying = W.tween(ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + .25*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); });
         return flying;
       },
       dive(x, y, rot, ms){
         const kTo = kTarget(x, y).setZ(kz), kFrom = kp.position.clone(), roll = -(rot || 0)*Math.PI/180;
-        return W.tween(ms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; POSE.dive(K.rig, Math.abs(roll) > .2 ? e : e*.3); ks.position.x = kp.position.x; });
+        return W.tween(ms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.3); ks.position.x = kp.position.x; });
       },
       async finish(saved, post){
         if (flying) await flying;
@@ -568,7 +718,7 @@ const G3 = (() => {
           await W.tween(420, k=>{ B.position.set(at.x - sx*1.4*ease(k), Math.max(.11, at.y + .3*k - 1.6*k*k), at.z + 3*ease(k)); });
         } else if (saved){   // held, or pushed round the post
           W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
-          const hand = new THREE.Vector3(); K.rig.elbow[p0.x < 0 ? -1 : 1].getWorldPosition(hand);
+          const hand = new THREE.Vector3(); (K.real ? K.bones[(p0.x < 0 ? "L" : "R") + "_Hand"] : K.rig.elbow[p0.x < 0 ? -1 : 1]).getWorldPosition(hand);
           await W.tween(220, k=>{ B.position.lerpVectors(p0, hand.clone().add(new THREE.Vector3(0, 0, .25)), ease(k)); });
         } else await W.inNet(spinAxis);
       }
@@ -591,23 +741,23 @@ const G3 = (() => {
     const crosser = W.add(o.crosser, start.x + .45, start.z - .35, -Math.PI/2 + .35);
     const kz = .5, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); W.scene.add(kp);
     cam.fov = 44; cam.position.set(2.6, 4.1, 18.5); cam.lookAt(.6, 1.3, 4); cam.updateProjectionMatrix();
-    W.idle = t => { POSE.idle(me.rig, t); POSE.idle(mk.rig, t + 1); POSE.idle(crosser.rig, t + 2); POSE.ready(K.rig, t); };
+    W.idle = t => { pose(me, "idle", t); pose(mk, "idle", t + 1); pose(crosser, "idle", t + 2); pose(K, "ready", t); };
     W.start();
     let kicked = false;
     return {stop:W.stop, at:W.toStage(H),
       // the cross on its way: 0 when it's struck, 1 when it reaches you
-      k(k){ if (!kicked && k > 0){ kicked = true; W.tween(220, q=>POSE.kick(crosser.rig, .45 + .55*q)); }
+      k(k){ if (!kicked && k > 0){ kicked = true; W.tween(220, q=>pose(crosser, "kick", .45 + .55*q)); }
         const e = Math.min(1.15, k); W.ballTo(start.x + (H.x - start.x)*e, Math.max(.11, start.y + (H.y - start.y)*e + 3.2*Math.sin(Math.min(1, e)*Math.PI)), start.z + (H.z - start.z)*e); W.B.rotateOnAxis(SX(), -.2); W.trailPush(); },
       // you meet it (on: you got your head to it); q has the 2D goal's numbers for where it goes and where the keeper goes
       async finish(q){
         W.mode = "play";
-        const jump = W.tween(260, k=>{ me.at.position.y = Math.sin(k*Math.PI)*.42; POSE.header(me.rig, k); });
+        const jump = W.tween(260, k=>{ me.at.position.y = Math.sin(k*Math.PI)*.42; pose(me, "header", k); });
         if (!q.on){ await jump; await flight(W, W.B.position.clone(), new THREE.Vector3(H.x - 3, 3.4, H.z - 12), 520, .6); W.fadeTrail(); return; }
         const tgt = new THREE.Vector3(gx(q.tx), Math.max(.11, gy(q.ty)), q.ty < 18 ? -3 : 0);
         const kFrom = kp.position.clone(), kTo = new THREE.Vector3(gx(q.kx), Math.max(.55, gy(q.ky)), kz), roll = -(q.rot || 0)*Math.PI/180;
         await Promise.all([jump, flight(W, W.B.position.clone(), tgt, 380, .15),
-          W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; POSE.dive(K.rig, Math.abs(roll) > .2 ? e : e*.4); })]);
-        if (q.goal){ const tc = performance.now(); W.tween(1400, ()=>POSE.cheer(me.rig, (performance.now() - tc)/1000)); await W.inNet(SX()); }
+          W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); })]);
+        if (q.goal){ const tc = performance.now(); W.tween(1400, ()=>pose(me, "cheer", (performance.now() - tc)/1000)); await W.inNet(SX()); }
         else { W.fadeTrail(); const p0 = W.B.position.clone(); await W.tween(420, k=>W.ballTo(p0.x + Math.sign(p0.x || 1)*1.4*ease(k), Math.max(.11, p0.y + .2*k - 1.2*k*k), p0.z + 1.4*ease(k))); }
       }};
   }
@@ -625,15 +775,15 @@ const G3 = (() => {
     band.rotation.x = -Math.PI/2; band.position.set(.2, .02, (z0 + z1)/2); scene.add(band);
     const edge = new THREE.LineSegments(new THREE.EdgesGeometry(band.geometry), new THREE.LineBasicMaterial({color:0x4ADE80})); edge.rotation.x = -Math.PI/2; edge.position.copy(band.position); edge.position.y = .025; scene.add(edge);
     cam.fov = 44; cam.position.set(1.5, 3.3, Zme + 6.4); cam.lookAt(.2, .45, Zme - 7); cam.updateProjectionMatrix();
-    W.idle = t => { POSE.ready(me.rig, t); if (block) POSE.idle(them.rig, t); };
+    W.idle = t => { pose(me, "ready", t); if (block) pose(them, "idle", t); };
     W.start();
     let p = -.1, struck = false;
     const place = () => {
       if (block){ // the shot: struck from 20 yards, low and hard at you
-        if (p > -.05 && !struck){ struck = true; W.tween(200, k=>POSE.kick(them.rig, .45 + .55*k)); }
+        if (p > -.05 && !struck){ struck = true; W.tween(200, k=>pose(them, "kick", .45 + .55*k)); }
         them.at.position.z = Z(-.05) - .6; W.ballTo(.3 - p*.3, .11 + Math.max(0, p)*.45, Z(p));
       } else {   // he dribbles at you, the ball a stride ahead
-        them.at.position.z = Z(p); POSE.run(them.rig, performance.now()/1000, 1);
+        them.at.position.z = Z(p); pose(them, "run", performance.now()/1000, 1);
         W.ballTo(.3, .11 + Math.abs(Math.sin(p*40))*.04, Z(p) + .55);
       }
       W.B.rotateOnAxis(SX(), .25);
@@ -646,14 +796,14 @@ const G3 = (() => {
         W.mode = "play";
         // a slide, feet first towards him, leaning back on an arm
         const zt = clamp(Z(Math.min(p, 1)) + .9, Zme - 2.4, Zme - .6), z0m = me.at.position.z, tilt = .95;
-        const slide = W.tween(320, k=>{ const e = ease(k); me.at.position.z = z0m + (zt - z0m)*e; me.root.rotation.x = -tilt*e; me.root.position.y = -.12*e; POSE.slide(me.rig, e); });
+        const slide = W.tween(320, k=>{ const e = ease(k); me.at.position.z = z0m + (zt - z0m)*e; me.root.rotation.x = -tilt*e; me.root.position.y = -.12*e; pose(me, "slide", e); });
         if (q.ok){ await slide; const p0 = W.B.position.clone();
           await flight(W, p0, new THREE.Vector3(p0.x + (block ? -4 : 5), block ? 3.5 : .11, p0.z + (block ? -6 : 1.5)), 420, block ? 1 : .6); W.fadeTrail(); return; }
         if (q.foul){ await slide; const zt2 = them.at.position.z;
-          await W.tween(420, k=>{ const e = ease(k); them.root.rotation.x = 1.35*e; them.root.position.y = -.5*e; them.at.position.z = zt2 + .9*e; POSE.fall(them.rig, e); }); return; }
+          await W.tween(420, k=>{ const e = ease(k); them.root.rotation.x = 1.35*e; them.root.position.y = -.5*e; them.at.position.z = zt2 + .9*e; pose(them, "fall", e); }); return; }
         // he's away: past you (or the shot's past you)
         const zEnd = Zme + 1.4;
-        await Promise.all([slide, W.tween(520, k=>{ const v2 = Math.min(1.4, p) + k*.6; if (block){ W.ballTo(.3 - v2*.3, .11 + v2*.3, Z(v2)); W.trailPush(); } else { them.at.position.z = Math.min(zEnd, Z(v2)); them.at.position.x = .3 + k*1.7; POSE.run(them.rig, performance.now()/1000, 1); W.ballTo(them.at.position.x, .11, them.at.position.z + .55); } })]);
+        await Promise.all([slide, W.tween(520, k=>{ const v2 = Math.min(1.4, p) + k*.6; if (block){ W.ballTo(.3 - v2*.3, .11 + v2*.3, Z(v2)); W.trailPush(); } else { them.at.position.z = Math.min(zEnd, Z(v2)); them.at.position.x = .3 + k*1.7; pose(them, "run", performance.now()/1000, 1); W.ballTo(them.at.position.x, .11, them.at.position.z + .55); } })]);
         W.fadeTrail();
       }};
   }
@@ -673,32 +823,35 @@ const G3 = (() => {
       d.rotation.x = -Math.PI/2; d.position.set(c.x, .02, c.z); scene.add(d);
       const ring = new THREE.Mesh(new THREE.RingGeometry(r*.12 - .05, r*.12, 32), new THREE.MeshBasicMaterial({color:0x4ADE80})); ring.rotation.x = -Math.PI/2; ring.position.set(c.x, .025, c.z); scene.add(ring); });
     cam.fov = 44; cam.position.set(cw.x + side*5.5, 5.2, cw.z + 9.5); cam.lookAt(side*1.2, .4, 6.2); cam.updateProjectionMatrix();
-    W.idle = t => { POSE.idle(me.rig, t); POSE.ready(K.rig, t); };
+    W.idle = t => { pose(me, "idle", t); pose(K, "ready", t); };
     W.start();
     const runT = () => performance.now()/1000;
     return {stop:W.stop,
       ballStage(){ return W.toStage(W.B.position); },
       // a runner (or the defender marking him) at a point of the 2D pitch: returns where he is on the stage, head height
-      run(i, x, y){ const P = i < 0 ? mk : runners[i], v = P3(x, y); P.at.position.set(v.x, 0, v.z); POSE.run(P.rig, runT() + i*.37, 1); v.y = 1.9; return W.toStage(v); },
+      run(i, x, y){ const P = i < 0 ? mk : runners[i], v = P3(x, y); P.at.position.set(v.x, 0, v.z); pose(P, "run", runT() + i*.37, 1); v.y = 1.9; return W.toStage(v); },
       // the cross to runner i: what became of it (q.res: "assist", "saved", "cleared", "wasted")
       async go(i, spot, q){
-        W.mode = "play"; runners.forEach(R=>POSE.idle(R.rig, 0)); POSE.idle(mk.rig, 0);
-        await W.tween(200, k=>POSE.kick(me.rig, .45 + .55*k));
+        W.mode = "play"; runners.forEach(R=>pose(R, "idle", 0)); pose(mk, "idle", 0);
+        await W.tween(200, k=>pose(me, "kick", .45 + .55*k));
         const s = P3(...spot); s.y = q.res==="wasted" ? .11 : 1.9;
         await flight(W, W.B.position.clone(), s, 520, 3.2);
         const R = runners[i];
         if (q.res==="assist" || q.res==="saved"){
           const tx = (Math.random() < .5 ? -1 : 1)*(1.5 + Math.random()*1.6), tgt = new THREE.Vector3(tx, .6 + Math.random()*1.4, 0);
-          await Promise.all([W.tween(240, k=>{ R.at.position.y = Math.sin(k*Math.PI)*.4; POSE.header(R.rig, k); }), flight(W, W.B.position.clone(), q.res==="assist" ? tgt : new THREE.Vector3(tx*.4, 1.3, kz + .3), 360, .1),
+          await Promise.all([W.tween(240, k=>{ R.at.position.y = Math.sin(k*Math.PI)*.4; pose(R, "header", k); }), flight(W, W.B.position.clone(), q.res==="assist" ? tgt : new THREE.Vector3(tx*.4, 1.3, kz + .3), 360, .1),
             W.tween(330, k=>{ const e = ease(k); kp.position.x = (q.res==="assist" ? -tx*.4 : tx*.4)*e; })]);
-          if (q.res==="assist"){ const tc = performance.now(); W.tween(1400, ()=>POSE.cheer(R.rig, (performance.now() - tc)/1000)); await W.inNet(SX()); }
+          if (q.res==="assist"){ const tc = performance.now(); W.tween(1400, ()=>pose(R, "cheer", (performance.now() - tc)/1000)); await W.inNet(SX()); }
           else W.fadeTrail();
-        } else if (q.res==="cleared"){ await W.tween(220, k=>{ mk.at.position.y = Math.sin(k*Math.PI)*.4; POSE.header(mk.rig, k); }); await flight(W, W.B.position.clone(), new THREE.Vector3(W.B.position.x + side*6, 3, W.B.position.z + 14), 520, 1.4); W.fadeTrail(); }
+        } else if (q.res==="cleared"){ await W.tween(220, k=>{ mk.at.position.y = Math.sin(k*Math.PI)*.4; pose(mk, "header", k); }); await flight(W, W.B.position.clone(), new THREE.Vector3(W.B.position.x + side*6, 3, W.B.position.z + 14), 520, 1.4); W.fadeTrail(); }
         else { const p0 = W.B.position.clone(); await flight(W, p0, new THREE.Vector3(p0.x - side*3, .11, p0.z - 1), 420, .3); W.fadeTrail(); }
       }};
   }
 
   // three.js is fetched once the game's on screen, so it's there by the first shot
-  if (typeof window !== "undefined") window.addEventListener("load", ()=>setTimeout(()=>load().then(ok=>{ if (ok && typeof S!=="undefined" && S && typeof render==="function" && document.querySelector(".board .card-top")) G3.cardNow(); }), 400));
+  if (typeof window !== "undefined") window.addEventListener("load", ()=>setTimeout(()=>load().then(ok=>{
+    if (!ok) return; if (typeof S!=="undefined" && S && document.querySelector(".board .card-top")) G3.cardNow();
+    loadPeople().then(got=>{ if (got && typeof S!=="undefined" && S && document.querySelector(".board .card-top")) G3.cardNow(); });
+  }), 400));
   return {on, set, load, ready, glOK, lookOf, card:card, shot, save, header, tackle, cross, cardNow(){ const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
 })();
