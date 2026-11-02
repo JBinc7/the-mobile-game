@@ -193,7 +193,7 @@ const G3 = (() => {
       r.arm[-1].rotation.x = r.arm[1].rotation.x = -.3*(1 - k); r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.1;
       r.leg[-1].rotation.z = -.25*k; r.leg[1].rotation.z = .25*k; r.leg[-1].rotation.x = r.leg[1].rotation.x = -.1; r.knee[-1].rotation.x = r.knee[1].rotation.x = .3*k; },
     // running: legs and arms swinging in time, a lean into it (k: how hard)
-    move(r, ph, w){ POSE.idle(r, performance.now()/1000); if (w > .02) POSE.run(r, ph*1.3, w); },
+    move(r, ph, v){ POSE.idle(r, performance.now()/1000); if (v > .25) POSE.run(r, ph*.571, Math.min(1, v/3)); },
     run(r, t, k = 1){ const w = Math.sin(t*11)*k; r.leg[1].rotation.x = w*.75; r.leg[-1].rotation.x = -w*.75; r.knee[1].rotation.x = .3 + Math.max(0, -w)*1.1; r.knee[-1].rotation.x = .3 + Math.max(0, w)*1.1;
       r.arm[1].rotation.x = -w*.6; r.arm[-1].rotation.x = w*.6; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -1.1; r.arm[-1].rotation.z = -.15; r.arm[1].rotation.z = .15; r.chest.rotation.x = .18*k; r.hips.position.y = .94 + Math.abs(Math.cos(t*11))*.03; },
     // a header: arms up for balance, the neck snapping through (k: 0 to 1 through the jump)
@@ -238,6 +238,8 @@ const G3 = (() => {
           const T = (i, srgb) => { const t = new THREE.Texture(i); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true; return t; };
           out[k] = {...P, key:k, scene:g.scene, body, head, bodyN:T(bn), headN:T(hn), hairT:hair && T(hair, true)};
         }
+        // the gaits: a walk, a jog and a steady run (Rocketbox's motion capture, the skeleton only), to go with the sprint
+        try{ const gg = await L.loadAsync(dir + "gaits.glb"); gg.animations.forEach(a=>{ if (!clips[a.name]) clips[a.name] = a; }); }catch(e){}
         // the extra faces (a face that won't load is just left out)
         await Promise.all(Object.keys(FACES).map(k=>img(dir + k + "_head.jpg").then(i=>{ faceImg[k] = i; }, ()=>{})));
         people = out; return true;
@@ -334,6 +336,24 @@ const G3 = (() => {
     bone.parent.getWorldQuaternion(Q1); bone.quaternion.copy(Q1.invert().multiply(Q2)); bone.updateMatrixWorld(true);
   }
   // a clip at time t, set on every bone it moves, every time (so the moves put on top never pile up from frame to frame)
+  /* the gaits: each clip's own ground speed (m/s), the ground covered in one cycle of it (m) and where in it his left
+     foot's furthest forward (measured from the motion capture), so stride and speed match and the feet don't slide */
+  const GAITS = [{n:"walk", v:1.49, c:1.59, o:.992}, {n:"jog", v:2.42, c:1.86, o:.867}, {n:"stride", v:2.88, c:2.11, o:.958}, {n:"run", v:5.84, c:3.5, o:.992}];
+  const gaits = () => GAITS.filter(g=>clips && clips[g.n]);
+  // the two gaits either side of a speed, and how far between them (null is standing)
+  function gaitAt(v){ const G = gaits(); if (!G.length) return [null, null, 0];
+    if (v < .25) return [null, G[0], 0];
+    if (v < G[0].v*.6) return [null, G[0], Math.min(1, (v - .25)/(G[0].v*.6 - .25))];
+    for (let i = 0; i < G.length - 1; i++) if (v < G[i + 1].v) return [G[i], G[i + 1], Math.max(0, (v - G[i].v)/(G[i + 1].v - G[i].v))];
+    return [G[G.length - 1], G[G.length - 1], 0]; }
+  // how far through his stride he gets, covering d metres (his own size) at v m/s
+  function strideBy(d, v){ const [a, b, w] = gaitAt(v), ca = a ? a.c : (b ? b.c : 1.6), cb = b ? b.c : ca; return d/(ca + (cb - ca)*w); }
+  // a player's stride kept going as he covers ground: from where he was to where he is now, over dt seconds
+  function stepTo(P, d, dt, scale = 1){ const v = dt > 0 ? d/scale/dt : 0; P.gv = (P.gv ?? v) + (v - (P.gv ?? v))*(1 - Math.exp(-dt*8)); P.gph = (P.gph ?? Math.random()) + strideBy(d/scale, P.gv); pose(P, "move", P.gph, P.gv); }
+  // a player moved by a script (obj: what moves him): his stride and gait from how far he's come since the last frame
+  function track(P, obj, scale = 1){ const now = performance.now(), p = obj.position;
+    if (P._lp && now > P._lt){ stepTo(P, Math.hypot(p.x - P._lp.x, p.z - P._lp.z), (now - P._lt)/1000, scale); } else if (!P._lp) pose(P, "move", 0, 0);
+    P._lp = p.clone(); P._lt = now; }
   // a clip's tracks on this player's bones: [bone, "quaternion" | "position", sampler, spare]
   function clipList(P, name){
     const c = clips && clips[name]; if (!c) return [];
@@ -355,11 +375,15 @@ const G3 = (() => {
   const REAL = {
     idle(P, t){ clip(P, "idle", t); },
     run(P, t){ clip(P, "run", t); },
-    // standing to running and back without a snap: the two clips blended by w (0 standing, 1 running), the stride at phase ph
-    move(P, ph, w){ if (w >= .99) return clip(P, "run", ph); clip(P, "idle", performance.now()/1000); if (w <= .01) return;
-      const L = clipList(P, "run"); for (const [b, prop, , sp] of L) sp.copy(b[prop]);   // standing...
-      clip(P, "run", ph);                                                                   // ...running...
-      for (const [b, prop, , sp] of L){ if (prop==="quaternion") b.quaternion.copy(sp.slerp(b.quaternion, w)); else b.position.copy(sp.lerp(b.position, w)); }   // ...and between
+    /* on the move at v m/s (his own size), at ph through his stride (0 to 1, the left foot forward at 0): standing,
+       walking, jogging, running or sprinting, whichever fits the speed, blended between neighbours (no snapping) */
+    move(P, ph, v){ const [a, b, w] = gaitAt(v);
+      const at = g => g ? ((((ph + g.o) % 1) + 1) % 1)*clips[g.n].duration : performance.now()/1000;
+      if (w <= .01) return clip(P, a ? a.n : "idle", at(a));
+      if (w >= .99) return clip(P, b.n, at(b));
+      clip(P, a ? a.n : "idle", at(a)); const L = clipList(P, b.n); for (const [bn, prop, , sp] of L) sp.copy(bn[prop]);
+      clip(P, b.n, at(b));
+      for (const [bn, prop, , sp] of L){ if (prop==="quaternion") bn.quaternion.copy(sp.slerp(bn.quaternion, w)); else bn.position.copy(sp.lerp(bn.position, w)); }
       P.model.position.y = 0; P.model.updateMatrixWorld(true); },
     cheer(P, t){ clip(P, "cheer2", t); },
     // a keeper on his toes: knees bent, weight forward, hands out
@@ -665,7 +689,7 @@ const G3 = (() => {
       const host0 = host, from = P.at ? P.at.position.clone() : P.root.position.clone(), obj = P.at || P.root;
       const yaw = Math.atan2(runTo.x - from.x, runTo.z - from.z), t1 = performance.now();
       const face = Math.atan2(cam.position.x - runTo.x, cam.position.z - runTo.z), turn = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a))*k;
-      const run = W.tween(1300, k=>{ const e = k*k*(3 - 2*k); obj.position.lerpVectors(from, runTo, e); obj.rotation.y = turn(yaw, face, Math.max(0, (k - .6)/.4)); pose(P, k < .75 ? "run" : "cheer", (performance.now() - t1)/1000); });
+      const run = W.tween(1300, k=>{ const e = k*k*(3 - 2*k); obj.position.lerpVectors(from, runTo, e); obj.rotation.y = turn(yaw, face, Math.max(0, (k - .6)/.4)); if (k < .75) track(P, obj); else pose(P, "cheer", (performance.now() - t1)/1000); });
       await run; if (stopped || frames.length < 4) return;
       // the replay: everything put back as it was, frame by frame, at half speed
       const live = W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]);
@@ -710,6 +734,8 @@ const G3 = (() => {
     // the ball where your finger goes (92% down), just over the bar 13% down
     frameCam(cam, new THREE.Vector3(0, 2.75, D + 4.7), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.75, 0), .13);
     Object.assign(W, {taker, K, kp, ks, kz, D});
+    // how far his hands reach above his hips, arms up in a dive (measured on him: everyone's built a little differently)
+    W.reach = reachOf(K, kp);
     W.idle = t => { pose(taker, "idle", t); pose(K, "ready", t); pose(ref, "idle", t + 2.3); };
     W.start();
     return W;
@@ -717,6 +743,24 @@ const G3 = (() => {
   const ease = k => 1 - Math.pow(1 - k, 2);
   // a point of the 2D goal (x 30-270 post to post, y 20 bar to 124 line) in the 3D goal mouth
   const kTarget = (kx, ky) => new THREE.Vector3(gx(kx), Math.max(.55, gy(ky)), 0);
+  /* the keeper getting his hands to P (a point on his line): which way he goes (sideways, a full-length dive with his
+     arms past his head; up, a leap; low and central, a crouch with the hands down), and where his hips must be for his
+     hands (reach above the hips, arms up) to land on it. Returns {at: his hips, roll, k: how far into the dive pose} */
+  function reachFor(P, reach){
+    // (from a crouch to a full dive, smoothly, the further out or higher it is)
+    const sd = Math.max(Math.min(1, Math.max(0, (Math.abs(P.x) - .3)/.5)), Math.min(1, Math.max(0, (P.y - 1.5)/.4))), ang = Math.atan2(P.x, Math.max(.15, P.y - .2));
+    const roll = -ang*(.35 + .6*sd), L = reach*(.4 + .6*sd), k = .35 + .65*sd;
+    const at = new THREE.Vector3(P.x + Math.sin(roll)*L, P.y - Math.cos(roll)*L, P.z);
+    at.y = Math.max(.3 + .6*Math.abs(Math.cos(roll)), Math.min(1.7, at.y));   // (upright, his feet stay on the grass)
+    return {at, roll, k};
+  }
+  // how far a keeper's hands reach above his hips, arms up in a dive (measured on him: everyone's built a little differently)
+  function reachOf(K, kp){ const r0 = kp.rotation.z; kp.rotation.z = 0; pose(K, "dive", 1); kp.updateMatrixWorld(true); const h = new THREE.Vector3(), c = new THREE.Vector3(); kp.getWorldPosition(c);
+    const hs = K.real ? [K.bones.L_Hand, K.bones.R_Hand].filter(Boolean) : []; let y = 1.1;
+    if (hs.length){ y = 0; hs.forEach(b=>{ b.getWorldPosition(h); y += (h.y - c.y)/hs.length; }); }
+    kp.rotation.z = r0; pose(K, "ready", 0); return Math.max(.8, Math.min(1.4, y)); }
+  // where his hands are, with his hips at c and that lean
+  const handsAt = (c, roll, L) => new THREE.Vector3(c.x - Math.sin(roll)*L, c.y + Math.cos(roll)*L, c.z);
 
   /* your shot. play(q) takes the 2D shot's numbers {wx, ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall}
      and plays the strike, the flight, the keeper and what happens next */
@@ -739,14 +783,18 @@ const G3 = (() => {
       if (q.wall) tgt.set(gx(q.wx), 1.2, D - 9.15 + .35);
       if (q.saved) tgt.z = kz + .3;   // saved: it meets his hands in front of the line, not the goal behind him
       const from = B.position.clone(), arcH = (q.h || 0)/104*2.44, cv = (q.curve || 0)/120*3.66;
-      const kTo = kTarget(q.kx, q.ky).setZ(kz), kFrom = kp.position.clone(), roll = -(q.rot || 0)*Math.PI/180, fov0 = cam.fov;
+      let kTo = kTarget(q.kx, q.ky).setZ(kz), roll = -(q.rot || 0)*Math.PI/180, dk = Math.abs(roll) > .2 ? 1 : .4;
+      if (q.saved){ const R = reachFor(new THREE.Vector3(tgt.x, tgt.y, kz), W.reach); kTo = R.at; roll = R.roll; dk = R.k; }   // a save: his hands meet it
+      else if (q.goal){ const hd = handsAt(kTo, roll, dk > .5 ? W.reach : W.reach*.4), gap = Math.hypot(hd.x - tgt.x, hd.y - tgt.y);   // a goal: it beats his hands
+        if (gap < .6) kTo.x += (Math.sign(hd.x - tgt.x) || -Math.sign(tgt.x) || 1)*(.6 - gap); }
+      const kFrom = kp.position.clone(), fov0 = cam.fov;
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
       await Promise.all([
         W.tween(sw*1.05, k=>pose(taker, "kick", .55 + .45*k)),
         W.tween(q.ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
           cam.fov = fov0 - 3*e; cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
-        W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); ks.position.x = kp.position.x; })
+        W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", e*dk); ks.position.x = kp.position.x; })
       ]);
       const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
       if (!q.goal) W.settle(taker, 450);   // no goal: he comes out of the follow-through and stands
@@ -785,7 +833,7 @@ const G3 = (() => {
       toGoal(cx, cy){ const r = W.r.domElement.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((cx - r.left)/r.width*2 - 1, -(cy - r.top)/r.height*2 + 1), W.cam);
         return rc.ray.intersectPlane(plane, hitP) ? [150 + hitP.x/3.66*120, 124 - hitP.y/2.44*104] : null; },
       runup(ms){ W.mode = "run"; const t1 = performance.now();
-        W.tween(Math.max(300, ms - 200), k=>{ const e = k*k*(3 - 2*k); taker.root.position.lerpVectors(start, plant, e); pose(taker, "run", (performance.now() - t1)/1000, 1 - k*.6); pose(K, "ready", (performance.now() - W.t0)/1000); }); },
+        W.tween(Math.max(300, ms - 200), k=>{ const e = k*k*(3 - 2*k); taker.root.position.lerpVectors(start, plant, e); track(taker, taker.root); pose(K, "ready", (performance.now() - W.t0)/1000); }); },
       release(x, y, curl, ms){
         if (released) return; released = true; W.mode = "shoot";
         const tgt = new THREE.Vector3(gx(x), Math.max(.11, gy(y)), 0), from = B.position.clone(), cv = (curl || 0)/120*3.66;
@@ -795,9 +843,10 @@ const G3 = (() => {
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); });
         return flying;
       },
+      // your dive: your hands go where you tapped (as far as you can reach)
       dive(x, y, rot, ms){
-        const kTo = kTarget(x, y).setZ(kz), kFrom = kp.position.clone(), roll = -(rot || 0)*Math.PI/180;
-        return W.tween(ms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.3); ks.position.x = kp.position.x; });
+        const R = reachFor(new THREE.Vector3(gx(x), Math.max(.15, gy(y)), kz), W.reach), kFrom = kp.position.clone(), r0 = kp.rotation.z;
+        return W.tween(ms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, R.at, e); kp.rotation.z = r0 + (R.roll - r0)*e; pose(K, "dive", e*R.k); ks.position.x = kp.position.x; });
       },
       async finish(saved, post){
         if (flying) await flying;
@@ -809,8 +858,10 @@ const G3 = (() => {
           await W.tween(420, k=>{ B.position.set(at.x - sx*1.4*ease(k), Math.max(.11, at.y + .3*k - 1.6*k*k), at.z + 3*ease(k)); });
         } else if (saved){   // held, or pushed round the post
           W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
-          const hand = new THREE.Vector3(); (K.real ? K.bones[(p0.x < 0 ? "L" : "R") + "_Hand"] : K.rig.elbow[p0.x < 0 ? -1 : 1]).getWorldPosition(hand);
-          await W.tween(220, k=>{ B.position.lerpVectors(p0, hand.clone().add(new THREE.Vector3(0, 0, .25)), ease(k)); });
+          // the last stretch: his hands onto the ball, and the ball into them
+          const R = reachFor(new THREE.Vector3(p0.x, p0.y, kz), W.reach), k0 = kp.position.clone(), r0 = kp.rotation.z, hand = new THREE.Vector3();
+          await W.tween(200, k=>{ const e = ease(k); kp.position.lerpVectors(k0, R.at, e); kp.rotation.z = r0 + (R.roll - r0)*e; pose(K, "dive", R.k); kp.updateMatrixWorld(true);
+            (K.real ? K.bones[(p0.x < 0 ? "L" : "R") + "_Hand"] : K.rig.elbow[p0.x < 0 ? -1 : 1]).getWorldPosition(hand); B.position.lerpVectors(p0, hand.add(new THREE.Vector3(0, 0, .12)), e); });
         } else await W.inNet(spinAxis);
       }
     };
@@ -832,7 +883,7 @@ const G3 = (() => {
     const W = base(stage, o, start), {cam} = W;
     const me = V ? W.add(o.me, H.x - .22, H.z + .5, Math.PI) : W.add(o.me, H.x, H.z + .35, Math.PI), mk = V ? W.add(o.marker, H.x - 1.5, H.z - 1.7, -.5) : W.add(o.marker, H.x + .6, H.z - .25, Math.PI + .5);   // the man marking you, goal-side
     const crosser = W.add(o.crosser, V ? 9 : start.x + .45, V ? 3 : start.z - .35, -Math.PI/2 + .35); if (V) crosser.at.visible = false;
-    const kz = .5, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); W.scene.add(kp); W.dyn.push(kp);
+    const kz = .5, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); W.scene.add(kp); W.dyn.push(kp); const reach = reachOf(K, kp);
     // the camera: over your shoulder, the goal ahead
     cam.fov = 42; if (V){ cam.position.set(.6, 1.95, 13.1); cam.lookAt(-.3, 1.05, 3); } else { cam.position.set(.4, 2.6, 12.4); cam.lookAt(-.5, 1.5, 3); } cam.updateProjectionMatrix();
     W.idle = t => { pose(me, "idle", t); pose(mk, "idle", t + 1); pose(crosser, "idle", t + 2); pose(K, "ready", t); };
@@ -854,9 +905,12 @@ const G3 = (() => {
         const settle = () => { me.at.position.y = 0; W.settle(me); };   // and back on his feet
         if (!q.on){ await jump; settle(); await flight(W, W.B.position.clone(), new THREE.Vector3(H.x - 3, 3.4, H.z - 12), 520, .6); W.fadeTrail(); return; }
         const tgt = new THREE.Vector3(gx(q.tx), Math.max(.11, gy(q.ty)), q.ty < 18 ? -3 : 0);
-        const kFrom = kp.position.clone(), kTo = new THREE.Vector3(gx(q.kx), Math.max(.55, gy(q.ky)), kz), roll = -(q.rot || 0)*Math.PI/180;
+        let kTo = new THREE.Vector3(gx(q.kx), Math.max(.55, gy(q.ky)), kz), roll = -(q.rot || 0)*Math.PI/180, dk = Math.abs(roll) > .2 ? 1 : .4;
+        if (!q.goal && tgt.z===0){ const R = reachFor(new THREE.Vector3(tgt.x, tgt.y, kz), reach); kTo = R.at; roll = R.roll; dk = R.k; tgt.z = kz + .3; }   // saved: his hands meet it
+        else if (q.goal){ const hd = handsAt(kTo, roll, dk > .5 ? reach : reach*.4), gap = Math.hypot(hd.x - tgt.x, hd.y - tgt.y); if (gap < .6) kTo.x += (Math.sign(hd.x - tgt.x) || 1)*(.6 - gap); }
+        const kFrom = kp.position.clone();
         await Promise.all([jump, flight(W, W.B.position.clone(), tgt, 380, .15),
-          W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); })]);
+          W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", e*dk); })]);
         if (q.goal){ await W.inNet(SX()); W.goalShow(me, new THREE.Vector3(-3.6, 0, 10.2), new THREE.Vector3(-9, 3.6, 13.5), new THREE.Vector3(0, 1.1, 3.5)); }
         else { settle(); W.fadeTrail(); const p0 = W.B.position.clone(); await W.tween(420, k=>W.ballTo(p0.x + Math.sign(p0.x || 1)*1.4*ease(k), Math.max(.11, p0.y + .2*k - 1.2*k*k), p0.z + 1.4*ease(k))); }
       }};
@@ -883,7 +937,7 @@ const G3 = (() => {
         if (p > -.05 && !struck){ struck = true; W.tween(200, k=>pose(them, "kick", .45 + .55*k)); }
         them.at.position.z = Z(-.05) - .6; W.ballTo(.3 - p*.3, .11 + Math.max(0, p)*.45, Z(p));
       } else {   // he dribbles at you, the ball a stride ahead
-        them.at.position.z = Z(p); pose(them, "run", performance.now()/1000, 1);
+        them.at.position.z = Z(p); track(them, them.at);
         W.ballTo(.3, .11 + Math.abs(Math.sin(p*40))*.04, Z(p) + .55);
       }
       W.B.rotateOnAxis(SX(), .25);
@@ -903,7 +957,7 @@ const G3 = (() => {
           await W.tween(420, k=>{ const e = ease(k); them.root.rotation.x = 1.35*e; them.root.position.y = -.5*e; them.at.position.z = zt2 + .9*e; pose(them, "fall", e); }); return; }
         // he's away: past you (or the shot's past you)
         const zEnd = Zme + 1.4;
-        await Promise.all([slide, W.tween(520, k=>{ const v2 = Math.min(1.4, p) + k*.6; if (block){ W.ballTo(.3 - v2*.3, .11 + v2*.3, Z(v2)); W.trailPush(); } else { them.at.position.z = Math.min(zEnd, Z(v2)); them.at.position.x = .3 + k*1.7; pose(them, "run", performance.now()/1000, 1); W.ballTo(them.at.position.x, .11, them.at.position.z + .55); } })]);
+        await Promise.all([slide, W.tween(520, k=>{ const v2 = Math.min(1.4, p) + k*.6; if (block){ W.ballTo(.3 - v2*.3, .11 + v2*.3, Z(v2)); W.trailPush(); } else { them.at.position.z = Math.min(zEnd, Z(v2)); them.at.position.x = .3 + k*1.7; track(them, them.at); W.ballTo(them.at.position.x, .11, them.at.position.z + .55); } })]);
         W.fadeTrail();
       }};
   }
@@ -917,7 +971,7 @@ const G3 = (() => {
     const W = base(stage, o, bw), {cam, scene} = W, side = cw.x > 0 ? 1 : -1;
     const me = W.add(o.me, cw.x, cw.z, side > 0 ? -Math.PI/2 - .5 : Math.PI/2 + .5);
     const runners = o.mates.map((look, i)=>W.add(look, 0, 20, Math.PI)), mk = W.add(o.marker, 0, 20, Math.PI);
-    const kz = .6, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); scene.add(kp); W.dyn.push(kp);
+    const kz = .6, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); scene.add(kp); W.dyn.push(kp); const reach = reachOf(K, kp);
     // the green spots where the runners want it
     o.spots.forEach(([x, y, r])=>{ const c = P3(x, y), d = new THREE.Mesh(new THREE.CircleGeometry(r*.12, 28), new THREE.MeshBasicMaterial({color:0x4ADE80, transparent:true, opacity:.3, depthWrite:false}));
       d.rotation.x = -Math.PI/2; d.position.set(c.x, .02, c.z); scene.add(d);
@@ -925,11 +979,10 @@ const G3 = (() => {
     cam.fov = 44; cam.position.set(cw.x + side*5.5, 5.2, cw.z + 9.5); cam.lookAt(side*1.2, .4, 6.2); cam.updateProjectionMatrix();
     W.idle = t => { pose(me, "idle", t); pose(K, "ready", t); };
     W.start();
-    const runT = () => performance.now()/1000;
     return {stop:W.stop,
       ballStage(){ return W.toStage(W.B.position); },
       // a runner (or the defender marking him) at a point of the 2D pitch: returns where he is on the stage, head height
-      run(i, x, y){ const P = i < 0 ? mk : runners[i], v = P3(x, y); P.at.position.set(v.x, 0, v.z); pose(P, "run", runT() + i*.37, 1); v.y = 1.9; return W.toStage(v); },
+      run(i, x, y){ const P = i < 0 ? mk : runners[i], v = P3(x, y); P.at.position.set(v.x, 0, v.z); track(P, P.at); v.y = 1.9; return W.toStage(v); },
       // the cross to runner i: what became of it (q.res: "assist", "saved", "cleared", "wasted")
       async go(i, spot, q){
         W.mode = "play"; W.rec = q.res==="assist" ? [] : null; runners.forEach(R=>pose(R, "idle", 0)); pose(mk, "idle", 0);
@@ -938,9 +991,11 @@ const G3 = (() => {
         await flight(W, W.B.position.clone(), s, 520, 3.2);
         const R = runners[i];
         if (q.res==="assist" || q.res==="saved"){
+          const k0 = kp.position.clone();
           const tx = (Math.random() < .5 ? -1 : 1)*(1.5 + Math.random()*1.6), tgt = new THREE.Vector3(tx, .6 + Math.random()*1.4, 0);
           await Promise.all([W.tween(240, k=>{ R.at.position.y = Math.sin(k*Math.PI)*.4; pose(R, "header", k); }), flight(W, W.B.position.clone(), q.res==="assist" ? tgt : new THREE.Vector3(tx*.4, 1.3, kz + .3), 360, .1),
-            W.tween(330, k=>{ const e = ease(k); kp.position.x = (q.res==="assist" ? -tx*.4 : tx*.4)*e; })]);
+            // saved: he gets his hands to it; a goal: he's gone the other way
+            (R => W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(k0, R.at, e); kp.rotation.z = R.roll*e; pose(K, "dive", e*R.k); }))(q.res==="assist" ? reachFor(new THREE.Vector3(-tx*.5, 1.1, kz), reach) : reachFor(new THREE.Vector3(tx*.4, 1.3, kz), reach))]);
           if (q.res==="assist"){ await W.inNet(SX()); W.goalShow(R, R.at.position.clone().setY(0).lerp(me.at.position, .5), new THREE.Vector3(-side*9, 3.6, 14), new THREE.Vector3(0, 1, 5)); }
           else W.fadeTrail();
         } else if (q.res==="cleared"){ await W.tween(220, k=>{ mk.at.position.y = Math.sin(k*Math.PI)*.4; pose(mk, "header", k); }); await flight(W, W.B.position.clone(), new THREE.Vector3(W.B.position.x + side*6, 3, W.B.position.z + 14), 520, 1.4); W.fadeTrail(); }
@@ -979,7 +1034,7 @@ const G3 = (() => {
     const cast = (x, y, onZ) => { rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam); if (onZ != null) plane.set(nz, -onZ); else plane.set(ny, 0); return rc.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
     // their keeper (or you, in goal), on his line
     const kz = .4, kp = grp(0, .94, kz), K = makePlayer(svg.dataset.kme ? W.looks.me && {...W.looks.me, gk:true, c1:"#F97316"} || {skin:"#B57D52", c1:"#F97316", c2:"#111827", gk:true, num:1} : {skin:"#D9A37A", c1:"#65A30D", c2:"#111827", gk:true, num:1, hair:"short", hairCol:"#17130F"});
-    K.root.position.y = -.94; kp.add(K.root); scene.add(kp);
+    K.root.position.y = -.94; kp.add(K.root); scene.add(kp); const reach = reachOf(K, kp);
     const men = new Map(), seen = new Set(), T = () => performance.now()/1000;
     const kme = !!svg.dataset.kme, tk = W.add(kme ? {...W.looks.anyone({}), c1:"#E5E7EB", c2:"#1F2937", num:9} : {...W.looks.me, c1:W.looks.me.c1}, -.72, D + .62, Math.PI + .3);
     let kickAt = 0, s0 = null;
@@ -992,8 +1047,11 @@ const G3 = (() => {
       if (kickAt) pose(tk, "kick", Math.min(1, (now - kickAt)/300)); else pose(tk, "idle", T());
       const kel = svg.querySelector("#lvKp");
       if (kel && kel.getClientRects().length){ const m = inv.multiply(kel.getScreenCTM()), rot = Math.atan2(m.b, m.a), p = cast(m.e, m.f, kz);
-        if (p){ kp.position.set(p.x, Math.max(.55, p.y), kz); kp.rotation.z = -rot; } kp.visible = true;
-        if (Math.abs(rot) > .2 || kel.classList.contains("dive")) pose(K, "dive", Math.min(1, Math.abs(rot)/1.1 + .3)); else pose(K, "ready", T()); } else kp.visible = false;
+        // diving, his hands go where 2D's keeper is (that's what 2D's saves are measured from); otherwise he's on his toes there
+        const dv = Math.abs(rot) > .2 || kel.classList.contains("dive");
+        if (p && dv){ const R = reachFor(new THREE.Vector3(p.x, Math.max(.15, p.y), kz), reach); kp.position.copy(R.at); kp.rotation.z = R.roll; pose(K, "dive", R.k); }
+        else { if (p){ kp.position.set(p.x, Math.max(.55, p.y), kz); kp.rotation.z = 0; } pose(K, "ready", T()); }
+        kp.visible = true; } else kp.visible = false;
       // the ball: how far it's come from its 2D size, then cast through the picture at that depth
       const bb = svg.querySelector("#lvBall > .lv-bb") || svg.querySelector("g[id] > .lv-bb");
       if (bb){ const g = bb.parentNode, m = inv.multiply(g.getScreenCTM()), s = Math.hypot(m.a, m.b), q = clamp((1 - s)/.4, 0, 1.15), tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || "");
@@ -1110,6 +1168,7 @@ const G3 = (() => {
         const dt = M.last ? Math.min(.1, Math.max(0, (now - M.lt)/1000)) : 0;
         const m = inv.multiply(el.getScreenCTM()), p = G(m.e, m.f), at = M.at;
         // facing: the way he's moving, or towards the ball
+        const moved = M.last ? Math.hypot(p.x - M.last.x, p.z - M.last.z) : 0, yaw0 = at.rotation.y;
         if (M.last){ const d = p.clone().sub(M.last), sp = d.length()/Math.max(.001, (now - M.lt)/1000); M.v += (Math.min(12, sp) - M.v)*(1 - Math.exp(-dt*9)); if (d.lengthSq() > 1e-6) M.yaw = Math.atan2(d.x, d.z); }
         else if (ballAt) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
         if (M.v < .6 && ballAt && p.distanceTo(ballAt) > .5) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
@@ -1123,9 +1182,13 @@ const G3 = (() => {
         else if (hop >= 0){ pose(M, "header", Math.min(1, hop/.46)); at.position.y = Math.sin(Math.min(1, hop/.46)*Math.PI)*.4; }
         else if (cheer >= 0) pose(M, "cheer", cheer);
         else if (Math.abs(rot) > .35 || (anc && anc.contains("dive")) || el.closest(".dive")){ pose(M, "dive", Math.min(1, Math.abs(rot)/1.1)); M.root.rotation.z = -rot; }
-        else {   // standing, jogging, running: one stride that speeds up with him, blended in and out (no snapping between them)
-          const wt = el.querySelector(".lv-legs.run") ? 1 : Math.min(1, Math.max(0, (M.v - .3)/1.3));
-          M.w += (wt - M.w)*(1 - Math.exp(-dt*7)); M.ph += dt*(.7 + Math.min(1.1, M.v/4.5)); pose(M, "move", M.ph, M.w); }
+        else {   // standing, walking, jogging, running or sprinting, by his speed; the stride matched to the ground he covers
+          let v = M.v/1.3, d = moved/1.3;
+          if (el.querySelector(".lv-legs.run") && v < 3.2){ v = 3.6; d = v*dt; }   // running on the spot (the 2D world scrolls past him)
+          M.ph += strideBy(d, v); pose(M, "move", M.ph, v);
+          // leaning into his turns, more the faster he goes
+          const turn = dt > 0 ? Math.atan2(Math.sin(at.rotation.y - yaw0), Math.cos(at.rotation.y - yaw0))/dt : 0;
+          M.lean = (M.lean || 0) + (Math.max(-.2, Math.min(.2, -turn*v*.035)) - (M.lean || 0))*(1 - Math.exp(-dt*6)); M.root.rotation.z = M.lean; }
       });
       men.forEach((M, el)=>{ M.at.visible = seen.has(el); if (!el.isConnected){ scene.remove(M.at); men.delete(el); } });
       // props the 2D game draws (slalom poles), stood where they are

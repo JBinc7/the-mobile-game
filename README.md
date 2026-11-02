@@ -197,4 +197,4 @@ Then open http://localhost:8000. Opening `index.html` straight from disk works t
 ## Credits
 
 - 3D: [three.js](https://threejs.org) (MIT), in `vendor/`.
-- The footballers in 3D come from the [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox) (MIT): Sports_Male_02 and Sports_Male_03 with their motion-captured animations, converted to glTF and reduced for phones, and seven more faces from its adult men (Male_Adult_02, 04, 07, 09, 11, 12 and 16) on the same head. Licence in `vendor/people/LICENSE-Rocketbox.txt`.
+- The footballers in 3D come from the [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox) (MIT): Sports_Male_02 and Sports_Male_03 with their motion-captured animations, converted to glTF and reduced for phones, its walk, jog and run (`gaits.glb`, the skeleton and motion only), and seven more faces from its adult men (Male_Adult_02, 04, 07, 09, 11, 12 and 16) on the same head. Licence in `vendor/people/LICENSE-Rocketbox.txt`.
