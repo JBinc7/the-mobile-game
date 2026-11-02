@@ -1352,3 +1352,6 @@ small.boot{display:inline-flex;align-items:center}
 .lv-stage.g3>.lv-res.goal small{font-size:13px}
 /* level 4: the 2D layer's gold and green hints (targets, zones, landing spots, gates) stay on in 3D; that layer is mapped onto the 3D pitch, so they sit on it */
 .lv-stage.g3>svg :is([stroke="#F5C542"],[stroke^="rgba(245,197,66"],[fill^="rgba(245,197,66"],[stroke="#4ADE80"],[fill^="rgba(74,222,128"]):not(.lv-man *, [id$="Bang"] *, .lg-flag *){visibility:visible}
+/* the goal view played from further out in 3D: 2D's layer stays hidden, and its drag lines are redrawn where they are in the picture */
+.lv-stage.g3-far>svg:not(.g3-ov),.lv-stage.g3-far>svg:not(.g3-ov) *{visibility:hidden!important}
+.g3-ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}

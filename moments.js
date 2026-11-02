@@ -310,7 +310,8 @@ function lvGoalSvg(kc, wall, me, o={}){
   const you = me && typeof S!=="undefined" && S && S.player;
   const skin = you ? LV_SKIN[S.player.skin ?? 1] : "#D9A37A", hair = you ? (S.player.hair==="none" ? null : HAIRC[S.player.hairColour]) : "#1A120D";
   const ink = lvLight(kc) ? "#15171A" : "#FFFFFF", trim = LV_TRIM[kc] && !lvNear(LV_TRIM[kc], kc) ? LV_TRIM[kc] : lvLight(kc) ? "#1F2937" : "#E5E7EB";
-  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="goal"${me ? ` data-kme="1"` : ""}>
+  // o.dist: how far out it's taken, in metres, for 3D (a free kick, a chip); 2D's picture is the same either way
+  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="goal"${me ? ` data-kme="1"` : ""}${o.dist ? ` data-dist="${o.dist}"` : ""}>
     <defs>${LV_DEFS}<pattern id="lvNet" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1"/></pattern>
       <linearGradient id="lvPostV" x1="0" x2="1"><stop offset="0" stop-color="#BFC6C1"/><stop offset=".5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3ABA6"/></linearGradient>
       <linearGradient id="lvPostH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3ABA6"/></linearGradient>

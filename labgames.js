@@ -546,7 +546,7 @@ function lgChip(st){
     st.lab.tally = `${got} of 3`;
     const rush = clamp(2300*(1 + e*.4) - k*160, 1500, 2900), charge = 1100;
     lgShow(st, "Chip the keeper", `Go ${k+1} of 3. He's rushing out. Hold to lift it; let go with the bar in the green.`,
-      lvGoalSvg(kit.them, null, false) + lgHud(got, "chips"),
+      lvGoalSvg(kit.them, null, false, {dist:18}) + lgHud(got, "chips"),
       `<div class="lv-bar lg-chipbar" aria-hidden="true"><span class="lv-zone"></span><span class="lg-fill"></span></div><button type="button" class="btn primary big lv-act">Hold to chip</button>`);
     const fin = r => { off(); res(r); }, off = lgKeys(k2=>{ if (k2===" " || k2==="Enter"){ press(true); return 1; } }, k2=>{ if (k2===" " || k2==="Enter") press(false); });
     lvSkippable(fin);
@@ -555,7 +555,7 @@ function lgChip(st){
     const centre = () => .3 + .42*a;
     lvLoop(now=>{
       if (done) return false;
-      a = clamp((now - t0)/rush, 0, 1); lvMove("#lvKp", 150, 84 + 20*a, 0, 1 + .32*a);
+      a = clamp((now - t0)/rush, 0, 1); lvMove("#lvKp", 150, 84 + 26*a, 0, 1 + .45*a);
       zone.style.left = ((centre() - w/2)*100).toFixed(1) + "%"; zone.style.width = (w*100).toFixed(1) + "%";
       if (pressAt){ p = Math.min(1, (now - pressAt)/charge); fill.style.transform = `scaleX(${p.toFixed(3)})`; lv$(".lg-chipbar").classList.toggle("in", Math.abs(p - centre())<=w/2); }
       if (a>=1){ end(true); return false; }
@@ -563,11 +563,12 @@ function lgChip(st){
     const press = on => { if (done) return; if (on && !pressAt){ pressAt = performance.now(); lv$(".lv-act").textContent = "Let go to chip"; } else if (!on && pressAt) end(false); };
     const end = async smothered => {
       if (done) return; done = true; cancelAnimationFrame(lvRaf); lv$(".lv-act").disabled = true;
-      if (smothered && !pressAt) return fin({ok:false, big:"Smothered", small:"He got to you first"});
-      const c = centre(), d = p - c, ok = Math.abs(d)<=w/2, low = d < -w/2, kx = 150, ky = 84 + 20*a;
+      if (smothered && !pressAt){ await lvTween(380, q=>lvMove("#lvKp", 150, 110 + 30*q, 0, 1.45 + .55*q)); return fin({ok:false, big:"Smothered", small:"He got to you first"}); }
+      const c = centre(), d = p - c, ok = Math.abs(d)<=w/2, low = d < -w/2, kx = 150, ky = 84 + 26*a;
       const tx = 150 + Math.random()*60 - 30, ty = ok ? 66 + Math.random()*20 : low ? ky - 30 : -14;
       await lvStrike(st);
-      await lvFly("#lvBall", [150, 166], [tx, ty], 620, {s0:1, s1:.6, h:40 + 70*p, spin:.8});
+      // caught: it ends in his hands, out where he's come to (bigger: nearer); otherwise in (or over) the goal
+      await lvFly("#lvBall", [150, 166], [tx, ty], 620, {s0:1, s1:low ? .6 + .3*a : .6, h:40 + 70*p, spin:.8});
       if (ok){ got++; lgSetHud(got); lvRipple(tx, ty); return fin({ok:true, big:"Chipped!", small:Math.abs(d)<w/5 ? "Delicate" : "Just over him"}); }
       fin({ok:false, big:low ? "Caught" : "Over the bar", small:low ? "Not enough height: he plucked it out of the air" : "Too much: it cleared the bar too"});
     };
@@ -917,18 +918,23 @@ function lgBend(st){
     st.lab.tally = `${got} of 3`;
     lgShow(st, "Bend it", `Go ${k+1} of 3. Swipe up from the ball, curving your finger: it follows your swipe round the wall or over it.`,
       lvGoalSvg(kit.them, kit.them, false) + lgHud(got, "goals"));
-    let done = false, fired = false, pts = [], down = false;
-    const fin = r => { done = true; res(r); }; lvSkippable(fin);
+    let done = false, fired = false, pts = [], raw = [], down = false;
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
+    // in 3D: a real free kick, 22 m out with the wall at 9.15, your swipe read off the 3D goal and grass (LV_MAP)
+    const g3 = typeof G3!=="undefined" ? G3.shot(stage, lv3dLooks(st, kit, "freekick")) : null;
+    if (g3) LV_MAP = g3.map;
+    const fin = r => { done = true; if (g3 && LV_MAP===g3.map) LV_MAP = null; res(r); }; lvSkippable(fin);
+    const rawAt = ev => { const r = stage.getBoundingClientRect(); return [(ev.clientX - r.left)/r.width*300, (ev.clientY - r.top)/r.height*180]; };
     svg.insertAdjacentHTML("beforeend", `<path id="lgSw" class="lv-dragline" fill="none" stroke="#F5C542" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><text id="lgHint" x="150" y="150" text-anchor="middle" font-family="Barlow Condensed,sans-serif" font-weight="700" font-size="11" letter-spacing="1" fill="#FFE9A8">SWIPE UP FROM THE BALL</text>`);
-    const draw = () => lv$("#lgSw")?.setAttribute("d", pts.length ? "M" + pts.map(p=>p.map(v=>v.toFixed(1)).join(" ")).join("L") : "");
-    stage.addEventListener("pointerdown", ev=>{ if (done || fired) return; ev.preventDefault(); stage.setPointerCapture?.(ev.pointerId); down = true; pts = [lgAt(ev, stage)]; draw(); lv$("#lgHint")?.remove(); });
-    stage.addEventListener("pointermove", ev=>{ if (!down || fired) return; const p = lgAt(ev, stage), q = pts[pts.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1])>2.5){ pts.push(p); draw(); } });
+    // the trail under your finger (in 3D the picture isn't 2D's, so it's drawn where you touched, not where that is in 2D)
+    const draw = () => { const P = g3 ? raw : pts; lv$("#lgSw")?.setAttribute("d", P.length ? "M" + P.map(p=>p.map(v=>v.toFixed(1)).join(" ")).join("L") : ""); };
+    stage.addEventListener("pointerdown", ev=>{ if (done || fired) return; ev.preventDefault(); stage.setPointerCapture?.(ev.pointerId); down = true; pts = [lgAt(ev, stage)]; raw = [rawAt(ev)]; draw(); lv$("#lgHint")?.remove(); });
+    stage.addEventListener("pointermove", ev=>{ if (!down || fired) return; const p = lgAt(ev, stage), q = pts[pts.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1])>2.5){ pts.push(p); raw.push(rawAt(ev)); draw(); } });
     stage.addEventListener("pointerup", ()=>{ if (!down || fired) return; down = false; release(); });
-    stage.addEventListener("pointercancel", ()=>{ down = false; pts = []; draw(); });
+    stage.addEventListener("pointercancel", ()=>{ down = false; pts = []; raw = []; draw(); });
     const release = async () => {
       const S0 = pts[0], S1 = pts[pts.length - 1];
-      if (pts.length<4 || S0[1] - S1[1] < 40){ pts = []; draw(); lgPop("Swipe up, towards the goal", false, 50, 62); return; }
+      if (pts.length<4 || S0[1] - S1[1] < 40){ pts = []; raw = []; draw(); lgPop("Swipe up, towards the goal", false, 50, 62); return; }
       fired = true;
       // your swipe, moved to start at the ball: where it ends is where the ball's going, and how far it bows out is the bend
       const A = [150, 166], o = [A[0] - S0[0], A[1] - S0[1]], B = [clamp(S1[0] + o[0], -20, 320), clamp(S1[1] + o[1], -30, 150)];
@@ -944,6 +950,18 @@ function lgBend(st){
       const goal = green || (!wall && !wide && !over && !post && Math.random()>save);
       const [kx, ky, rot] = lvKeeperTo(B[0], B[1], wall || wide || over ? "wrong" : goal ? "near" : "save", B[0]<140 ? "l" : B[0]>160 ? "r" : "c");
       lv$("#lgSw").style.transition = "opacity .5s"; lv$("#lgSw").setAttribute("opacity", ".25");
+      if (g3){
+        // the same kick in 3D: the bend in metres, enough of it (or enough lift) to go round or over the wall when it beat it
+        const tgx = (B[0] - 150)/120*3.66, sg = Math.sign(dev[0]) || Math.sign(tgx) || 1; let cvm = clamp(dev[0]*1.6, -90, 90)/120*3.66, h = 22;
+        if (!wall && Math.abs(tgx*.42 + cvm*.97) < 1.5){ if (Math.abs(dev[0]) > 8) cvm = (sg*1.5 - tgx*.42)/.97; else h = 64; }
+        lv$("#lgSw")?.setAttribute("opacity", "0");
+        await g3.play({wx:clamp(B[0], -10, 310), ty:B[1], ms:wall ? 520 : 900, h, curve:cvm/3.66*120, kx, ky, rot, kms:520, goal, over, wide, wood:post, wall,
+          saved:!goal && !wall && !wide && !over && !post, held:false, power:.8});
+        if (done) return;
+        if (wall) return fin({ok:false, big:"Hit the wall", small:"Bend it wider, or lift it higher over them"});
+        if (goal){ got++; lgSetHud(got); return fin({ok:true, big:"What a free kick!", small:curl>22 ? "Bent it round the wall" : "Over the wall and in"}); }
+        return fin({ok:false, big:wide ? "Wide" : over ? "Over the bar" : post ? "Off the woodwork" : "Saved", small:wide || over ? "Aim inside the posts" : post ? "Inches away" : curl<12 ? "Not enough bend: he read it" : "He got across to it"});
+      }
       await lvStrike(st); if (done) return;
       const end = wall ? W : B, ms = wall ? 260 : 680;
       await Promise.all([lvTween(ms, kk=>{ const u = (wall ? .28 : 1)*lvEaseOut(kk), [x, y] = Pq(u); lvBallAt("#lvBall", x, y, 1 - .42*u, 0, kk*720, kk<1); }),
@@ -1412,7 +1430,7 @@ function lgFinesse(st){
     // coming in from the left, the far corner is the right one, and the goal's seen at that angle: near post bigger
     const side = at<150 ? "r" : "l", tilt = clamp((150 - at)/58, -1, 1)*22, zone = clamp(.13*(1 + e*1.3), .07, .22), mid = .7, lo = mid - zone/2, hi = mid + zone/2, per = 1500, need = clamp(14*(1 - e*.5), 9, 18);
     lgShow(st, "Finesse shot", `You're in on the ${at<150 ? "left" : "right"}. He's covering his near post: hold the ball, then swipe up with a curve to bend it into the far ${side==="l" ? "left" : "right"} corner, with the power in the green.`,
-      lvGoalSvg(kit.them, null, false) + lgHud(got, "scored") + `<div class="lv-pow"><span class="lv-pow-l">Power</span>${lvBarHTML(mid, zone)}</div>`);
+      lvGoalSvg(kit.them, null, false, {dist:17}) + lgHud(got, "scored") + `<div class="lv-pow"><span class="lv-pow-l">Power</span>${lvBarHTML(mid, zone)}</div>`);
     lv$(".lv-stage svg").style.cssText = `transform:perspective(560px) rotateY(${tilt.toFixed(1)}deg) scale(1.1);transform-origin:50% 62%`;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");

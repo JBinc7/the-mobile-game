@@ -172,7 +172,7 @@ const G3 = (() => {
       const b = new THREE.Mesh(geo("boot", ()=>{ const g = new THREE.CapsuleGeometry(.042, .16, 4, 10); g.rotateX(Math.PI/2); return g; }), boot); b.scale.set(1.05, .8, 1); b.position.set(0, -.012, .055); ft.add(b);
     });
     const sh0 = blob(.9, .6); root.add(sh0); rig.shadow = sh0;
-    root.traverse(o=>{ if (o.isMesh) o.frustumCulled = false; });
+    root.traverse(o=>{ if (o.isMesh){ o.frustumCulled = false; o.castShadow = true; } });
     return {root, rig};
   }
   // poses: k from 0 to 1 through the move
@@ -307,7 +307,7 @@ const G3 = (() => {
     const F = FACES[face] ? {key:"f" + face, head:faceImg[face], skin:FACES[face].skin} : M;
     const model = SkeletonUtils.clone(M.scene), root = grp(); root.add(model);
     const body = kitTex(M, look), head = headTex(F, look);
-    model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false;
+    model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = true;
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
         : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite || F!==M ? null : M.headN, roughness:.62}))
         : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:lite ? null : M.bodyN, roughness:.78})));
@@ -425,14 +425,62 @@ const G3 = (() => {
   function makeRenderer(){
     const r = new THREE.WebGLRenderer({antialias:!lite, alpha:true, powerPreference:"low-power"});
     r.setPixelRatio(lite ? 1 : Math.min(1.75, window.devicePixelRatio || 1)); r.outputColorSpace = THREE.SRGBColorSpace;
-    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
+    r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1;
+    if (!lite){ r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; }   // real shadows under the floodlights (not on older phones)
     r.domElement.className = "g3-canvas"; r.domElement.setAttribute("aria-hidden", "true");
     return r;
   }
   function fit(r, cam, el){ const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight); if (r._w===w && r._h===h) return false; r._w = w; r._h = h; r.setSize(w, h, false); if (cam.isPerspectiveCamera) cam.aspect = w/h; cam.updateProjectionMatrix(); return true; }
+  /* ---------- the look ----------
+     The light: a night stadium all round (a dark sky, the glow of the stands, four banks of floodlights, the pitch below),
+     made once per renderer and used as image-based light, so the kit, the skin, the ball and the posts pick up the
+     floodlights and the grass the way they would under them */
+  const envs = new WeakMap();
+  function envFor(r){
+    if (envs.has(r)) return envs.get(r);
+    const sc = new THREE.Scene(), g = new THREE.SphereGeometry(60, 48, 24), P = g.attributes.position, cl = [], c = new THREE.Color();
+    const sky = new THREE.Color(.012, .02, .035), haze = new THREE.Color(.16, .15, .13), stand = new THREE.Color(.05, .06, .06), grass = new THREE.Color(.035, .12, .05);
+    for (let i = 0; i < P.count; i++){ const y = P.getY(i)/60;
+      if (y < -.03) c.copy(grass); else if (y < .12) c.copy(stand).lerp(haze, (y + .03)/.15); else c.copy(haze).lerp(sky, Math.min(1, (y - .12)/.35));
+      cl.push(c.r, c.g, c.b); }
+    g.setAttribute("color", new THREE.Float32BufferAttribute(cl, 3));
+    sc.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.BackSide})));
+    // the floodlights: four bright banks high in the corners, and a long strip along each roof
+    const fl = new THREE.MeshBasicMaterial({color:new THREE.Color(9, 8.6, 7.6)}), st = new THREE.MeshBasicMaterial({color:new THREE.Color(2.4, 2.3, 2.1)});
+    [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz])=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(9, 4), fl); m.position.set(sx*34, 26, sz*34); m.lookAt(0, 0, 0); sc.add(m); });
+    [0, Math.PI/2, Math.PI, -Math.PI/2].forEach(a=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(60, 1.2), st); m.position.set(Math.sin(a)*45, 17, Math.cos(a)*45); m.lookAt(0, 4, 0); sc.add(m); });
+    const pm = new THREE.PMREMGenerator(r), env = pm.fromScene(sc, .035).texture; pm.dispose();
+    sc.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    envs.set(r, env); return env;
+  }
+  // the night sky behind the stands: deep blue overhead to a haze over the roofs
+  let skyTex = null;
+  function skyFor(){ if (skyTex) return skyTex;
+    const c = document.createElement("canvas"); c.width = 4; c.height = 256; const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, "#03060C"); g.addColorStop(.55, "#0A1320"); g.addColorStop(.8, "#16212A"); g.addColorStop(1, "#0B1611"); x.fillStyle = g; x.fillRect(0, 0, 4, 256);
+    skyTex = new THREE.CanvasTexture(c); skyTex.colorSpace = THREE.SRGBColorSpace; return skyTex; }
+  // the grass: fine blades and patchy wear over the mown stripes (a texture that tiles every 4 m)
+  let grassTex = null;
+  function grassFor(){ if (grassTex) return grassTex;
+    const N = 512, c = document.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d");
+    x.fillStyle = "#C9C9C9"; x.fillRect(0, 0, N, N);
+    const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(7);
+    for (let i = 0; i < 220; i++){ const px = R()*N, py = R()*N, rr = 14 + R()*40, g2 = x.createRadialGradient(px, py, 0, px, py, rr), v = R() < .5 ? "255,255,255" : "40,40,40";
+      g2.addColorStop(0, `rgba(${v},${(.02 + R()*.035).toFixed(3)})`); g2.addColorStop(1, `rgba(${v},0)`); x.fillStyle = g2;
+      for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]){ x.save(); x.translate(ox, oy); x.fillRect(px - rr, py - rr, rr*2, rr*2); x.restore(); } }
+    for (let i = 0; i < 26000; i++){ const px = R()*N, py = R()*N, l = 2 + R()*5, sh = R(); x.strokeStyle = sh < .5 ? `rgba(255,255,255,${(.1 + R()*.2).toFixed(2)})` : `rgba(0,0,0,${(.1 + R()*.22).toFixed(2)})`;
+      x.lineWidth = .8 + R()*.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - .5)*1.6, py - l); x.stroke(); }
+    grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 8; return grassTex; }
+  const grassMat = c2 => { const k = "grass|" + c2; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({color:col(c2), map:grassFor(), roughness:.92, envMapIntensity:.55})); return mats.get(k); };
+  const tileUV = (g, u, v) => { const a = g.attributes.uv; for (let i = 0; i < a.count; i++) a.setXY(i, a.getX(i)*u, a.getY(i)*v); return g; };
   function lights(scene, o = {}){
-    scene.add(new THREE.HemisphereLight(0xE6EEFF, 0x1A3A22, o.hemi ?? 1.1));
+    const env = !!scene.environment;
+    scene.add(new THREE.HemisphereLight(0xE6EEFF, 0x1A3A22, (o.hemi ?? 1.1)*(env ? .45 : 1)));
     const a = new THREE.DirectionalLight(0xFFF1D6, o.key ?? 2.2); a.position.set(-4, 7, o.keyZ ?? -5); scene.add(a);
+    // the main floodlight casts the shadows: of the players, the ball and the goal, round where the play is
+    if (o.at && !lite){ const at = o.at, dir = a.position.clone().normalize(); a.target.position.copy(at); scene.add(a.target); a.position.copy(at).addScaledVector(dir, 40);
+      a.castShadow = true; a.shadow.mapSize.set(2048, 2048); const sc = a.shadow.camera, z = o.size || 17; sc.left = -z; sc.right = z; sc.top = z; sc.bottom = -z; sc.near = 5; sc.far = 90; sc.updateProjectionMatrix();
+      a.shadow.bias = -.0004; a.shadow.normalBias = .03; a.shadow.radius = 3; }
     const b = new THREE.DirectionalLight(0xDDE8FF, o.fill ?? .9); b.position.set(5, 5, 6); scene.add(b);
     const c = new THREE.DirectionalLight(0xFFE9B0, o.rim ?? 1.3); c.position.set(0, 4, -8); scene.add(c);
   }
@@ -462,7 +510,7 @@ const G3 = (() => {
       if (!el || !ready()) return false;
       if (!R){ R = makeRenderer(); scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(26, 1, .1, 50); }
       const k = JSON.stringify([pl.skin, pl.hair, pl.hairColour, pl.number, pl.name, club.c1, club.c2, !!people]);
-      if (k !== key){ key = k; clear(scene); lights(scene, {key:2.4, keyZ:-6, rim:1.6});
+      if (k !== key){ key = k; clear(scene); scene.environment = envFor(R); lights(scene, {key:2.4, keyZ:-6, rim:1.6});
         P = makePlayer(lookOf(pl, club.c1, club.c2)); (P.rig ? P.rig.shadow : P.shadow).visible = false; scene.add(P.root); }
       // framed from the thighs up, the way the 2D card was
       cam.position.set(0, 1.47, 2.25); cam.lookAt(0, 1.31, 0);
@@ -489,9 +537,10 @@ const G3 = (() => {
   let SR = null;
   function pitch(scene, lines = true){
     // mown stripes across the pitch, then the lines as thin strips
-    const g1 = mat("#1D6B3A", .95), g2 = mat("#22793F", .95), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), g1); ground.rotation.x = -Math.PI/2; ground.position.set(0, -.01, 0); scene.add(ground);   // grass to the horizon
-    for (let i = -2; i < 20; i++){ const s = new THREE.Mesh(new THREE.PlaneGeometry(120, 4), i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); scene.add(s); }
+    const g1 = grassMat("#25703E"), g2 = grassMat("#34914F"), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
+    const ground = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(400, 400), 100, 100), g1); ground.rotation.x = -Math.PI/2; ground.position.set(0, -.01, 0); ground.receiveShadow = true; scene.add(ground);   // grass to the horizon
+    const sg = geo("stripe", ()=>tileUV(new THREE.PlaneGeometry(120, 4), 30, 1));
+    for (let i = -2; i < 20; i++){ const s = new THREE.Mesh(sg, i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); s.receiveShadow = true; scene.add(s); }
     if (!lines) return;
     const strip = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), line); m.rotation.x = -Math.PI/2; m.position.set(x, .01, z); scene.add(m); };
     const W = .12;
@@ -504,7 +553,7 @@ const G3 = (() => {
   function goalFrame(scene){
     const post = mat("#F4F6F2", .35), H = 2.44, X = 3.66, r = .06;
     const pg = new THREE.CylinderGeometry(r, r, H + r, 16);
-    [-1, 1].forEach(s=>{ const p = new THREE.Mesh(pg, post); p.position.set(s*X, (H + r)/2, 0); scene.add(p); });
+    [-1, 1].forEach(s=>{ const p = new THREE.Mesh(pg, post); p.position.set(s*X, (H + r)/2, 0); p.castShadow = true; scene.add(p); });
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 2*X + 2*r, 16), post); bar.rotation.z = Math.PI/2; bar.position.set(0, H, 0); scene.add(bar);
     /* the net. The back is a stretchy sheet: a grid of knots, each pushed back by the ball and pulled by its
        neighbours (a wave on a membrane), held by the frame at its edges. The roof and the sides hang off it and
@@ -577,20 +626,36 @@ const G3 = (() => {
   }
   let crowdTex = null, boardTex = null;
   function stands(scene, kc){
-    if (!crowdTex){ const c = document.createElement("canvas"); c.width = 1024; c.height = 256; const x = c.getContext("2d"); x.fillStyle = "#0B1611"; x.fillRect(0, 0, 1024, 256);
-      const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(11), cs = ["#26332D","#33413A","#1E2A25","#3D4A43","#46524B"];
-      for (let row = 0; row < 11; row++) for (let i = 0; i < 70; i++){ x.fillStyle = R() < .18 ? kc : cs[Math.floor(R()*cs.length)];
-        const cx = i*14.8 + (row%2)*7 + R()*3, cy = 18 + row*22 + R()*3; x.beginPath(); x.arc(cx, cy, 5 + R()*1.5, 0, 7); x.fill(); x.fillRect(cx - 7, cy + 5, 14, 12); }
-      crowdTex = new THREE.CanvasTexture(c); crowdTex.colorSpace = THREE.SRGBColorSpace; }
+    // the crowd: rows of fans on the steps, faces of every skin tone, shirts in the home colours, white, and everyday darks,
+    // the odd scarf held up; the rows under the roof in its shadow
+    if (!crowdTex){ const c = document.createElement("canvas"); c.width = 2048; c.height = 512; const x = c.getContext("2d"); x.fillStyle = "#0A120E"; x.fillRect(0, 0, 2048, 512);
+      const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(11), sk = ["#F1C9A5","#D9A37A","#B57D52","#8A5A3B","#5C3A24"], dk = ["#2B3440","#3A3F46","#1F2A33","#4B5563","#343434","#5B4636"];
+      for (let row = 0; row < 16; row++){ const cy = 22 + row*30;
+        x.fillStyle = "rgba(255,255,255,.035)"; x.fillRect(0, cy + 17, 2048, 4);   // the step
+        for (let i = 0; i < 120; i++){ if (R() < .06) continue;   // an empty seat
+          const cx = i*17.1 + (row%2)*8.5 + R()*4, r = R(), shirt = r < .34 ? kc : r < .5 ? "#E8E8E4" : dk[Math.floor(R()*dk.length)];
+          x.fillStyle = shirt; x.beginPath(); x.ellipse(cx, cy + 15, 7.5, 9, 0, Math.PI, 0); x.fill(); x.fillRect(cx - 7.5, cy + 14, 15, 9);
+          x.fillStyle = sk[Math.floor(R()*sk.length)]; x.beginPath(); x.arc(cx, cy + 3, 5.2, 0, 7); x.fill();
+          if (R() < .5){ x.fillStyle = R() < .7 ? "#17120E" : "#6B4A2B"; x.beginPath(); x.arc(cx, cy + 1.2, 5.3, Math.PI, 0); x.fill(); }   // hair
+          if (R() < .07){ x.fillStyle = kc; x.fillRect(cx - 9, cy - 9, 18, 4.5); x.fillStyle = "#F4F4F0"; x.fillRect(cx - 9, cy - 9, 4, 4.5); x.fillRect(cx + 1, cy - 9, 4, 4.5); }   // a scarf held up
+        } }
+      const sh = x.createLinearGradient(0, 0, 0, 512); sh.addColorStop(0, "rgba(0,0,0,.55)"); sh.addColorStop(.3, "rgba(0,0,0,.12)"); sh.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = sh; x.fillRect(0, 0, 2048, 512);
+      crowdTex = new THREE.CanvasTexture(c); crowdTex.colorSpace = THREE.SRGBColorSpace; crowdTex.anisotropy = 4; }
     if (!boardTex){ const c = document.createElement("canvas"); c.width = 1024; c.height = 64; const x = c.getContext("2d"); x.fillStyle = "#0B1A12"; x.fillRect(0, 0, 1024, 64);
       x.font = "900 40px Big Shoulders Display, Impact, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
       for (let i = 0; i < 6; i++){ x.fillStyle = i%2 ? "#F5C542" : "#7FD7C4"; x.fillText("PYRAMID", 85 + i*171, 34); }
       boardTex = new THREE.CanvasTexture(c); boardTex.colorSpace = THREE.SRGBColorSpace; boardTex.wrapS = THREE.RepeatWrapping; boardTex.repeat.x = 2; }
     // the stands all round: behind the goal and down both sides (so a replay from the side has a crowd behind it),
     // each a raked bank of fans over a strip of advertising boards
-    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:0x9AA59F}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
-    const bank = (w, x, z, ry, d) => { const g = grp(x, 0, z); g.rotation.y = ry; scene.add(g);
-      const c = new THREE.Mesh(new THREE.PlaneGeometry(w, 20), cm); c.position.set(0, 10.5, -d); c.rotation.x = .22; g.add(c); crowd.push(c);
+    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:0xB4BCB7}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
+    const roofM = mat("#14191E", .7, {metal:.3}), wallM = mat("#1B2228", .85), lightM = new THREE.MeshBasicMaterial({color:new THREE.Color(2.2, 2.1, 1.85)});
+    // a stand: the raked crowd over a concourse wall and the advertising boards, under a roof with a strip of floodlights along its edge
+    const bank = (w, x, z, ry, d) => { const g = grp(x, 0, z); g.rotation.y = ry; g.userData.stand = true; scene.add(g);
+      const c = new THREE.Mesh(new THREE.PlaneGeometry(w, 20), cm); c.position.set(0, 11.2, -d); c.rotation.x = .22; g.add(c); crowd.push(c);
+      const fw = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.8), wallM); fw.position.set(0, .9, -1.2); g.add(fw);
+      const deck = new THREE.Mesh(new THREE.PlaneGeometry(w, d + 1), wallM); deck.rotation.x = -Math.PI/2; deck.position.set(0, 1.62, -1.2 - (d - 1.2)/2); g.add(deck);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 4, .35, 13), roofM); roof.position.set(0, 21.6, -d - 2.4); roof.rotation.x = -.08; g.add(roof);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(w*.92, .28, .28), lightM); strip.position.set(0, 21.05, -d + 4); g.add(strip);
       const b = new THREE.Mesh(new THREE.PlaneGeometry(w*.6, .9), bm); b.position.set(0, .45, 0); g.add(b); };
     bank(80, 0, -5, 0, 11);
     [-1, 1].forEach(s=>bank(66, s*36, 27, -s*Math.PI/2, 7));
@@ -600,7 +665,10 @@ const G3 = (() => {
     const gc = document.createElement("canvas"); gc.width = gc.height = 64; const gx2 = gc.getContext("2d"), gr = gx2.createRadialGradient(32, 32, 0, 32, 32, 32);
     gr.addColorStop(0, "rgba(255,248,222,1)"); gr.addColorStop(.25, "rgba(255,226,154,.45)"); gr.addColorStop(1, "rgba(255,226,154,0)"); gx2.fillStyle = gr; gx2.fillRect(0, 0, 64, 64);
     const gt = new THREE.CanvasTexture(gc);
-    [-1, 1].forEach(s=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:gt, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); sp.position.set(s*24, 24, -22); sp.scale.set(16, 16, 1); scene.add(sp); });
+    [-1, 1].forEach(s=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:gt, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); sp.position.set(s*24, 24, -22); sp.scale.set(16, 16, 1); scene.add(sp);
+      // the pylon under it, and its bank of lamps
+      const py = new THREE.Mesh(new THREE.CylinderGeometry(.35, .6, 24, 8), wallM); py.position.set(s*24, 12, -22.5); py.userData.pylon = true; scene.add(py);
+      const hd = new THREE.Mesh(new THREE.BoxGeometry(5, 2.6, .4), lightM); hd.position.set(s*24, 24, -22.2); hd.lookAt(0, 0, 8); hd.userData.pylon = true; scene.add(hd); sp.userData.pylon = true; });
     scene.fog = new THREE.Fog(0x07120C, 30, 70);
     return crowd;
   }
@@ -609,7 +677,7 @@ const G3 = (() => {
     if (!ballTex){ const c = document.createElement("canvas"); c.width = 256; c.height = 128; const x = c.getContext("2d"); x.fillStyle = "#F7F7F5"; x.fillRect(0, 0, 256, 128);
       x.fillStyle = "#1B1D21"; for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++){ const cx = i*44 + (j%2)*22 + 10, cy = 22 + j*42; x.beginPath(); for (let k = 0; k < 5; k++){ const a = k/5*Math.PI*2 - Math.PI/2; x.lineTo(cx + Math.cos(a)*11, cy + Math.sin(a)*11); } x.fill(); }
       ballTex = new THREE.CanvasTexture(c); ballTex.colorSpace = THREE.SRGBColorSpace; }
-    const b = new THREE.Mesh(new THREE.SphereGeometry(.11, 24, 16), new THREE.MeshStandardMaterial({map:ballTex, roughness:.45}));
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.11, 24, 16), new THREE.MeshStandardMaterial({map:ballTex, roughness:.38})); b.castShadow = true;
     return b;
   }
   /* the stadium for a shot or a save: the goal, the ball on its spot, the man taking it and the man in goal.
@@ -619,9 +687,9 @@ const G3 = (() => {
   function base(stage, o, ballAt){
     if (!SR){ SR = {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)}; }
     if (SR.cur){ SR.cur.stop(); SR.cur = null; }   // one scene at a time: the last one stops
-    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = new THREE.Color(0x07120C);
+    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = skyFor(); scene.environment = envFor(r);
     if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
-    lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1});
+    lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize});
     pitch(scene, !o.noLines); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542");
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
@@ -814,7 +882,18 @@ const G3 = (() => {
         await W.tween(480, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.8*ease(k), Math.max(.11, p0.y + .3*k - 1.3*k*k), p0.z + 2.6*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
       }
     }
-    return {play, aim, stop:W.stop};
+    /* 2D's goal view mapped onto this one, for a game that takes taps or swipes on it (bend it): 2D's goal (x 30-270 post
+       to post, y 20 bar to 124 line) is the goal; below it, 2D's grass out to the ball (y 166) is the grass out to the
+       ball here (2D draws the near end bigger: the ball's 1, the goal's .6) */
+    const rc = new THREE.Raycaster(), pv = new THREE.Vector3(), gp = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), gl = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const near = t => .6/(.6 + .4*t);
+    const map = {
+      fwd(x, y){ let v; if (y <= 124) v = new THREE.Vector3(gx(x), gy(y), 0); else { const t = Math.min(1.3, (y - 124)/42); v = new THREE.Vector3(gx(x)*near(t), 0, t*D); }
+        cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1)*150, (1 - v.y)*90]; },
+      inv(x, y){ cam.updateMatrixWorld(); rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam);
+        if (rc.ray.direction.y < 0 && rc.ray.intersectPlane(gp, pv) && pv.z > 0){ const t = pv.z/D; return [150 + pv.x/near(t)/3.66*120, 124 + 42*t]; }
+        return rc.ray.intersectPlane(gl, pv) ? [150 + pv.x/3.66*120, 124 - pv.y/2.44*104] : [x, y]; }};
+    return {play, aim, stop:W.stop, map};
   }
 
   /* you in goal: their striker runs up and shoots; you dive.
@@ -1026,12 +1105,37 @@ const G3 = (() => {
     // the distance whose framing puts the posts where 2D has them
     const fr = D => { const c = new THREE.PerspectiveCamera(40, 300/180, .1, 160); frameCam(c, new THREE.Vector3(0, 2.75, D + 4.7), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.44, 0), .111); c.updateMatrixWorld(); return c; };
     let lo = 4, hi = 40; for (let i = 0; i < 30; i++){ const D = (lo + hi)/2, x = new THREE.Vector3(3.66, 1.2, 0).project(fr(D)).x; if (x > .8) lo = D; else hi = D; }
-    const D = (lo + hi)/2, W = base(stage, {}, new THREE.Vector3(0, .11, D)), {scene, cam} = W, c0 = fr(D); W.looks = MLOOKS;
-    cam.fov = c0.fov; cam.position.copy(c0.position); cam.quaternion.copy(c0.quaternion); cam.updateProjectionMatrix();
+    /* 2D's picture is as seen from c0, with the ball only D0 out. A game played further out (svg data-dist: a free kick,
+       a chip over a keeper rushing out) is put at that distance: everything 2D draws is found in c0's world, then its
+       distance from the goal stretched by S (heights and sideways kept), and filmed by a camera behind the ball like a
+       shot's. Its taps, swipes and the things laid over it are mapped between the two (LV_MAP) */
+    const D0 = (lo + hi)/2, c0 = fr(D0), D = Math.max(D0, +svg.dataset.dist || 0), S = D/D0, far = D > D0 + .5;
+    const W = base(stage, {}, new THREE.Vector3(0, .11, D)), {scene, cam} = W; W.looks = MLOOKS;
+    if (far) frameCam(cam, new THREE.Vector3(.4, 2.6 + D*.03, D + 5.2), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.44, 0), .2);
+    else { cam.fov = c0.fov; cam.position.copy(c0.position); cam.quaternion.copy(c0.quaternion); cam.updateProjectionMatrix(); }
     // a 2D goal drawn at an angle (the finesse shot's) is front-on here, so its swipe lines up with the 3D goal
     const tilt = svg.style.cssText; if (tilt){ svg.style.cssText = ""; const st0 = W.stop; W.stop = () => { st0(); if (svg.isConnected) svg.style.cssText = tilt; }; }
     const rc = new THREE.Raycaster(), hit = new THREE.Vector3(), plane = new THREE.Plane(), nz = new THREE.Vector3(0, 0, 1), ny = new THREE.Vector3(0, 1, 0);
-    const cast = (x, y, onZ) => { rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam); if (onZ != null) plane.set(nz, -onZ); else plane.set(ny, 0); return rc.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
+    const cast = (x, y, onZ) => { rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), c0); if (onZ != null) plane.set(nz, -onZ); else plane.set(ny, 0); return rc.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
+    // a 2D point on the grass in front of the goal (or on the goal itself), where it is in this world, and back again
+    const gp = new THREE.Plane(ny, 0), gl = new THREE.Plane(nz, 0), pv = new THREE.Vector3();
+    const to3 = (x, y) => { rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), c0); const g = rc.ray.intersectPlane(gp, pv);
+      if (g && g.z > 0 && rc.ray.direction.y < 0) return pv.clone().setZ(pv.z*S); return rc.ray.intersectPlane(gl, pv) ? pv.clone() : null; };
+    const from3 = v => { const q = v.clone(); if (q.z > .01) q.z /= S; q.project(c0); return [(q.x + 1)*150, (1 - q.y)*90]; };
+    if (far){
+      stage.classList.add("g3-far");
+      LV_MAP = {fwd:(x, y)=>{ const v = to3(x, y); if (!v) return [x, y]; cam.updateMatrixWorld(); v.project(cam); return [(v.x + 1)*150, (1 - v.y)*90]; },
+        inv:(x, y)=>{ cam.updateMatrixWorld(); rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam);
+          const g = rc.ray.direction.y < 0 && rc.ray.intersectPlane(gp, pv); if (g && pv.z > 0) return from3(pv); return rc.ray.intersectPlane(gl, pv) ? from3(pv) : [x, y]; }};
+      // 2D's drag lines and swipes, drawn over the picture where they are in it
+      stage.insertAdjacentHTML("beforeend", `<svg class="g3-ov" viewBox="0 0 300 180" preserveAspectRatio="none" aria-hidden="true"></svg>`);
+      const ov = stage.lastElementChild, st1 = W.stop; W.stop = () => { st1(); LV_MAP = null; ov.remove(); stage.classList.remove("g3-far"); };
+      W.overlay = () => { const ls = svg.querySelectorAll(".lv-dragline"); while (ov.children.length > ls.length) ov.lastChild.remove();
+        ls.forEach((l, i)=>{ let o = ov.children[i]; if (!o){ o = document.createElementNS("http://www.w3.org/2000/svg", "path"); o.setAttribute("class", "lv-dragline"); ov.appendChild(o); }
+          ["stroke", "stroke-width", "stroke-dasharray", "stroke-linecap", "stroke-linejoin", "opacity", "fill"].forEach(a=>{ const v = l.getAttribute(a); if (v!=null) o.setAttribute(a, v); else o.removeAttribute(a); });
+          const n = (l.getAttribute("d") || "").match(/-?[\d.]+/g) || []; let d = ""; for (let j = 0; j + 1 < n.length; j += 2){ const [X, Y] = LV_MAP.fwd(+n[j], +n[j + 1]); d += (j ? "L" : "M") + X.toFixed(1) + " " + Y.toFixed(1); }
+          o.setAttribute("d", d); o.style.opacity = getComputedStyle(l).opacity; }); };
+    }
     // their keeper (or you, in goal), on his line
     const kz = .4, kp = grp(0, .94, kz), K = makePlayer(svg.dataset.kme ? W.looks.me && {...W.looks.me, gk:true, c1:"#F97316"} || {skin:"#B57D52", c1:"#F97316", c2:"#111827", gk:true, num:1} : {skin:"#D9A37A", c1:"#65A30D", c2:"#111827", gk:true, num:1, hair:"short", hairCol:"#17130F"});
     K.root.position.y = -.94; kp.add(K.root); scene.add(kp); const reach = reachOf(K, kp);
@@ -1046,22 +1150,29 @@ const G3 = (() => {
       if (!kickAt && (svg.querySelector(".lv-boot") || bs0 < s0 - .01)) kickAt = now;
       if (kickAt) pose(tk, "kick", Math.min(1, (now - kickAt)/300)); else pose(tk, "idle", T());
       const kel = svg.querySelector("#lvKp");
-      if (kel && kel.getClientRects().length){ const m = inv.multiply(kel.getScreenCTM()), rot = Math.atan2(m.b, m.a), p = cast(m.e, m.f, kz);
+      if (kel && kel.getClientRects().length){ const m = inv.multiply(kel.getScreenCTM()), rot = Math.atan2(m.b, m.a), ksz = Math.hypot(m.a, m.b);
+        // off his line (2D draws him bigger as he comes out): how far, from his size
+        const out = ksz > 1.1 ? Math.min(D0 - kz - .5, (c0.position.z - kz)*(1 - 1/ksz)) : 0, zo = kz + out, p = cast(m.e, m.f, zo);
+        if (p){ p.z = kz + out*S; if (out > 0) p.y = Math.max(p.y, .94); }
         // diving, his hands go where 2D's keeper is (that's what 2D's saves are measured from); otherwise he's on his toes there
         const dv = Math.abs(rot) > .2 || kel.classList.contains("dive");
-        if (p && dv){ const R = reachFor(new THREE.Vector3(p.x, Math.max(.15, p.y), kz), reach); kp.position.copy(R.at); kp.rotation.z = R.roll; pose(K, "dive", R.k); }
-        else { if (p){ kp.position.set(p.x, Math.max(.55, p.y), kz); kp.rotation.z = 0; } pose(K, "ready", T()); }
+        if (p && dv){ const R = reachFor(new THREE.Vector3(p.x, Math.max(.15, p.y), p.z), reach); kp.position.copy(R.at); kp.rotation.z = R.roll; pose(K, "dive", R.k); }
+        else if (p && out > .05){ const was = kp.position.clone(); kp.position.set(p.x, .94, p.z); kp.rotation.z = 0; const dt = Math.max(.001, (now - (W.kt || now))/1000);   // rushing out at you
+          const v = Math.hypot(kp.position.x - was.x, kp.position.z - was.z)/dt; W.kv = (W.kv || 0) + (v - (W.kv || 0))*.2; K.root.rotation.y = 0; if (W.kv > .6) stepTo(K, Math.hypot(kp.position.x - was.x, kp.position.z - was.z), dt); else pose(K, "ready", T()); }
+        else { if (p){ kp.position.set(p.x, Math.max(.55, p.y), p.z); kp.rotation.z = 0; } pose(K, "ready", T()); }
+        W.kt = now;
         kp.visible = true; } else kp.visible = false;
       // the ball: how far it's come from its 2D size, then cast through the picture at that depth
       const bb = svg.querySelector("#lvBall > .lv-bb") || svg.querySelector("g[id] > .lv-bb");
       if (bb){ const g = bb.parentNode, m = inv.multiply(g.getScreenCTM()), s = Math.hypot(m.a, m.b), q = clamp((1 - s)/.4, 0, 1.15), tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || "");
-        const lift = tz ? -(+tz[1])*s : 0, p = cast(m.e, m.f - lift, D*(1 - q)); if (p){ W.B.position.set(p.x, Math.max(.11, p.y), p.z); W.bs.position.set(p.x, .006, p.z); } W.B.rotation.x -= .08; }
+        const lift = tz ? -(+tz[1])*s : 0, p = cast(m.e, m.f - lift, D0*(1 - q)); if (p){ p.z *= S; W.B.position.set(p.x, Math.max(.11, p.y), p.z); W.bs.position.set(p.x, .006, p.z); } W.B.rotation.x -= .08; }
       // anyone else: a wall, a striker, on the grass
       svg.querySelectorAll(".lv-man").forEach(el=>{ if (!el.getClientRects().length) return; seen.add(el); let M = men.get(el);
         if (!M){ const k = el.dataset.k || "#1D4ED8"; M = W.add({...W.looks.anyone(el), c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || "#FFFFFF", num:el.dataset.n || ""}, 0, 0, 0); men.set(el, M); }
-        const m = inv.multiply(el.getScreenCTM()), p = cast(m.e, m.f); if (p) M.at.position.copy(p);
+        const m = inv.multiply(el.getScreenCTM()), p = cast(m.e, m.f); if (p){ p.z *= S; M.at.position.copy(p); }
         pose(M, el.closest(".lv-wall") || p && p.z > 3 ? "wall" : "idle", T()); });
       men.forEach((M, el)=>{ M.at.visible = seen.has(el); });
+      if (W.overlay) W.overlay();
     };
     W.start(); return W;
   }
@@ -1119,12 +1230,14 @@ const G3 = (() => {
     // side-on games keep the flat (orthographic) view; the rest are filmed by a TV camera (see tv() below)
     const flat = V.track || vk==="bottom";   // (looking out of your own goal, the goal in the foreground would hide the play)
     const cam = flat ? (SR.ortho ||= new THREE.OrthographicCamera(-150*MK, 150*MK, 90*MK, -90*MK, .1, 400)) : (SR.tv ||= new THREE.PerspectiveCamera(30, 300/180, .5, 400));
-    const W = base(stage, {cam, noLines:true}, G(150, 90, .11)), {scene} = W;
+    const W = base(stage, {cam, noLines:true, focus:G(150, 90), shadowSize:15}, G(150, 90, .11)), {scene} = W;
     if (V.track){ // side-on: the middle of the picture is the grass behind the line of play, and there's no goal in it
       O.copy(new THREE.Vector3(...V.o)).addScaledVector(ey, (90 - V.track)*MK/SE); scene.children.forEach(o=>{ if (o.isLineSegments || (o.isMesh && o.geometry && o.geometry.type==="CylinderGeometry")) o.visible = false; });
       const back = G(150, 124), bd = scene.children.find(o=>o.isMesh && o.material && o.material.map===boardTex), cr = scene.children.find(o=>o.isMesh && o.material && o.material.map===crowdTex);
       if (bd){ bd.position.set(back.x, .45, back.z); bd.scale.set(.6, 1, 1); }
       if (cr){ cr.position.set(back.x, 5.4, back.z - .05); cr.rotation.x = 0; cr.scale.set(.42, .45, 1); } }
+    // looking out of your own goal, the camera's high behind it: the stand there (and the pylons) would be in the way
+    if (vk==="bottom"){ if (W.crowd[0]) W.crowd[0].parent.visible = false; scene.children.forEach(o=>{ if (o.userData.pylon) o.visible = false; }); }
     // a 2D scene with no goal in it (the slalom's course): no goal, and the stand behind it pushed well back
     if (svg.dataset.nogoal){ scene.children.forEach(o=>{ if (o.isLineSegments || o.renderOrder===-1 || (o.isMesh && o.geometry && o.geometry.type==="CylinderGeometry")) o.visible = false; });
       if (W.crowd[0]) W.crowd[0].parent.position.z -= 60; }
