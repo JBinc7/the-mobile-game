@@ -727,7 +727,8 @@ function lv3dLooks(st, kit, v){
   return {v, crowd:kit.us,
     // you in goal (saves), and the striker who takes it
     gk:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:1, name:"You"}, gkMe, lvLight(gkMe) ? "#111827" : "#F4F4F5", {gk:true, gloves:"#C8F04A", num:1, shorts:"#111827", socks:gkMe}),
-    taker:{...them(9)},
+    taker:{...them(9)}, foe:them(4),
+    mates:[7, 9, 11].map(n=>({...them(n), c1:kit.us, c2:tr(kit.us), socks:kit.us, shorts:tr(kit.us)==="#FFFFFF" ? "#F4F4F5" : tr(kit.us)})),
     me:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:10, name:"You"}, kit.us, tr(kit.us), {shorts:tr(kit.us)==="#FFFFFF" ? "#F4F4F5" : tr(kit.us), socks:kit.us}),
     keeper:{...them(1), c1:gk, c2:lvLight(gk) ? "#111827" : "#F4F4F5", gk:true, gloves:"#C8F04A", shorts:"#111827", socks:gk},
     wall:them(4)};
@@ -835,11 +836,14 @@ function lvRing(st, o){
         <span class="lv-ring tgt" style="${lvPct(o.x, o.y)}"></span><span class="lv-ring mov" style="${lvPct(o.x, o.y)}"></span></div>
       <button type="button" class="btn primary big lv-act">${o.btn}</button>`);
     lvSkippable(res);
+    // in 3D (o.g3 builds the scene): the rings go where the ball's met in the picture, and the 3D ball follows the ring
+    const g3 = o.g3 ? o.g3(lv$(".lv-stage")) : null;
+    if (g3) lvEl.querySelectorAll(".lv-ring").forEach(el=>el.setAttribute("style", lvPct(...g3.at)));
     const ring = lv$(".lv-ring.mov"), t0 = performance.now() + 350; let s = 2.8, done = false;
-    const ballAt = k => { if (bid) lvBallAt(bid, from[0] + (bx-from[0])*k, from[1] + (by-from[1])*k, bs, Math.sin(Math.min(1, k)*Math.PI)*34*(1 - k*.4), k*500, true); };
+    const ballAt = k => { if (g3) g3.k(k); if (bid) lvBallAt(bid, from[0] + (bx-from[0])*k, from[1] + (by-from[1])*k, bs, Math.sin(Math.min(1, k)*Math.PI)*34*(1 - k*.4), k*500, true); };
     ballAt(0);
     lvLoop(now=>{ if (done) return false; const t = Math.max(0, now-t0)/per; s = 2.8 - 2.6*t; ring.style.transform = `translate(-50%,-50%) scale(${Math.max(.15, s).toFixed(3)})`; ballAt(clamp((2.8 - s)/1.8, 0, 1.12)); if (s<=.2){ end(); return false; } });
-    const end = ()=>{ if (done) return; done = true; cancelAnimationFrame(lvRaf); lv$(".lv-act").disabled = true; res({d:Math.abs(s-1), tol}); };
+    const end = ()=>{ if (done) return; done = true; cancelAnimationFrame(lvRaf); lv$(".lv-act").disabled = true; res({d:Math.abs(s-1), tol, g3}); };
     lvTap(lv$(".lv-act"), end); lvTap(lv$(".lv-stage"), end);
     lvKey = k=>{ if (k==="go") end(); };
   });
@@ -848,15 +852,17 @@ async function lvGameHeader(st, m){
   if (m.v==="def") return lvGameClear(st, m);
   const kit = lvKits(st), a = lvAttr(st), GK = lvKeeper(st, a.fin), kq = GK.q;
   const r = await lvRing(st, {head:lvHead(st, m.min), title:"Cross coming in", sub:"Tap Head it! when the closing ring meets the gold one.", btn:"Head it!",
-    attr:a.fin*.6 + a.def*.4, x:112, y:104, scene:lvGoalSvg(kit.them) + lvKeeperTag(GK), ball:["#lvBall", 112, 104, .85]});
+    attr:a.fin*.6 + a.def*.4, x:112, y:104, scene:lvGoalSvg(kit.them) + lvKeeperTag(GK), ball:["#lvBall", 112, 104, .85],
+    g3:typeof G3!=="undefined" ? stage => { const L = lv3dLooks(st, kit, "box"); return G3.header(stage, {...L, marker:L.foe, crosser:L.mates[0]}); } : null});
   if (r==="skip") return r;
   const perfect = r.d < r.tol*.45, on = r.d < r.tol;
   const save = perfect ? .1*kq/.5 : on ? clamp(.45*kq/.5, .2, .8) : 1;
   let goal = Math.random() > save; if (goal && Math.random()>m.q) goal = false;
   const col = pick(["l","r"]), tx = perfect ? LV_COLS[col] : on ? 150 + (Math.random()*60-30) : 150 + (Math.random()*160-80), ty = !on ? -10 : perfect ? 42 : 80;
   const [kx, ky, rot] = lvKeeperTo(tx, ty, goal ? "wrong" : on ? "save" : "wrong", goal ? (tx<150 ? "r" : "l") : "c");
-  await Promise.all([lvFly("#lvBall", [112, 104], [tx, ty], 380, {s0:.85, s1:.6, spin:1.4}), on ? lvTween(300, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (ky-84)*q, rot*q); }) : null]);
-  if (goal){ lvRipple(tx, ty); await lvWait(160); return {ok:true, big:"Goal!", small: perfect ? "A bullet header" : "Glanced in", g:1}; }
+  if (r.g3) await r.g3.finish({on, goal, tx, ty, kx, ky, rot});
+  else await Promise.all([lvFly("#lvBall", [112, 104], [tx, ty], 380, {s0:.85, s1:.6, spin:1.4}), on ? lvTween(300, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", 150 + (kx-150)*q, 84 + (ky-84)*q, rot*q); }) : null]);
+  if (goal){ if (!r.g3){ lvRipple(tx, ty); await lvWait(160); } return {ok:true, big:"Goal!", small: perfect ? "A bullet header" : "Glanced in", g:1}; }
   return {ok:false, big: on ? "Saved" : "Over the bar", small: on ? (perfect ? "Somehow he kept it out" : "Straight at the keeper") : r.d<r.tol*2 ? "Just mistimed it" : "Way off", bonus:-.08};
 }
 // a cross into your own box: meet it first and head it clear
@@ -1048,25 +1054,31 @@ function lvGameCross(st, m){
     lvSkippable(res);
     const t0 = performance.now() + 300, btns = lvEl.querySelectorAll(".lv-run-btn"); let t = 0, done = false;
     const pos = (r, k) => [r.from[0] + (r.to[0]-r.from[0])*k, r.from[1] + (r.to[1]-r.from[1])*k];
+    // in 3D: from behind you on the wing, the runners in the box; where each is on the stage, for the buttons and aiming
+    const g3 = typeof G3!=="undefined" ? (L => G3.cross(lv$(".lv-stage"), {...L, me:L.me, mates:[L.mates[1], L.mates[2]], marker:L.foe, crosser:[X(272), 34], ball:[X(262), 36], spots:R.map(r=>[...r.spot, rr])}))(lv3dLooks(st, kit, "box")) : null;
+    const scr = [[0, 0], [0, 0]];
     lvLoop(now=>{
       if (done) return false;
       t = Math.max(0, now-t0)/per;
-      R.forEach((r,i)=>{ const [x,y] = pos(r, Math.min(t, 1.1)); lvMove(`#lvR${i}`, x, y); btns[i].setAttribute("style", lvPct(x, y-14)); if (i===marked) lvMove("#lvRd", x + (left ? -11 : 11), y + 5); });
+      R.forEach((r,i)=>{ const [x,y] = pos(r, Math.min(t, 1.1)); lvMove(`#lvR${i}`, x, y); scr[i] = g3 ? g3.run(i, x, y) : [x, y - 14]; btns[i].setAttribute("style", lvPct(...scr[i]));
+        if (i===marked){ lvMove("#lvRd", x + (left ? -11 : 11), y + 5); if (g3) g3.run(-1, x + (left ? -11 : 11)*.6, y + 4); } });
       if (t>1.25){ end(-1); return false; }
     });
     const end = async i=>{
       if (done) return; done = true; cancelAnimationFrame(lvRaf);
       if (i<0) return res({ok:false, big:"Too late", small:"The chance has gone", bonus:-.08});
       const r = R[i], [x,y] = pos(r, Math.min(t, 1.1)), d = Math.hypot(x - r.spot[0], y - r.spot[1]);
+      // decide what came of it, then show it
+      const R2 = i===marked ? {ok:false, big:"Cleared", small:"He was marked", bonus:-.08, k:"cleared"}
+        : d>rr ? {ok:false, big:"Wasted", small: t<1 && Math.hypot(x-r.from[0], y-r.from[1]) < Math.hypot(r.spot[0]-r.from[0], r.spot[1]-r.from[1]) ? "Crossed too early" : "Crossed too late", bonus:-.08, k:"wasted"}
+        : Math.random() < lvConv(st, m, .42) ? {ok:true, big:"Assist!", small:"A perfect cross, buried with a header", a:1, k:"assist"} : {ok:true, big:"Great cross", small:"His header was saved", bonus:.12, k:"saved"};
       lvEl.querySelectorAll(".lv-legs.run").forEach(l=>l.classList.remove("run"));
-      lvKick(); await lvFly("#lvCb", [X(262), 36], r.spot, 420, {h:30, spin:1.4});
-      if (i===marked) return res({ok:false, big:"Cleared", small:"He was marked", bonus:-.08});
-      if (d>rr) return res({ok:false, big:"Wasted", small: t<1 && Math.hypot(x-r.from[0], y-r.from[1]) < Math.hypot(r.spot[0]-r.from[0], r.spot[1]-r.from[1]) ? "Crossed too early" : "Crossed too late", bonus:-.08});
-      res(Math.random() < lvConv(st, m, .42) ? {ok:true, big:"Assist!", small:"A perfect cross, buried with a header", a:1} : {ok:true, big:"Great cross", small:"His header was saved", bonus:.12});
+      if (g3) await g3.go(i, r.spot, {res:R2.k}); else { lvKick(); await lvFly("#lvCb", [X(262), 36], r.spot, 420, {h:30, spin:1.4}); }
+      delete R2.k; res(R2);
     };
     btns.forEach(b=>lvTap(b, ()=>end(+b.dataset.i)));
-    const from = [X(262), 36], aimAt = q => { if (Math.hypot(q[0] - from[0], q[1] - from[1]) < 16) return -1;
-      let best = -1, bd = 46; R.forEach((r, i)=>{ const [x, y] = pos(r, Math.min(t, 1.1)), d = Math.hypot(q[0] - x, q[1] - (y - 10)); if (d<bd){ bd = d; best = i; } }); return best; };
+    const from = g3 ? g3.ballStage() : [X(262), 36], aimAt = q => { if (Math.hypot(q[0] - from[0], q[1] - from[1]) < 16) return -1;
+      let best = -1, bd = 46; R.forEach((r, i)=>{ const [x, y] = scr[i], d = Math.hypot(q[0] - x, q[1] - (y + 4)); if (d<bd){ bd = d; best = i; } }); return best; };
     lvDrag(lv$(".lv-stage"), {from, ok:()=>!done, move:q=>{ const i = aimAt(q); btns.forEach((b, j)=>b.classList.toggle("aim", j===i)); },
       end:q=>{ const i = aimAt(q); btns.forEach(b=>b.classList.remove("aim")); if (i>=0) end(i); }});
     lvKey = k=>{ const i = {l:left?0:1, r:left?1:0}[k]; if (i!=null) end(i); };
@@ -1089,24 +1101,31 @@ function lvGameTiming(st, m){
       <button type="button" class="btn primary big lv-act">${T.b}</button>`);
     lvSkippable(res);
     let p = -.1, done = false; const t0 = performance.now() + 450, mx = 10 + 280*mid;
+    // in 3D: from behind you, him running at you (or the shot coming at you), the green a band across his path
+    const g3 = typeof G3!=="undefined" ? (L => G3.tackle(lv$(".lv-stage"), {...L, me:L.me, them:block ? L.taker : L.foe, block, mid, zone:[mid - zone/2, mid + zone/2]}))(lv3dLooks(st, kit, "box")) : null;
     lvMove("#lvMe", mx, 140);
-    const place = () => { const x = 10 + clamp(p, -.1, 1)*280; if (block) lvBallAt("#lvRun", x, 92, 1, 0, x*4); else { lvMove("#lvRun", x, 92); lvBallAt("#lvRunB", 9, 6, 1, 0, x*5); } };
+    const place = () => { const x = 10 + clamp(p, -.1, 1)*280; if (g3) g3.p(clamp(p, -.1, 1)); if (block) lvBallAt("#lvRun", x, 92, 1, 0, x*4); else { lvMove("#lvRun", x, 92); lvBallAt("#lvRunB", 9, 6, 1, 0, x*5); } };
     lvLoop(now=>{ if (done) return false; p = (now-t0)/per; place(); if (p>=1){ go(true); return false; } });
     const go = async (late)=>{
       if (done || (p<0 && !late)) return;   // he isn't on the pitch yet: a tap now doesn't count
       done = true; cancelAnimationFrame(lvRaf); lv$(".lv-act").disabled = true;
       const ok = Math.abs(p-mid)<=zone/2, early = p<mid-zone/2, x = 10 + clamp(p, -.1, 1)*280;
-      // you go to ground: a slide towards where he is (and the ball flying off if you got it)
-      lvTween(260, k=>{ const q = lvEaseOut(k); lvMove("#lvMe", mx + (x - mx)*q*.8, 140 - 34*q, (x<mx ? -1 : 1)*70*q); });
-      if (ok){ await lvWait(120); if (block) await lvFly("#lvRun", [x, 92], [x - 40, 30], 380, {h:24, spin:2}); else await lvFly("#lvRunB", [9, 6], [9, -50], 380, {h:20, spin:2});
-        return res({ok:true, big: block ? "Blocked!" : "Tackle won!", small: block ? "Off your shin and away" : "Clean as a whistle", bonus:.3}); }
-      await lvWait(260);
       // a tackle you mistime catches the man, not the ball: the later (or the more reckless the dive), the worse it is
-      if (!block && !late){
+      let foulR = null;
+      if (!ok && !block && !late){
         const off = early ? (mid - zone/2) - p : p - (mid + zone/2);
         const foul = early ? off < .1 && Math.random() < .6 : off < .34;
-        if (foul) return res(lvFoul(st, m, early ? .3*(1 - off/.1) : off/.34, early));
+        if (foul) foulR = lvFoul(st, m, early ? .3*(1 - off/.1) : off/.34, early);
       }
+      // you go to ground: a slide towards where he is (and the ball flying off if you got it, or him going down)
+      if (g3) await g3.go({ok, foul:!!foulR});
+      else {
+        lvTween(260, k=>{ const q = lvEaseOut(k); lvMove("#lvMe", mx + (x - mx)*q*.8, 140 - 34*q, (x<mx ? -1 : 1)*70*q); });
+        if (ok){ await lvWait(120); if (block) await lvFly("#lvRun", [x, 92], [x - 40, 30], 380, {h:24, spin:2}); else await lvFly("#lvRunB", [9, 6], [9, -50], 380, {h:20, spin:2}); }
+        else await lvWait(260);
+      }
+      if (ok) return res({ok:true, big: block ? "Blocked!" : "Tackle won!", small: block ? "Off your shin and away" : "Clean as a whistle", bonus:.3});
+      if (foulR) return res(foulR);
       const why = early ? (block ? "You went down too soon" : "You dived in") : (block ? "Too late" : "He skipped past you");
       if (Math.random() >= (block ? .72 : .52)*m.q) return res({ok:false, big:"Got away with it", small:`${why}, but the shot went wide`, bonus:-.1});
       const og = block && Math.random()<.3;   // a block that goes wrong can deflect in off you
