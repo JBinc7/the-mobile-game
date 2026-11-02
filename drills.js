@@ -18,7 +18,7 @@ const DR = {
 const DR_BEEP_MAX = 16;   // shuttles in a perfect beep test
 
 Object.assign(LV_HELP, {
-  flick:LV_HELP.shot, flick2:LV_HELP.shot,
+  flick:LV_HELP.shot, flick2:LV_HELP.shot, flick3:LV_HELP.shot, save2:LV_HELP.save,
   drills:{t:"Training drills", steps:["Once a week you can do a <b>drill</b> for your training focus: a quicker, easier version of a match mini-game.",
     "The better the session, the more that attribute grows on top of the week's training. A perfect score adds about the same again.",
     "Drills are optional. Rest weeks have none, and you can't do one while you're injured."]},

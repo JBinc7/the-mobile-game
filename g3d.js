@@ -316,7 +316,7 @@ const G3 = (() => {
     const shade = new THREE.Mesh(new THREE.PlaneGeometry(2*X + 1, Hb + .6), new THREE.MeshBasicMaterial({color:0x04100A, transparent:true, opacity:.4, depthWrite:false}));
     shade.position.set(0, Hb/2, -D - 1.4); shade.renderOrder = -1; scene.add(shade);
     let ball = null, live = 0, last = 0;
-    const C2 = 22/(n*n), K = 10, DAMP = 1.7;   // wave speed squared over the knot spacing, a little spring back, and damping
+    const C2 = 15/(n*n), K = 12, DAMP = 2.3;   // wave speed squared over the knot spacing, a little spring back, and damping
     const step = dt => {
       for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const k = at(i, j);
         // the top row is tied to the roof, which gives a little: it mirrors the row below
@@ -324,23 +324,26 @@ const G3 = (() => {
         v[k] += (C2*(h[k - 1] + h[k + 1] + h[k - NX] + up - 4*h[k]) - K*h[k] - DAMP*v[k])*dt; }
       for (let k = 0; k < h.length; k++) h[k] += v[k]*dt;
       // where the ball is in the net, the net is where the ball is: pushed back around it
-      if (ball){ const pen = -D - (ball.z - .11); if (pen > 0){ const R = .55;
+      if (ball){ const pen = -D - (ball.z - .11); if (pen > 0){ const R = .8;
         for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const x = -X + i*dx, y = j*dy, d2 = ((x - ball.x)**2 + (y - ball.y)**2)/(R*R); if (d2 >= 1) continue;
-          const want = pen*(1 - d2)*(1 - d2); const k = at(i, j); if (h[k] < want){ v[k] = (want - h[k])/dt*.5; h[k] = want; } } } }
+          const want = pen*(1 - d2)*(1 - d2)*(1 - d2*.3); const k = at(i, j); if (h[k] < want){ v[k] = Math.min(v[k] + (want - h[k])/dt*.35, 6); h[k] += (want - h[k])*.6; } } } }
     };
+    // a light smoothing pass, so the cloth never looks knotted
+    const smooth = () => { for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const k = at(i, j); h[k] += .12*((h[k - 1] + h[k + 1] + h[k - NX] + h[k + NX])/4 - h[k]); } };
     return {D,
       // the ball, while it's in the goal (null once it's done)
       touch(b){ ball = b; live = performance.now(); },
       update(now){
         const dt = Math.min(.033, last ? (now - last)/1000 : .016); last = now;
         if (!ball && now - live > 4500) return;   // settled: nothing to do
-        for (let s = 0; s < 3; s++) step(dt/3);
+        for (let s = 0; s < 6; s++) step(dt/6);
+        smooth();
         // the slope of the sheet at each knot: the cords sway across with it (that's what you see of a ripple from the
         // front), it draws the mesh in round the bulge, and it lights the knot
         for (let j = 1; j < NY - 1; j++) for (let i = 1; i < NX - 1; i++){ const k = at(i, j);
           const gx = gxA[k] = (h[k + 1] - h[k - 1])/(2*dx), gy = gyA[k] = (h[k + NX] - h[k - NX])/(2*dy);
-          const b = (.6*gy + .8)/Math.sqrt(1 + gx*gx + gy*gy)/.8; lit[k] = Math.max(.3, Math.min(1.9, 1 + 3*(b - 1))); }
-        const p = g.attributes.position.array, c = g.attributes.color.array, SW = .28;
+          const b = (.6*gy + .8)/Math.sqrt(1 + gx*gx + gy*gy)/.8; lit[k] = Math.max(.4, Math.min(1.7, 1 + 2.4*(b - 1))); }
+        const p = g.attributes.position.array, c = g.attributes.color.array, SW = .17;
         for (let q = 0; q < link.length; q++){ const L = link[q], o = q*3, k = L[1]; let d = 0, l = 1;
           if (L[0]===1){ d = h[k]; const sx = -gxA[k]*(SW + h[k]*.3), sy = -gyA[k]*(SW + h[k]*.3);
             p[o] = base[o] + Math.max(-.16, Math.min(.16, sx)); p[o + 1] = base[o + 1] + Math.max(-.16, Math.min(.16, sy)) - d*.1; p[o + 2] = base[o + 2] - d; l = lit[k]; }
@@ -443,10 +446,10 @@ const G3 = (() => {
       W.tween(300, k=>{ trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; });
       // the net stretches round it and stops it…
       const p1 = B.position.clone();
-      await W.tween(170, k=>{ const e = Math.sin(k*Math.PI/2); B.position.set(p1.x, p1.y - .05*k, back - .42*e); B.rotateOnAxis(spinAxis, -.12*(1 - k)); });
+      await W.tween(230, k=>{ const e = 1 - Math.pow(1 - k, 3); B.position.set(p1.x, p1.y - .06*k, back - .45*e); B.rotateOnAxis(spinAxis, -.1*(1 - k)); });
       // …then throws it back out, and it drops into the goal
       const p2 = B.position.clone();
-      await W.tween(520, k=>{ const e = ease(k); B.position.set(p2.x, Math.max(.11, p2.y + .1*k - (p2.y + .1)*k*k), p2.z + .75*e); });
+      await W.tween(620, k=>{ const e = k*k*(3 - 2*k); B.position.set(p2.x, Math.max(.11, p2.y + .08*Math.sin(k*Math.PI) - (p2.y - .11)*k*k), p2.z + .7*e); });
       net.touch(null);
     };
     return W;
@@ -460,16 +463,24 @@ const G3 = (() => {
   function shot(stage, o){
     if (!stage || !fast()) return null;
     const W = world(stage, o, "shot"), {B, bs, taker, K, kp, ks, kz, D, cam} = W;
+    const aimG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, .02, D), new THREE.Vector3(0, .02, 0)]);
+    const aimL = new THREE.Line(aimG, new THREE.LineDashedMaterial({color:0xF5C542, dashSize:.5, gapSize:.35, transparent:true, opacity:.85, depthTest:false}));
+    aimL.visible = false; aimL.renderOrder = 5; W.scene.add(aimL);
+    const aimM = new THREE.Mesh(new THREE.RingGeometry(.16, .26, 3), new THREE.MeshBasicMaterial({color:0xF5C542, transparent:true, opacity:.9, depthTest:false}));
+    aimM.rotation.x = -Math.PI/2; aimM.visible = false; aimM.renderOrder = 5; W.scene.add(aimM);
+    function aim(x){ const ax = gx(x), P = aimG.attributes.position; P.setXYZ(1, ax, .02, 0); P.needsUpdate = true; aimL.computeLineDistances(); aimL.visible = true; aimM.position.set(ax, .03, .3); aimM.visible = true; }
     async function play(q){
-      W.mode = "shoot";
-      await W.tween(240, k=>{ POSE.kick(taker.rig, k*.55); POSE.ready(K.rig, (performance.now() - W.t0)/1000); });
+      W.mode = "shoot"; W.tween(250, k=>{ aimL.material.opacity = .85*(1 - k); aimM.material.opacity = .9*(1 - k); }).then(()=>{ aimL.visible = aimM.visible = false; });
+      // the harder the strike, the quicker the leg comes through
+      const sw = clamp(300 - (q.power ?? .7)*120, 170, 300);
+      await W.tween(sw, k=>{ POSE.kick(taker.rig, k*.55); POSE.ready(K.rig, (performance.now() - W.t0)/1000); });
       const tgt = new THREE.Vector3(gx(q.wx), Math.max(.11, gy(q.ty)), 0);
       if (q.wall) tgt.set(gx(q.wx), 1.2, D - 9.15 + .35);
       const from = B.position.clone(), arcH = (q.h || 0)/104*2.44, cv = (q.curve || 0)/120*3.66;
       const kTo = kTarget(q.kx, q.ky).setZ(kz), kFrom = kp.position.clone(), roll = -(q.rot || 0)*Math.PI/180, fov0 = cam.fov;
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
       await Promise.all([
-        W.tween(260, k=>POSE.kick(taker.rig, .55 + .45*k)),
+        W.tween(sw*1.05, k=>POSE.kick(taker.rig, .55 + .45*k)),
         W.tween(q.ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
           cam.fov = fov0 - 3*e; cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
@@ -490,7 +501,7 @@ const G3 = (() => {
         await W.tween(460, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.6*ease(k), Math.max(.11, p0.y + .25*k - 1.1*k*k), p0.z + 1.2*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
       }
     }
-    return {play, stop:W.stop};
+    return {play, aim, stop:W.stop};
   }
 
   /* you in goal: their striker runs up and shoots; you dive.
@@ -502,8 +513,12 @@ const G3 = (() => {
     // he starts further back for his run-up
     const start = new THREE.Vector3(-1.5, 0, D + 2.6), plant = taker.root.position.clone(); taker.root.position.copy(start);
     let flying = null, spinAxis = new THREE.Vector3(1, 0, 0), released = false;
+    const rc = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -kz), hitP = new THREE.Vector3();
     return {
       stop:W.stop,
+      // a tap on the picture, as a point of the 2D goal (x 30-270 post to post, y 20 bar to 124 line)
+      toGoal(cx, cy){ const r = W.r.domElement.getBoundingClientRect(); rc.setFromCamera(new THREE.Vector2((cx - r.left)/r.width*2 - 1, -(cy - r.top)/r.height*2 + 1), W.cam);
+        return rc.ray.intersectPlane(plane, hitP) ? [150 + hitP.x/3.66*120, 124 - hitP.y/2.44*104] : null; },
       runup(ms){ W.mode = "run"; const t1 = performance.now();
         W.tween(Math.max(300, ms - 200), k=>{ const e = k*k*(3 - 2*k); taker.root.position.lerpVectors(start, plant, e); POSE.run(taker.rig, (performance.now() - t1)/1000, 1 - k*.6); POSE.ready(K.rig, (performance.now() - W.t0)/1000); }); },
       release(x, y, curl, ms){
