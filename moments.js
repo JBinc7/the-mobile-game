@@ -106,7 +106,13 @@ const lvUs = st => st.us || S.mc.club;
 const lvCols = st => { if (st.lab) return st.lab.cols; const k = meta(lvUs(st)); return [k.c1, k.c2 || "#FFFFFF", "#F5C542", "#FFFFFF"]; };
 
 /* ---------- drawing ---------- */
-const lvPct = (x, y) => `left:${(x/3).toFixed(2)}%;top:${(y/1.8).toFixed(2)}%`;
+/* in 3D the from-above games are filmed by a TV camera (a tilted, perspective view), and LV_MAP (set by the 3D
+   mirror while one's on) maps the 2D scene's points to where they are in the picture (fwd) and back (inv).
+   Things laid over the picture remember their 2D point (--lx, --ly), so they can be put back when it changes */
+let LV_MAP = null;
+const lvPct = (x, y) => { const [X, Y] = LV_MAP ? LV_MAP.fwd(x, y) : [x, y]; return `left:${(X/3).toFixed(2)}%;top:${(Y/1.8).toFixed(2)}%;--lx:${(+x).toFixed(1)};--ly:${(+y).toFixed(1)}`; };
+// a finger on the stage, as a point of the 2D scene (300 by 180)
+function lvAt(ev, stage){ const r = stage.getBoundingClientRect(), x = (ev.clientX - r.left)/r.width*300, y = (ev.clientY - r.top)/r.height*180; return LV_MAP ? LV_MAP.inv(x, y) : [x, y]; }
 // how much easier your attribute makes a moment against this opponent, with sharpness and form: about −0.35 to +0.35
 // (in the lab, the difficulty you picked)
 // mostly your own attribute (so a better finisher always gets a bigger green), a little the opponent, sharpness and form
@@ -251,7 +257,7 @@ function lvStrike(st){
    place), drag, and let go. Positions come in the scene's coordinates (300 by 180), and a gold line runs from the ball
    to your finger. A tap (a short press that hardly moves) is reported as one, so tapping still works where it did. */
 function lvDrag(stage, o){
-  const at = ev => { const r = stage.getBoundingClientRect(); return [(ev.clientX - r.left)/r.width*300, (ev.clientY - r.top)/r.height*180]; };
+  const at = ev => lvAt(ev, stage);
   const svg = stage.querySelector("svg"); let d = null, line = null;
   const draw = p => { if (!o.from || !svg) return; if (!line){ svg.insertAdjacentHTML("beforeend", `<path class="lv-dragline" fill="none" stroke="#F5C542" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="6 5" opacity=".9"/>`); line = svg.lastElementChild; }
     line.setAttribute("d", p ? `M${o.from[0].toFixed(1)} ${o.from[1].toFixed(1)}L${p[0].toFixed(1)} ${p[1].toFixed(1)}` : ""); };

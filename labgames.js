@@ -71,7 +71,7 @@ function lgImpact(x, y, col = "#FFFFFF", r = 9){
   const c = svg.lastElementChild; setTimeout(()=>c.remove(), 600);
 }
 // where a tap landed on the stage, in the scene's coordinates
-const lgAt = (ev, stage = lv$(".lv-stage")) => { const r = stage.getBoundingClientRect(); return [(ev.clientX - r.left)/r.width*300, (ev.clientY - r.top)/r.height*180]; };
+const lgAt = (ev, stage = lv$(".lv-stage")) => lvAt(ev, stage);
 // the figures in a scene drawn back to front, so whoever's nearer the bottom is in front (ids, in any order)
 function lgDepth(ids, ys){
   const order = ids.map((id, i)=>[id, ys[i]]).sort((a, b)=>a[1] - b[1]).map(x=>x[0]);
@@ -217,7 +217,7 @@ function lgTargets(st){
       lgSetTimer(1 - (now-t0)/dur);
       if (now - t0 >= dur){ end(); return false; }
     });
-    lv$(".lg-aimpad").addEventListener("pointerdown", ev=>{ const r = stage.getBoundingClientRect(); anchor = [clamp((ev.clientX - r.left)/r.width*300, 40, 260), clamp((ev.clientY - r.top)/r.height*180, 30, 114)]; });
+    lv$(".lg-aimpad").addEventListener("pointerdown", ev=>{ const q = lvAt(ev, stage); anchor = [clamp(q[0], 40, 260), clamp(q[1], 30, 114)]; });
     const shoot = async () => {
       if (busy || done) return; busy = true; shots++;
       const at = aim.slice(), was = tgt && tgt.slice();
@@ -362,7 +362,7 @@ function lgThrough(st){
       await lvFly("#lgB", T, [140 + Math.random()*20, 2], 300, {spin:2, s1:.8}); lvRipple?.(150, 2);
       fin({ok:true, big:"Assist!", small:dR < slack*.5 ? "Perfectly weighted" : "Into his stride and finished"});
     };
-    lv$(".lg-aimpad").addEventListener("pointerdown", ev=>{ const r = stage.getBoundingClientRect(); pass([clamp((ev.clientX - r.left)/r.width*300, 20, 280), clamp((ev.clientY - r.top)/r.height*180, 10, 150)]); });
+    lv$(".lg-aimpad").addEventListener("pointerdown", ev=>{ const q = lvAt(ev, stage); pass([clamp(q[0], 20, 280), clamp(q[1], 10, 150)]); });
   });
   return (async ()=>{
     if (st.lab.once) return one(0);

@@ -431,7 +431,7 @@ const G3 = (() => {
   function pitch(scene, lines = true){
     // mown stripes across the pitch, then the lines as thin strips
     const g1 = mat("#1D6B3A", .95), g2 = mat("#22793F", .95), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
-    for (let i = -2; i < 14; i++){ const s = new THREE.Mesh(new THREE.PlaneGeometry(90, 4), i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); scene.add(s); }
+    for (let i = -2; i < 20; i++){ const s = new THREE.Mesh(new THREE.PlaneGeometry(120, 4), i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); scene.add(s); }
     if (!lines) return;
     const strip = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), line); m.rotation.x = -Math.PI/2; m.position.set(x, .01, z); scene.add(m); };
     const W = .12;
@@ -587,7 +587,7 @@ const G3 = (() => {
       last = now; };
     const frame = now => {
       raf = 0; if (stopped) return; if (!r.domElement.isConnected){ W.stop(); return; }
-      watch(now); fit(r, cam, host);
+      watch(now); if (fit(r, cam, host) && W.onFit) W.onFit();
       if (W.rec) poseLog = [];
       if (W.mode==="idle" && W.idle) W.idle((now - t0)/1000);
       anims.forEach(f=>f(now)); net.update(now);
@@ -952,6 +952,43 @@ const G3 = (() => {
     W.start(); return W;
   }
 
+  /* the TV camera for a from-above game: lower and in perspective, like the main camera at a match, from behind the
+     2D picture's near (bottom) edge. The 2D scene still runs the game, so its flat picture is mapped onto the
+     camera's (a homography: the ground's a plane): the 2D layer (the drag line) is drawn in perspective with a CSS
+     matrix3d, and LV_MAP takes points between the two for the taps and the things laid over the picture */
+  const TV_EL = 26*Math.PI/180;
+  function homog(s, d){   // the 3x3 projective map taking the four points s to the four points d
+    const A = [], b = [];
+    for (let i = 0; i < 4; i++){ const [x, y] = s[i], [X, Y] = d[i];
+      A.push([x, y, 1, 0, 0, 0, -X*x, -X*y]); b.push(X); A.push([0, 0, 0, x, y, 1, -Y*x, -Y*y]); b.push(Y); }
+    for (let c = 0; c < 8; c++){ let m = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[m][c])) m = r;
+      [A[c], A[m]] = [A[m], A[c]]; [b[c], b[m]] = [b[m], b[c]];
+      for (let r = 0; r < 8; r++) if (r!==c){ const k = A[r][c]/A[c][c]; for (let j = c; j < 8; j++) A[r][j] -= k*A[c][j]; b[r] -= k*b[c]; } }
+    return [...b.map((v, i)=>v/A[i][i]), 1];
+  }
+  const happly = (h, x, y) => { const w = h[6]*x + h[7]*y + h[8]; return [(h[0]*x + h[1]*y + h[2])/w, (h[3]*x + h[4]*y + h[5])/w, w]; };
+  function tv(W, stage, svg, cam, G, ey){
+    const C = [[0, 0], [300, 0], [300, 180], [0, 180]], P = C.map(([x, y])=>G(x, y)), v = new THREE.Vector3();
+    const look = new THREE.Vector3(), f = ey.clone().multiplyScalar(-Math.cos(TV_EL)).add(new THREE.Vector3(0, -Math.sin(TV_EL), 0)).normalize();
+    const mid = G(150, 90); let s = 0, d = 60;
+    const place = () => { look.copy(mid).addScaledVector(ey, s); cam.position.copy(look).addScaledVector(f, -d); cam.up.set(0, 1, 0); cam.lookAt(look); cam.updateMatrixWorld(); cam.updateProjectionMatrix(); };
+    const ndc = () => P.map(p=>{ v.copy(p).project(cam); return [v.x, v.y]; });
+    // fit: the near edge across the bottom of the picture, the whole of the 2D scene in it, the stands over the far edge
+    const fitCam = () => {
+      for (let i = 0; i < 80; i++){ place(); const q = ndc(), yf = Math.max(q[0][1], q[1][1]), yn = Math.min(q[2][1], q[3][1]), xm = Math.max(...q.map(p=>Math.abs(p[0])));
+        const k = Math.max(xm/.99, (yf - yn)/1.84); d *= Math.pow(k, .6); s -= (yn + .97)*d*.12; }
+      place();
+      // the map, in the 2D scene's units both ways (and the layer's CSS pixels for the matrix)
+      const q = ndc().map(([x, y])=>[(x + 1)/2*300, (1 - y)/2*180]), h = homog(C, q), hi = homog(q, C), w = stage.clientWidth || 300, ht = stage.clientHeight || 180;
+      LV_MAP = {fwd:(x, y)=>happly(h, x, y).slice(0, 2), inv:(x, y)=>{ const r = happly(hi, x, y); return r[2] > 0 ? [r[0], Math.max(-90, Math.min(270, r[1]))] : [r[0], -90]; }};
+      const hp = homog(C.map(([x, y])=>[x*w/300, y*ht/180]), q.map(([x, y])=>[x*w/300, y*ht/180]));
+      svg.style.transformOrigin = "0 0"; svg.style.transform = `matrix3d(${[hp[0], hp[3], 0, hp[6], hp[1], hp[4], 0, hp[7], 0, 0, 1, 0, hp[2], hp[5], 0, hp[8]].map(n=>+n.toFixed(9)).join(",")})`;
+      stage.querySelectorAll('[style*="--lx"]').forEach(el=>{ const [X, Y] = LV_MAP.fwd(+el.style.getPropertyValue("--lx"), +el.style.getPropertyValue("--ly")); el.style.left = (X/3).toFixed(2) + "%"; el.style.top = (Y/1.8).toFixed(2) + "%"; });
+    };
+    W.onFit = fitCam;
+    const stop0 = W.stop; W.stop = () => { stop0(); LV_MAP = null; svg.style.transform = svg.style.transformOrigin = "";
+      stage.querySelectorAll('[style*="--lx"]').forEach(el=>{ el.style.left = (+el.style.getPropertyValue("--lx")/3).toFixed(2) + "%"; el.style.top = (+el.style.getPropertyValue("--ly")/1.8).toFixed(2) + "%"; }); };
+  }
   function mirror(stage){
     if (!stage || !fast() || stage.classList.contains("g3")) return null;
     const svg = stage.querySelector(":scope > svg[data-view]"); if (!svg) return null;
@@ -962,7 +999,9 @@ const G3 = (() => {
     const ex = new THREE.Vector3(...V.ex), ey = new THREE.Vector3(...V.ey), O = new THREE.Vector3(...V.o);
     const G = (x, y, h = 0, out = new THREE.Vector3()) => out.copy(O).addScaledVector(ex, (x - 150)*MK).addScaledVector(ey, (y - 90)*MK/SE).setY(h);
     SR ||= {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)};
-    const cam = SR.ortho ||= new THREE.OrthographicCamera(-150*MK, 150*MK, 90*MK, -90*MK, .1, 400);
+    // side-on games keep the flat (orthographic) view; the rest are filmed by a TV camera (see tv() below)
+    const flat = V.track || vk==="bottom";   // (looking out of your own goal, the goal in the foreground would hide the play)
+    const cam = flat ? (SR.ortho ||= new THREE.OrthographicCamera(-150*MK, 150*MK, 90*MK, -90*MK, .1, 400)) : (SR.tv ||= new THREE.PerspectiveCamera(30, 300/180, .5, 400));
     const W = base(stage, {cam, noLines:true}, G(150, 90, .11)), {scene} = W;
     if (V.track){ // side-on: the middle of the picture is the grass behind the line of play, and there's no goal in it
       O.copy(new THREE.Vector3(...V.o)).addScaledVector(ey, (90 - V.track)*MK/SE); scene.children.forEach(o=>{ if (o.isLineSegments || (o.isMesh && o.geometry && o.geometry.type==="CylinderGeometry")) o.visible = false; });
@@ -980,6 +1019,7 @@ const G3 = (() => {
     // the camera: up and back on the near side (2D's bottom edge), looking at the middle of the picture
     const f = ey.clone().multiplyScalar(-CE).add(new THREE.Vector3(0, -SE, 0));
     cam.position.copy(O).addScaledVector(f, -80); cam.up.set(0, 1, 0); cam.lookAt(O); cam.updateProjectionMatrix();
+    if (!flat) tv(W, stage, svg, cam, G, ey);
     // the players: one 3D footballer for each 2D one, matched on the element
     const men = new Map(), balls = new Map(), seen = new Set(), sm = new DOMMatrix();
     const T = () => performance.now()/1000;
