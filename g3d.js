@@ -650,6 +650,7 @@ const G3 = (() => {
       await W.tween(sw, k=>{ pose(taker, "kick", k*.55); pose(K, "ready", (performance.now() - W.t0)/1000); });
       const tgt = new THREE.Vector3(gx(q.wx), Math.max(.11, gy(q.ty)), 0);
       if (q.wall) tgt.set(gx(q.wx), 1.2, D - 9.15 + .35);
+      if (q.saved) tgt.z = kz + .3;   // saved: it meets his hands in front of the line, not the goal behind him
       const from = B.position.clone(), arcH = (q.h || 0)/104*2.44, cv = (q.curve || 0)/120*3.66;
       const kTo = kTarget(q.kx, q.ky).setZ(kz), kFrom = kp.position.clone(), roll = -(q.rot || 0)*Math.PI/180, fov0 = cam.fov;
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
@@ -671,8 +672,10 @@ const G3 = (() => {
         await W.tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
       } else if (q.wall){ fade();
         await W.tween(420, k=>{ B.position.set(p0.x + .6*k, Math.max(.11, p0.y + .3*k - 1.2*k*k), p0.z + 3.5*ease(k)); });
-      } else { fade();   // saved: pushed away
-        await W.tween(460, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.6*ease(k), Math.max(.11, p0.y + .25*k - 1.1*k*k), p0.z + 1.2*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
+      } else if (q.held){ fade();   // held: into his chest, and he keeps it
+        await W.tween(240, k=>{ const e = ease(k); B.position.set(p0.x + (kp.position.x - p0.x)*e*.85, p0.y + (kp.position.y + .15 - p0.y)*e*.85, p0.z + .1*e); bs.position.set(B.position.x, .006, B.position.z); });
+      } else { fade();   // parried: pushed away, out and wide
+        await W.tween(480, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.8*ease(k), Math.max(.11, p0.y + .3*k - 1.3*k*k), p0.z + 2.6*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
       }
     }
     return {play, aim, stop:W.stop};

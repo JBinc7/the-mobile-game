@@ -792,7 +792,10 @@ function lvShotCore(st, m, v, head, title, o = {}){
       let d = Math.hypot((x - 150)/rx, (y - 80)/ry), guess = 0;
       if (v==="pen"){ guess = Math.random() < .16 ? 0 : Math.random() < .5 ? -1 : 1;
         if (guess && guess!==side && Math.abs(x - 150)>22) d = 9; else if (!guess) d = Math.abs(x - 150)<30 && y>50 ? .3 : d*1.7; }
-      const pSave = clamp(1.32 - d, 0, .95);
+      // a shot at him (near the middle of the goal) he saves most of the time, however well it's struck; unless he's
+      // already gone the wrong way for a penalty
+      const sentWrong = v==="pen" && guess && guess!==side && Math.abs(x - 150)>22, atHim = Math.abs(x - 150)<42 && y>40 && !sentWrong;
+      const pSave = atHim ? Math.max(clamp(1.32 - d, 0, .95), green ? .7 : .85) : clamp(1.32 - d, 0, .95);
       let goal = !wide && !wood && !over && !wall && Math.random()>=pSave, tip = false;
       if (goal && !green && pSave>0 && Math.random()>m.q){ goal = false; tip = true; }   // in a match that's going against you, chances are harder
       const corner = Math.abs(x - 150)>78 && (y<52 || y>96);
@@ -800,8 +803,11 @@ function lvShotCore(st, m, v, head, title, o = {}){
       const kcol = guess ? (guess<0 ? "l" : "r") : green ? (col==="l" ? "r" : col==="r" ? "l" : pick(["l","r"])) : col;
       const [kx, ky, rot] = lvKeeperTo(clamp(wx, 36, 264), clamp(ty, 30, 116), !goal && !over && !wide && !wood && !wall ? "save" : guess && guess!==side ? "wrong" : d>1.6 ? "wrong" : "near", kcol);
       // pace follows the power: the harder you hit it, the quicker it's there
-      const ms = clamp(760 - Math.min(p, 1.05)*520, 290, 760)*(green ? .92 : 1), h = over ? 26 : y<72 ? 14 : 4, curve = (col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6), kms = 330 + (1 - kq)*110;
-      if (g3) await g3.play({wx:clamp(wx, -10, 310), ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall, power:p});
+      const ms = clamp(760 - Math.min(p, 1.05)*520, 290, 760)*(green ? .92 : 1), h = over ? 26 : y<72 ? 14 : 4, curve = (col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6);
+      // on target and not in: the keeper's saved it, so he gets there with the ball; he holds the ones at him, parries the rest
+      const saved = !goal && !over && !wide && !wood && !wall, held = saved && (d<.6 || Math.random() < kq*.4);
+      const kms = saved ? Math.min(330 + (1 - kq)*110, ms*.9) : 330 + (1 - kq)*110;
+      if (g3) await g3.play({wx:clamp(wx, -10, 310), ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall, saved, held, power:p});
       else {
         await lvStrike(st);
         await Promise.all([
@@ -814,7 +820,7 @@ function lvShotCore(st, m, v, head, title, o = {}){
         small: goal ? (guess && guess!==side ? "Sent him the wrong way" : corner ? "Right in the corner" : green ? "Struck too well for him" : "Squeezed past him")
           : over ? (long ? "Too much power: flick in the green" : "Flicked it too quick: it rose over") : wide ? (green ? "A clean strike, but aim inside the posts" : "Off the green, so it sprayed wide")
           : wood ? "Inches away" : wall ? (short ? "Not enough on it to clear the wall" : "Flick quicker to lift it over the wall") : tip ? "Fingertip save"
-          : d<.7 ? "Too close to him: aim for the corners" : short ? "Not enough power: he had time to get there" : "Good save: go further into the corner"});
+          : atHim ? (held ? "Straight at him: aim for the corners" : "Too close to him: aim for the corners") : short ? "Not enough power: he had time to get there" : held ? "Great save, and he held it" : "Good save: go further into the corner"});
     };
     lvKey = null;
   });
