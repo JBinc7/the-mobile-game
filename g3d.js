@@ -983,7 +983,13 @@ const G3 = (() => {
         else pose(M, "idle", T() + (M.root.id%7));
       });
       men.forEach((M, el)=>{ M.at.visible = seen.has(el); if (!el.isConnected){ scene.remove(M.at); men.delete(el); } });
+      // props the 2D game draws (slalom poles), stood where they are
+      svg.querySelectorAll("[data-prop]").forEach(el=>{ let P = props.get(el);
+        if (!P){ P = new THREE.Group(); const pm = new THREE.Mesh(geo("pole", ()=>new THREE.CylinderGeometry(.035, .035, 1.7, 10)), mat("#F8FAFC", .4)); pm.position.y = .85; P.add(pm);
+          const fl = new THREE.Mesh(geo("flag", ()=>{ const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute([0, 1.7, 0, .45, 1.55, 0, 0, 1.4, 0], 3)); g.computeVertexNormals(); return g; }), mat("#F97316", .6, {side:THREE.DoubleSide})); P.add(fl); scene.add(P); props.set(el, P); }
+        const m = inv.multiply(el.getScreenCTM()); G(m.e, m.f, 0, P.position); P.visible = !!el.getClientRects().length; });
     };
+    const props = new Map();
     W.start();
     return W;
   }

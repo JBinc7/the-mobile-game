@@ -241,10 +241,10 @@ function lgSlalom(st){
   const kit = lvKits(st), e = st.lab.ease, v0 = clamp(120*(1 - e*.5), 92, 152), L = 860, half = clamp(19*(1 + e*1.1), 13, 26), lives = {easy:2, normal:1, hard:0}[labDiff] ?? 1;
   // gates of two poles, swinging from one side to the other, so you have to weave
   const gates = []; for (let i=0, y=-70; y>-L+40; i++, y -= 92 + Math.random()*18) gates.push({x:150 + (i%2 ? 1 : -1)*(28 + Math.random()*30), y, done:false});
-  const pole = (x, y, id) => `<g id="${id}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><ellipse cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,.35)"/><path d="M0 2V-20" stroke="#F8FAFC" stroke-width="2.4"/><path d="M0-20 10-16 0-12z" fill="#F97316"/></g>`;
+  const pole = (x, y, id) => `<g id="${id}" data-prop="pole" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><ellipse cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,.35)"/><path d="M0 2V-20" stroke="#F8FAFC" stroke-width="2.4"/><path d="M0-20 10-16 0-12z" fill="#F97316"/></g>`;
   return new Promise(res=>{
     lgShow(st, "Dribble slalom", "Hold left or right to steer through every gate. Don't touch the poles.",
-      `<svg viewBox="0 0 300 180" aria-hidden="true"><defs>${LV_DEFS}<radialGradient id="lgVg" cx="50%" cy="50%" r="70%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>
+      `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="top"><defs>${LV_DEFS}<radialGradient id="lgVg" cx="50%" cy="50%" r="70%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>
         <rect width="300" height="180" fill="#195C33"/><g id="lgC">${[...Array(Math.ceil((L+260)/36))].map((_,i)=>`<rect x="0" y="${180 - (i+1)*36}" width="300" height="18" fill="#1E6A3B"/>`).join("")}
           <path d="M44 180V${-L-80}M256 180V${-L-80}" stroke="rgba(255,255,255,.6)" stroke-width="2"/><path d="M44 ${-L-20}h212" stroke="#F5C542" stroke-width="4" stroke-dasharray="10 6"/>
           <text x="150" y="${-L-30}" text-anchor="middle" font-family="Big Shoulders Display,Impact,sans-serif" font-weight="900" font-size="14" fill="#FFE9A8" letter-spacing="2">FINISH</text>
