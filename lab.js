@@ -48,12 +48,27 @@ const LAB_IC = {
 const labIcon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${LAB_IC[k] || LAB_IC.goal}</svg>`;
 
 /* ---------- the games: only the unreleased ones (labgames.js, p90.js) ---------- */
-// the lab is only for games that aren't released yet: the rest are in matches, or at the training ground (drills.js)
+// the old training ground's sprint starts and beep test, scored as one go
+async function labSprint(st){
+  st.drill = {t:"Sprint starts", n:0}; st.lvl = 0;
+  const rt = await drSprintCore(st); if (rt==="skip") return rt;
+  return rt<0 ? {ok:false, big:"False start", small:"Wait for the green"} : {ok:rt<450, big:rt<330 ? "Rapid!" : rt<450 ? "Good start" : "Slow start", small:`${(rt/1000).toFixed(2)}s reaction`};
+}
+async function labBeep(st){
+  st.drill = {t:"Beep test", n:0}; st.lvl = 0;
+  const n = await drBeepCore(st); if (n==="skip") return n;
+  return {ok:n>=8, big:`Level ${Math.floor(n/2)+1}`, small:`${n} shuttle${n===1 ? "" : "s"} of ${DR_BEEP_MAX}`};
+}
+// the lab is for games that aren't released yet, and (from 1.57) the old training ground's drills and arcade games,
+// kept here to think about. The rest are in matches, or at the training centre (drills.js)
 const LAB_GAMES = [
   ...(typeof LAB_NEW!=="undefined" ? LAB_NEW.filter(g=>g.cat==="new") : []),
+  {id:"sprint", t:"Sprint starts", d:"The old training drill: go the moment the lights turn green.", cat:"old", ic:"lights", help:"sprint", run:labSprint},
+  {id:"beep", t:"Beep test", d:"The old training drill: turn at each line, faster and faster.", cat:"old", ic:"shuttle", help:"beep", run:labBeep},
+  ...(typeof LAB_NEW!=="undefined" ? LAB_NEW.filter(g=>g.cat==="arcade").map(g=>({...g, cat:"old"})) : []),
   ...(typeof LAB_P90!=="undefined" ? LAB_P90 : [])
 ];
-const LAB_CATS = {match:"In matches", drill:"Training", arcade:"Arcade · training ground", new:"New · lab only", full:"Full match · lab only"};
+const LAB_CATS = {match:"In matches", drill:"Training", arcade:"Arcade · training ground", new:"New · lab only", full:"Full match · lab only", old:"Old training · for later"};
 
 /* ---------- the sandbox ---------- */
 // a pretend match for one game: attributes and ease from the difficulty, your club's kit if you have a career
@@ -84,14 +99,14 @@ function labHome(){
   const list = LAB_GAMES.filter(g=>labCat==="all" || g.cat===labCat), n = c => LAB_GAMES.filter(g=>c==="all" || g.cat===c).length;
   return `<div class="lab">
     <div class="lab-head"><div><div class="lv-eye">Development</div><h2 class="lv-t">Mini-game lab</h2></div><button type="button" class="dlg-x lab-x" data-lab="close" aria-label="Close the lab">×</button></div>
-    <p class="lab-intro">Mini-games that <b>aren't in the game yet</b>, to try out as often as you like. <b>Nothing here touches your career</b>: no coins, no stats, no training, no saves. The released ones are in your matches and at the training ground.</p>
+    <p class="lab-intro">Mini-games that <b>aren't in the game yet</b>, and the <b>old training ground's</b> drills and arcade games, to try out as often as you like. <b>Nothing here touches your career</b>: no coins, no stats, no training, no saves. The released ones are in your matches and at the training ground.</p>
     <div class="lab-bar">
       <div class="lab-seg" role="group" aria-label="Difficulty">${Object.entries(LAB_DIFF).map(([k,D])=>`<button type="button" data-lab="diff" data-k="${k}" aria-pressed="${k===labDiff}">${D.t}</button>`).join("")}</div>
-      <div class="chips lab-cats" role="group" aria-label="Show">${["all","match","drill","arcade","new","full"].filter(c=>n(c)).map(c=>`<button type="button" class="chip ${c===labCat?"on":""}" data-lab="cat" data-k="${c}" aria-pressed="${c===labCat}">${c==="all" ? "All" : LAB_CATS[c].split(" ·")[0]} <small>${n(c)}</small></button>`).join("")}</div>
+      <div class="chips lab-cats" role="group" aria-label="Show">${["all","new","full","old"].filter(c=>n(c)).map(c=>`<button type="button" class="chip ${c===labCat?"on":""}" data-lab="cat" data-k="${c}" aria-pressed="${c===labCat}">${c==="all" ? "All" : LAB_CATS[c].split(" ·")[0]} <small>${n(c)}</small></button>`).join("")}</div>
     </div>
     <div class="lab-grid">${list.map(g=>`<button type="button" class="lab-card ${g.cat}" data-lab="play" data-k="${g.id}">
       <span class="lab-ic">${labIcon(g.ic)}</span><span class="lab-txt"><b>${esc(g.t)}</b><small>${esc(g.d)}</small></span>
-      <span class="lab-tag">${{new:"New", drag:"Drag", drill:"Drill", arcade:"Arcade", full:"90'"}[g.cat] || "Match"}</span></button>`).join("")}</div>
+      <span class="lab-tag">${{new:"New", drag:"Drag", drill:"Drill", arcade:"Arcade", full:"90'", old:"Old"}[g.cat] || "Match"}</span></button>`).join("")}</div>
   </div>`;
 }
 // the lab's front page: resolves the button pressed, as [action, key]

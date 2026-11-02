@@ -6,14 +6,16 @@
    you instead. The drill runs on the live match screen (moments.js) against teammates in training bibs, with the
    opponent set well below you, so every mini-game is at its most forgiving. A week's drill is kept on its week
    (S.mc.weeks[w].drill), so it can't be repeated. Loaded before game.js; only called once the game is running. */
+/* The training centre's drills (1.57): each a short session of reps built from the match's own moments (so they're
+   in 3D when the match is), the reps varied so it's a proper workout. reps: the moments, in order */
 const DR = {
-  fin:{t:"Shooting practice", n:5, unit:"shots", help:"flick2"},
-  pas:{t:"Passing drill", n:5, unit:"passes", help:"pass"},
-  pac:{t:"Sprint starts", n:5, unit:"sprints", help:"sprint"},
-  def:{t:"Tackling drill", n:5, unit:"tackles", help:"tackle"},
-  gk:{t:"Shot-stopping drill", n:5, unit:"shots to save", help:"save"},
-  sta:{t:"Beep test", n:0, unit:"levels", help:"beep"},
-  prep:{t:"Free kicks", n:3, unit:"free kicks", help:"flick2"}
+  fin:{t:"Finishing circuit", n:5, unit:"goals", help:"flick3", reps:[["shot","box"], ["shot","oneonone"], ["shot","long"], ["shot","box"], ["shot","freekick"]]},
+  pas:{t:"Passing and crossing", n:5, unit:"good balls", help:"pass", reps:[["cross"], ["pass"], ["cross"], ["pass"], ["cross"]]},
+  pac:{t:"1v1 take-ons", n:5, unit:"beaten", help:"takeon", reps:[["takeon"], ["takeon"], ["takeon"], ["takeon"], ["takeon"]], ramp:true},
+  def:{t:"Defending station", n:5, unit:"won", help:"tackle", reps:[["tackle"], ["block"], ["header","def"], ["tackle"], ["block"]]},
+  gk:{t:"Shot-stopping", n:5, unit:"saves", help:"save2", reps:[["save"], ["save","pen"], ["save"], ["save"], ["save","pen"]]},
+  sta:{t:"Pressing intervals", n:6, unit:"won back", help:"intercept", reps:[["intercept"], ["tackle"], ["intercept"], ["tackle"], ["intercept"], ["tackle"]], press:true},
+  prep:{t:"Free kicks", n:3, unit:"free kicks", help:"flick3", reps:[["shot","freekick"], ["shot","freekick"], ["shot","freekick"]]}
 };
 const DR_BEEP_MAX = 16;   // shuttles in a perfect beep test
 
@@ -59,8 +61,8 @@ function drSess(wk){
   if (wk.sess) return wk.sess;
   const gk = S.player.pos==="GK", f = S.train.focus, mine = f==="rest" ? null : f==="def" && gk ? "def" : f;
   const others = shuffle(["fin","pas","pac","def","sta"].filter(k=>k!==mine && !(gk && k==="fin")));
-  const arc = shuffle(Object.keys(DR_ARCADE)).slice(0, 2);
-  return wk.sess = {items:[{t:"drill", k:mine || others[1]}, {t:"drill", k:others[0]}, ...arc.map(id=>({t:"arcade", id}))], done:{}};
+  const ks = [mine || others.pop(), ...others.filter(k=>k!==mine)].slice(0, 4);
+  return wk.sess = {items:ks.map(k=>({t:"drill", k})), done:{}};
 }
 const drSessDone = wk => !!wk && !!wk.sess && wk.sess.items.every((_, i)=>wk.sess.done[i]);
 const drSessCount = wk => wk && wk.sess ? Object.keys(wk.sess.done).length : 0;
@@ -77,7 +79,7 @@ function drPanel(){
 // the Training tab
 function trainingBody(){
   const wk = S.phase==="stats" && seasonMode()==="centre" ? drWeek() : null;
-  const intro = `<p class="hint">Every week there's a <b>training session</b> of four exercises: two drills and two from the arcade. Finish all four before you play the week and <b>your attributes grow twice as fast that week (2×)</b>. Each exercise also adds a little on its own, more the better you do.</p>`;
+  const intro = `<p class="hint">Every week there's a <b>training session</b> of four drills: one for your training focus and three others. Finish all four before you play the week and <b>your attributes grow twice as fast that week (2×)</b>. Each exercise also adds a little on its own, more the better you do.</p>`;
   if (!wk) return `<section class="panel"><h2>Training</h2>${intro}<p>Sessions run week by week while your season's on in the match centre.</p></section>`;
   if (S.train.focus==="rest") return `<section class="panel"><h2>Training</h2>${intro}<p>This is a <b>rest week</b> (your training focus is Rest), so there's no session. Pick a focus in the Season tab to train.</p></section>`;
   const sess = drSess(wk), n = drSessCount(wk), hurt = mcInjury(mcFrac(S.mc.wi));
@@ -90,7 +92,7 @@ function trainingBody(){
     <div class="tr-boost ${n>=4 ? "on" : ""}"><b>2×</b><span>${n>=4 ? "<b>Session complete:</b> this week's training counts double when you play it." : `Finish all four for double training growth this week · <b>${n} of 4</b> done`}</span><i style="--p:${n/4}"></i></div>
     ${hurt ? `<p class="ref">You're injured: no training until you're fit.</p>` : ""}
     <div class="tr-list">${sess.items.map((it, i)=>{ const d = sess.done[i];
-      return `<div class="tr-item ${d ? "done" : ""}"><span class="lab-ic">${ic(it)}</span><div class="tr-txt"><b>${esc(name(it))}</b><small>${it.t==="drill" ? "Drill" : "Arcade"} · ${esc(attr(it))}${d ? ` · ${esc(d.res)} · +${typeof d.gain==="number" && it.k!=="prep" ? d.gain.toFixed(2) : d.gain}` : ""}</small></div>
+      return `<div class="tr-item ${d ? "done" : ""}"><span class="lab-ic">${ic(it)}</span><div class="tr-txt"><b>${esc(name(it))}</b><small>${it.t==="drill" ? `Drill · ${drInfo(it.k).n} reps` : "Arcade"} · ${esc(attr(it))}${d ? ` · ${esc(d.res)} · +${typeof d.gain==="number" && it.k!=="prep" ? d.gain.toFixed(2) : d.gain}` : ""}</small></div>
         ${d ? `<span class="tr-tick" aria-label="Done">✓</span>` : `<button type="button" class="btn small primary" data-act="tr-play" data-k="${i}" ${hurt ? "disabled" : ""}>Play</button>`}</div>`; }).join("")}</div>
     <p class="hint" style="margin-top:12px">Your training focus (${esc(S.train.focus==="prep" ? "Match prep" : mcAttrName(S.train.focus))}) and Normal or Hard intensity are set in the Season tab. A new session comes with each new week.</p>
   </section>`;
@@ -220,45 +222,38 @@ function drBeepCore(st){
 /* ---------- a session ---------- */
 // one rep of a rep-based drill: resolves a score from 0 to 1 (with what to flash), or "skip"
 async function drRep(st, k){
-  const m = {min:0, q:1, g:k==="def" ? "tackle" : "save"};
-  if (k==="fin" || k==="prep"){
-    const r = await lvShotCore(st, m, k==="prep" ? "freekick" : "box", drHead(st), k==="prep" ? "Free kick" : "Shooting practice"); if (r==="skip") return r;
-    return {s:r.goal ? 1 : 0, big:r.big, small:r.small};
-  }
-  if (k==="pas"){
-    const r = await lvPassCore(st, drHead(st), "Passing drill", "Drag the ball to the teammate who's free. The bibs keep moving.", 700); if (r==="skip") return r;
-    return {s:r.ok ? 1 : 0, big:r.ok ? "Found him" : "Cut out", small:r.why};
-  }
-  if (k==="pac"){
-    const rt = await drSprintCore(st); if (rt==="skip") return rt;
-    // the quicker your pace, the more a slightly late start is forgiven
-    const pace = (mcA().pac - 60)*1.5, s = rt<0 ? 0 : rt<=330 + pace ? 1 : rt<=460 + pace ? .6 : rt<=650 + pace ? .3 : 0;
-    return {s, big:rt<0 ? "False start" : s>=1 ? "Rapid!" : s>=.6 ? "Good start" : s>0 ? "Slow start" : "Asleep", small:rt<0 ? "Wait for the green" : `${(rt/1000).toFixed(2)}s reaction`};
-  }
-  const R = await (S.player.pos==="GK" ? lvGameSave : lvGameTiming)(st, m); if (R==="skip") return R;
-  return {s:R.ok ? 1 : 0, big:R.ok ? R.big : S.player.pos==="GK" ? "Goal" : "Missed it", small:R.ok ? R.small : S.player.pos==="GK" ? "Wrong way" : "Timing's off"};
+  const D = st.drill, [g, v] = D.reps[st.i % D.reps.length];
+  // the take-ons quicken as you go; pressing gives no breather between reps
+  const m = {min:0, q:1, g, v, side:["tackle","block","save","intercept"].includes(g) || v==="def" ? "def" : "att"};
+  if (D.ramp) st.f.oppStr = st.base + st.i*3;
+  if (g==="shot"){ const r = await lvShotCore(st, m, v || "box", drHead(st), D.t); if (r==="skip") return r; return {s:r.goal ? 1 : 0, big:r.big, small:r.small}; }
+  if (g==="pass"){ const r = await lvPassCore(st, drHead(st), D.t, "Drag the ball to the teammate who's free. The bibs keep moving.", 700); if (r==="skip") return r;
+    return {s:r.ok ? 1 : 0, big:r.ok ? "Found him" : "Cut out", small:r.why}; }
+  const R = await LV_GAMES[g](st, m); if (R==="skip") return R;
+  const good = R.ok || R.a || R.g;
+  return {s:good ? 1 : 0, big:R.big, small:R.small};
 }
 async function drSession(st, k){
   const D = st.drill;
-  if (k==="sta"){ const n = await drBeepCore(st); return {score:Math.min(1, n/DR_BEEP_MAX), res:`level ${Math.floor(n/2)+1}, ${n} shuttle${n===1?"":"s"}`}; }
   for (st.i=0; st.i<D.n; st.i++){
+    if (st.i) lvCountNext = !D.press;   // a breather (the countdown) between reps, except when pressing
     const r = await drRep(st, k); if (r==="skip") break;
     st.got.push(r.s); await drFlash(r.s>=.5, r.big, r.small);
   }
   const tot = st.got.reduce((s,x)=>s+x, 0);
-  return {score:tot/D.n, res:k==="pac" ? `${st.got.filter(x=>x>=.6).length} good starts out of ${D.n}` : `${tot} of ${D.n} ${D.unit}`};
+  return {score:tot/D.n, res:`${tot} of ${D.n} ${D.unit}`};
 }
 async function drPlay(k = S.train.focus, idx = null){
   const wk = drWeek(), D = drInfo(k);
   if (!wk || !D || mcInjury(mcFrac(S.mc.wi)) || (idx!=null ? drSess(wk).done[idx] : wk.drill)) return;
   const attr = k==="prep" ? mcA().fin : mcA()[k];
-  const st = {drill:D, f:{opp:"Training", oppStr:attr - 16, home:true}, X:{base:strOf(S.mc.club)}, ev:[], left:1, i:0, got:[], lvl:0, log:[]};
+  const st = {drill:D, f:{opp:"Training", oppStr:attr - 16, home:true}, base:attr - 16, X:{base:strOf(S.mc.club)}, ev:[], left:1, i:0, got:[], lvl:0, log:[]};
   lvOpen();
   try{
     if (!lvSeen().drills) await lvHelp(["drills"], true);
     if (!lvSeen()[D.help]) await lvHelp([D.help], true);
     const go = await lvAsk(`<div class="lv-card"><div class="lv-eye">Training · ${esc(mcDate(S.mc.wi))}</div><h2 class="lv-t">${esc(D.t)}</h2>
-      <p>${D.n ? `${D.n} ${D.unit}, easier than in a match.` : "Keep going as long as you can."} ${k==="prep" ? "A good session sharpens you for the next games." : `The better you do, the more your ${esc(mcAttrName(k).toLowerCase())} grows this week.`}</p>
+      <p>${D.n} reps${D.press ? ", back to back with no breather" : ""}, against teammates in bibs, so it's easier than a match. ${k==="prep" ? "A good session sharpens you for the next games." : `The better you do, the more your ${esc(mcAttrName(k).toLowerCase())} grows this week.`}</p>
       <div class="lv-row"><button type="button" class="btn primary big" data-lv="go" data-lv-focus>Start</button><button type="button" class="btn" data-lv="no">Not now</button></div></div>`);
     if (go!=="go") return;
     lvCountNext = true;
