@@ -216,6 +216,12 @@ const G3 = (() => {
      colour, the trim in its second, the name and number on the back), and you look like your player: the footballer
      closer to your skin tone, tinted to it. Until they've loaded (or if they can't), the drawn players stand in */
   const PEOPLE = {m02:{glb:"sm02", tex:"m301", skin:"#C08368"}, m03:{glb:"sm03", tex:"m300", skin:"#9A6746", hair:true}};
+  /* more faces: other Rocketbox men's faces, which share the footballers' head layout, so any of them goes on m02's
+     head. Each skin tone has its own set (the two darkest: two Black players' faces), and each player keeps his */
+  const FACES = {m007:{skin:"#6A4634"}, m006:{skin:"#83583D"}, m017:{skin:"#B28665"}, m019:{skin:"#C29475", blond:true}, m003:{skin:"#B5896E"}, m013:{skin:"#BF8462"}, m001:{skin:"#CF9475"}};
+  const FACE_TONES = [["#F1C9A5", ["m301", "m019", "m001", "m003"]], ["#D9A37A", ["m301", "m013", "m003", "m017", "m001", "m019"]], ["#B57D52", ["m300", "m013", "m017", "m003"]],
+    ["#8A5A3B", ["m006", "m300", "m007"]], ["#5C3A24", ["m007", "m006"]]];
+  const faceImg = {};
   let peopleP = null, people = null, clips = null;
   const img = src => new Promise((res, rej)=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = rej; i.src = src; });
   const script = src => new Promise((res, rej)=>{ const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
@@ -232,6 +238,8 @@ const G3 = (() => {
           const T = (i, srgb) => { const t = new THREE.Texture(i); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.needsUpdate = true; return t; };
           out[k] = {...P, key:k, scene:g.scene, body, head, bodyN:T(bn), headN:T(hn), hairT:hair && T(hair, true)};
         }
+        // the extra faces (a face that won't load is just left out)
+        await Promise.all(Object.keys(FACES).map(k=>img(dir + k + "_head.jpg").then(i=>{ faceImg[k] = i; }, ()=>{})));
         people = out; return true;
       }catch(e){ console.warn("players", e); return false; }
     })();
@@ -288,12 +296,18 @@ const G3 = (() => {
   const matCache = new Map();
   const matFor = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
   function makeReal(look){
-    const M = lum(look.skin) < .33 ? people.m03 : people.m02;   // the two lightest skin tones: m02; the rest: m03
+    // his face: from the set for the skin tone nearest his, picked by his name (so it's always the same face)
+    const sk = hex(look.skin), tone = FACE_TONES.reduce((b, t)=>{ const d = hex(t[0]).reduce((a, v, i)=>a + Math.abs(v - sk[i]), 0); return d < b[0] ? [d, t[1]] : b; }, [1e9, FACE_TONES[1][1]])[1];
+    let opts = tone.filter(k=>k==="m301" || k==="m300" || faceImg[k]);
+    if (look.hairCol && lum(look.hairCol) > .2 && opts.some(k=>FACES[k] && FACES[k].blond)) opts = opts.filter(k=>FACES[k] && FACES[k].blond);   // fair hair
+    const nh = [...String(look.name || look.num || look.skin)].reduce((a, ch)=>(a*33 + ch.charCodeAt(0)) >>> 0, 5381), face = opts[nh % opts.length] || "m301";
+    const M = face==="m300" ? people.m03 : people.m02;
+    const F = FACES[face] ? {key:"f" + face, head:faceImg[face], skin:FACES[face].skin} : M;
     const model = SkeletonUtils.clone(M.scene), root = grp(); root.add(model);
-    const body = kitTex(M, look), head = headTex(M, look);
+    const body = kitTex(M, look), head = headTex(F, look);
     model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false;
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
-        : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite ? null : M.headN, roughness:.62}))
+        : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite || F!==M ? null : M.headN, roughness:.62}))
         : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:lite ? null : M.bodyN, roughness:.78})));
       o.material = ms.length===1 ? ms[0] : ms; });
     const bones = {}, byName = {}; model.traverse(o=>{ if (o.isBone){ bones[o.name.replace(/^Bip01_?/, "") || "root"] = o; byName[o.name] = o; } });

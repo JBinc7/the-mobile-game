@@ -6,7 +6,7 @@
    calls Account.boot(start) once it has loaded, and this file calls back into the game (render, exportBackup…)
    only after that. */
 const Account = (() => {
-  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.63";
+  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.64";
   const OLD = {career:"efp-career-v1", hall:"efp-hall-v1"};   // where saves lived before accounts existed
   const $id = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
