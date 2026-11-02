@@ -1341,3 +1341,12 @@ small.boot{display:inline-flex;align-items:center}
 .lv-stage.g3>svg>*:not(.lv-dragline){visibility:hidden}
 .card-top.g3 .pt-fig{visibility:hidden}
 .card-top.g3 .g3-canvas{touch-action:pan-y;cursor:grab}
+/* level 4: a replay's badge */
+.g3-replay{position:absolute;left:10px;top:10px;z-index:3;padding:3px 9px 3px 20px;border-radius:6px;background:rgba(5,9,10,.72);color:#fff;font:800 12px/1.4 var(--f-ui,system-ui);letter-spacing:.12em;text-transform:uppercase;pointer-events:none}
+.g3-replay::before{content:"";position:absolute;left:8px;top:50%;width:7px;height:7px;margin-top:-3.5px;border-radius:50%;background:#EF4444;animation:g3rec 1s steps(2) infinite}
+@keyframes g3rec{50%{opacity:.2}}
+/* level 4: after a goal in 3D the result sits low on the pitch, so the celebration and the replay show above it */
+.lv-stage.g3>.lv-res.goal{inset:auto 0 0 0;padding:28px 12px 10px;gap:2px;background:linear-gradient(rgba(3,8,6,0),rgba(3,8,6,.8) 55%)}
+.lv-stage.g3>.lv-res.goal .lv-ico{display:none}
+.lv-stage.g3>.lv-res.goal span{font-size:clamp(30px,9vw,44px)}
+.lv-stage.g3>.lv-res.goal small{font-size:13px}

@@ -352,7 +352,8 @@ const G3 = (() => {
     wall(P, t){ clip(P, "idle", t); ["L", "R"].forEach(s=>{ fwd(P, s + "_UpperArm", .35); raise(P, s, -.18); fwd(P, s + "_Forearm", 1.25); }); }
   };
   // pose any player, real or drawn
-  function pose(P, name, a, b){ if (!P) return; if (P.real) REAL[name](P, a, b); else POSE[name](P.rig, a, b); }
+  let poseLog = null;
+  function pose(P, name, a, b){ if (!P) return; if (poseLog) poseLog.push([P, name, a, b]); if (P.real) REAL[name](P, a, b); else POSE[name](P.rig, a, b); }
 
   // your player, as the game describes him, in a kit (club colours, or the kit of the moment)
   function lookOf(pl, c1, c2, o = {}){
@@ -525,14 +526,23 @@ const G3 = (() => {
       x.font = "900 40px Big Shoulders Display, Impact, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
       for (let i = 0; i < 6; i++){ x.fillStyle = i%2 ? "#F5C542" : "#7FD7C4"; x.fillText("PYRAMID", 85 + i*171, 34); }
       boardTex = new THREE.CanvasTexture(c); boardTex.colorSpace = THREE.SRGBColorSpace; boardTex.wrapS = THREE.RepeatWrapping; boardTex.repeat.x = 2; }
-    const crowd = new THREE.Mesh(new THREE.PlaneGeometry(80, 20), new THREE.MeshBasicMaterial({map:crowdTex, color:0x9AA59F})); crowd.position.set(0, 10.5, -16); crowd.rotation.x = .22; scene.add(crowd);
-    const boards = new THREE.Mesh(new THREE.PlaneGeometry(40, .9), new THREE.MeshBasicMaterial({map:boardTex})); boards.position.set(0, .45, -5); scene.add(boards);
+    // the stands all round: behind the goal and down both sides (so a replay from the side has a crowd behind it),
+    // each a raked bank of fans over a strip of advertising boards
+    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:0x9AA59F}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
+    const bank = (w, x, z, ry, d) => { const g = grp(x, 0, z); g.rotation.y = ry; scene.add(g);
+      const c = new THREE.Mesh(new THREE.PlaneGeometry(w, 20), cm); c.position.set(0, 10.5, -d); c.rotation.x = .22; g.add(c); crowd.push(c);
+      const b = new THREE.Mesh(new THREE.PlaneGeometry(w*.6, .9), bm); b.position.set(0, .45, 0); g.add(b); };
+    bank(80, 0, -5, 0, 11);
+    [-1, 1].forEach(s=>bank(66, s*36, 27, -s*Math.PI/2, 7));
+    // the touchlines
+    const tl = new THREE.MeshBasicMaterial({color:0xF2F5EF}); [-1, 1].forEach(s=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(.12, 58), tl); m.rotation.x = -Math.PI/2; m.position.set(s*34, .01, 29); scene.add(m); });
     // the floodlights' glow
     const gc = document.createElement("canvas"); gc.width = gc.height = 64; const gx2 = gc.getContext("2d"), gr = gx2.createRadialGradient(32, 32, 0, 32, 32, 32);
     gr.addColorStop(0, "rgba(255,248,222,1)"); gr.addColorStop(.25, "rgba(255,226,154,.45)"); gr.addColorStop(1, "rgba(255,226,154,0)"); gx2.fillStyle = gr; gx2.fillRect(0, 0, 64, 64);
     const gt = new THREE.CanvasTexture(gc);
     [-1, 1].forEach(s=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:gt, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); sp.position.set(s*24, 24, -22); sp.scale.set(16, 16, 1); scene.add(sp); });
     scene.fog = new THREE.Fog(0x07120C, 30, 70);
+    return crowd;
   }
   let ballTex = null;
   function ball(){
@@ -552,7 +562,7 @@ const G3 = (() => {
     const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = new THREE.Color(0x07120C);
     if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
     lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1});
-    pitch(scene, !o.noLines); const net = goalFrame(scene); stands(scene, o.crowd || "#F5C542");
+    pitch(scene, !o.noLines); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542");
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner
@@ -562,7 +572,7 @@ const G3 = (() => {
       trailPos.copyWithin(3, 0, (TN - 1)*3); trailPos[0] = B.position.x; trailPos[1] = B.position.y; trailPos[2] = B.position.z; trailG.attributes.position.needsUpdate = true; };
     const host = stage; host.classList.add("g3"); host.prepend(r.domElement); r._w = 0;
     const anims = new Set(); let t0 = performance.now(), raf = 0, stopped = false;
-    const W = {r, scene, cam, B, bs, trail, trailPush, net, mode:"idle", t0, idle:null}; SR.cur = W;
+    const W = {r, scene, cam, B, bs, trail, trailPush, net, mode:"idle", t0, idle:null, dyn:[B, bs], rec:null, view:null, crowd}; SR.cur = W;
     // the ball's shadow follows it, smaller as it rises
     W.ballTo = (x, y, z) => { B.position.set(x, y, z); bs.position.set(x, .006, z); bs.scale.setScalar(Math.max(.3, 1 - y*.25)); };
     W.fadeTrail = () => W.tween(300, k=>{ trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; trail.material.opacity = .5; });
@@ -578,9 +588,12 @@ const G3 = (() => {
     const frame = now => {
       raf = 0; if (stopped) return; if (!r.domElement.isConnected){ W.stop(); return; }
       watch(now); fit(r, cam, host);
+      if (W.rec) poseLog = [];
       if (W.mode==="idle" && W.idle) W.idle((now - t0)/1000);
       anims.forEach(f=>f(now)); net.update(now);
-      r.render(scene, cam); raf = requestAnimationFrame(frame);
+      if (W.rec){ W.rec.push({t:now, o:W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]), p:poseLog}); poseLog = null; }
+      if (W.view) fit(r, W.view, host);
+      r.render(scene, W.view || cam); raf = requestAnimationFrame(frame);
     };
     W.start = () => { try{ r.compile(scene, cam); }catch(e){} raf = requestAnimationFrame(frame); };
     W.stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); if (r.domElement.parentNode===host) r.domElement.remove(); if (SR.cur===W) SR.cur = null; };
@@ -599,7 +612,33 @@ const G3 = (() => {
       net.touch(null);
     };
     // a player standing in the scene: a holder for where he is and which way he faces, the body inside it free to tilt
-    W.add = (look, x, z, face = 0) => { const P = makePlayer(look), h = grp(x, 0, z); h.rotation.y = face; h.add(P.root); scene.add(h); P.at = h; return P; };
+    W.add = (look, x, z, face = 0) => { const P = makePlayer(look), h = grp(x, 0, z); h.rotation.y = face; h.add(P.root); scene.add(h); P.at = h; W.dyn.push(h, P.root); return P; };
+    /* a goal: the scorer wheels away to celebrate, then a slow-motion replay of the recording from a second camera
+       (from behind the goal, through the net), then back to him celebrating. It runs on behind the result card */
+    // the crowd on its feet: the banks bounce, fading out over ms
+    W.roar = ms => { const y0 = crowd.map(c=>c.position.y); W.tween(ms, k=>crowd.forEach((c, i)=>{ c.position.y = y0[i] + .35*(1 - k)*Math.abs(Math.sin(k*ms/1000*7.5 + i)); })); };
+    W.goalShow = async (P, runTo, camAt, lookAt) => {
+      const all = W.rec || [], end = all.length ? all[all.length - 1].t : 0, frames = all.filter(f=>f.t >= end - 2600); W.rec = null; if (stopped) return;
+      W.roar(4200);
+      const host0 = host, from = P.at ? P.at.position.clone() : P.root.position.clone(), obj = P.at || P.root;
+      const yaw = Math.atan2(runTo.x - from.x, runTo.z - from.z), t1 = performance.now();
+      const face = Math.atan2(cam.position.x - runTo.x, cam.position.z - runTo.z), turn = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a))*k;
+      const run = W.tween(1300, k=>{ const e = k*k*(3 - 2*k); obj.position.lerpVectors(from, runTo, e); obj.rotation.y = turn(yaw, face, Math.max(0, (k - .6)/.4)); pose(P, k < .75 ? "run" : "cheer", (performance.now() - t1)/1000); });
+      await run; if (stopped || frames.length < 4) return;
+      // the replay: everything put back as it was, frame by frame, at half speed
+      const live = W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]);
+      const rc = new THREE.PerspectiveCamera(40, 300/180, .1, 160); rc.position.copy(camAt); rc.lookAt(lookAt); W.view = rc; const tr = new THREE.Vector3(); W.mode = "replay";
+      host0.insertAdjacentHTML("beforeend", `<span class="g3-replay" aria-hidden="true">Replay</span>`); const badge = host0.lastElementChild;
+      const t0r = frames[0].t, span = frames[frames.length - 1].t - t0r; net.touch(B.position);
+      await W.tween(span*2, k=>{ const tt = t0r + span*k; let i = 0; while (i < frames.length - 1 && frames[i + 1].t <= tt) i++; const F = frames[i];
+        F.o.forEach(([p, q, v], j)=>{ const o = W.dyn[j]; if (!o) return; o.position.copy(p); o.quaternion.copy(q); o.visible = v; });
+        (F.p || []).forEach(([Q, n, a, b])=>{ if (Q.real) REAL[n](Q, a, b); else POSE[n](Q.rig, a, b); });
+        rc.lookAt(tr.copy(lookAt).lerp(B.position, .45)); });   // the camera follows the ball
+      net.touch(null); badge.remove(); if (stopped) return;
+      live.forEach(([p, q, v], j)=>{ const o = W.dyn[j]; o.position.copy(p); o.quaternion.copy(q); o.visible = v; });
+      W.view = null; W.mode = "goal";
+      const t2 = performance.now(); W.tween(2600, ()=>pose(P, "cheer", (performance.now() - t2)/1000));
+    };
     return W;
   }
   // the camera at `at`, tilted and zoomed so that point a lands fa of the way down the picture and point b lands fb down
@@ -645,8 +684,9 @@ const G3 = (() => {
     const aimM = new THREE.Mesh(new THREE.RingGeometry(.16, .26, 3), new THREE.MeshBasicMaterial({color:0xF5C542, transparent:true, opacity:.9, depthTest:false}));
     aimM.rotation.x = -Math.PI/2; aimM.visible = false; aimM.renderOrder = 5; W.scene.add(aimM);
     function aim(x){ const ax = gx(x), P = aimG.attributes.position; P.setXYZ(1, ax, .02, 0); P.needsUpdate = true; aimL.computeLineDistances(); aimL.visible = true; aimM.position.set(ax, .03, .3); aimM.visible = true; }
+    W.dyn.push(taker.root, kp);
     async function play(q){
-      W.mode = "shoot"; W.tween(250, k=>{ aimL.material.opacity = .85*(1 - k); aimM.material.opacity = .9*(1 - k); }).then(()=>{ aimL.visible = aimM.visible = false; });
+      W.rec = []; W.mode = "shoot"; W.tween(250, k=>{ aimL.material.opacity = .85*(1 - k); aimM.material.opacity = .9*(1 - k); }).then(()=>{ aimL.visible = aimM.visible = false; });
       // the harder the strike, the quicker the leg comes through
       const sw = clamp(300 - (q.power ?? .7)*120, 170, 300);
       await W.tween(sw, k=>{ pose(taker, "kick", k*.55); pose(K, "ready", (performance.now() - W.t0)/1000); });
@@ -666,9 +706,9 @@ const G3 = (() => {
       const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
       if (q.goal){
         W.mode = "goal";
-        const tc = performance.now(); W.tween(1400, k=>pose(taker, "cheer", (performance.now() - tc)/1000));
         await W.inNet(spinAxis);
-      } else if (q.over || q.wide){ fade();
+        W.goalShow(taker, new THREE.Vector3(-2.3, 0, D - 2), new THREE.Vector3(-7, 3.4, D + (D > 16 ? 6 : 8)), new THREE.Vector3(0, .9, D*.3));
+      } else if (q.over || q.wide){ W.rec = null; fade();
         await W.tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
       } else if (q.wood){ fade();
         await W.tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
@@ -744,25 +784,26 @@ const G3 = (() => {
     const W = base(stage, o, start), {cam} = W;
     const me = W.add(o.me, H.x, H.z + .35, Math.PI), mk = W.add(o.marker, H.x + .75, H.z + .9, Math.PI + .4);
     const crosser = W.add(o.crosser, start.x + .45, start.z - .35, -Math.PI/2 + .35);
-    const kz = .5, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); W.scene.add(kp);
+    const kz = .5, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); W.scene.add(kp); W.dyn.push(kp);
     cam.fov = 44; cam.position.set(2.6, 4.1, 18.5); cam.lookAt(.6, 1.3, 4); cam.updateProjectionMatrix();
     W.idle = t => { pose(me, "idle", t); pose(mk, "idle", t + 1); pose(crosser, "idle", t + 2); pose(K, "ready", t); };
     W.start();
     let kicked = false;
     return {stop:W.stop, at:W.toStage(H),
       // the cross on its way: 0 when it's struck, 1 when it reaches you
-      k(k){ if (!kicked && k > 0){ kicked = true; W.tween(220, q=>pose(crosser, "kick", .45 + .55*q)); }
+      k(k){ if (!kicked && k > 0){ kicked = true; W.rec = []; W.tween(220, q=>pose(crosser, "kick", .45 + .55*q)); }
         const e = Math.min(1.15, k); W.ballTo(start.x + (H.x - start.x)*e, Math.max(.11, start.y + (H.y - start.y)*e + 3.2*Math.sin(Math.min(1, e)*Math.PI)), start.z + (H.z - start.z)*e); W.B.rotateOnAxis(SX(), -.2); W.trailPush(); },
       // you meet it (on: you got your head to it); q has the 2D goal's numbers for where it goes and where the keeper goes
       async finish(q){
         W.mode = "play";
         const jump = W.tween(260, k=>{ me.at.position.y = Math.sin(k*Math.PI)*.42; pose(me, "header", k); });
+        if (!q.goal) W.rec = null;
         if (!q.on){ await jump; await flight(W, W.B.position.clone(), new THREE.Vector3(H.x - 3, 3.4, H.z - 12), 520, .6); W.fadeTrail(); return; }
         const tgt = new THREE.Vector3(gx(q.tx), Math.max(.11, gy(q.ty)), q.ty < 18 ? -3 : 0);
         const kFrom = kp.position.clone(), kTo = new THREE.Vector3(gx(q.kx), Math.max(.55, gy(q.ky)), kz), roll = -(q.rot || 0)*Math.PI/180;
         await Promise.all([jump, flight(W, W.B.position.clone(), tgt, 380, .15),
           W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); })]);
-        if (q.goal){ const tc = performance.now(); W.tween(1400, ()=>pose(me, "cheer", (performance.now() - tc)/1000)); await W.inNet(SX()); }
+        if (q.goal){ await W.inNet(SX()); W.goalShow(me, new THREE.Vector3(-3.6, 0, 10.2), new THREE.Vector3(-9, 3.6, 13.5), new THREE.Vector3(0, 1.1, 3.5)); }
         else { W.fadeTrail(); const p0 = W.B.position.clone(); await W.tween(420, k=>W.ballTo(p0.x + Math.sign(p0.x || 1)*1.4*ease(k), Math.max(.11, p0.y + .2*k - 1.2*k*k), p0.z + 1.4*ease(k))); }
       }};
   }
@@ -822,7 +863,7 @@ const G3 = (() => {
     const W = base(stage, o, bw), {cam, scene} = W, side = cw.x > 0 ? 1 : -1;
     const me = W.add(o.me, cw.x, cw.z, side > 0 ? -Math.PI/2 - .5 : Math.PI/2 + .5);
     const runners = o.mates.map((look, i)=>W.add(look, 0, 20, Math.PI)), mk = W.add(o.marker, 0, 20, Math.PI);
-    const kz = .6, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); scene.add(kp);
+    const kz = .6, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); scene.add(kp); W.dyn.push(kp);
     // the green spots where the runners want it
     o.spots.forEach(([x, y, r])=>{ const c = P3(x, y), d = new THREE.Mesh(new THREE.CircleGeometry(r*.12, 28), new THREE.MeshBasicMaterial({color:0x4ADE80, transparent:true, opacity:.3, depthWrite:false}));
       d.rotation.x = -Math.PI/2; d.position.set(c.x, .02, c.z); scene.add(d);
@@ -837,7 +878,7 @@ const G3 = (() => {
       run(i, x, y){ const P = i < 0 ? mk : runners[i], v = P3(x, y); P.at.position.set(v.x, 0, v.z); pose(P, "run", runT() + i*.37, 1); v.y = 1.9; return W.toStage(v); },
       // the cross to runner i: what became of it (q.res: "assist", "saved", "cleared", "wasted")
       async go(i, spot, q){
-        W.mode = "play"; runners.forEach(R=>pose(R, "idle", 0)); pose(mk, "idle", 0);
+        W.mode = "play"; W.rec = q.res==="assist" ? [] : null; runners.forEach(R=>pose(R, "idle", 0)); pose(mk, "idle", 0);
         await W.tween(200, k=>pose(me, "kick", .45 + .55*k));
         const s = P3(...spot); s.y = q.res==="wasted" ? .11 : 1.9;
         await flight(W, W.B.position.clone(), s, 520, 3.2);
@@ -846,7 +887,7 @@ const G3 = (() => {
           const tx = (Math.random() < .5 ? -1 : 1)*(1.5 + Math.random()*1.6), tgt = new THREE.Vector3(tx, .6 + Math.random()*1.4, 0);
           await Promise.all([W.tween(240, k=>{ R.at.position.y = Math.sin(k*Math.PI)*.4; pose(R, "header", k); }), flight(W, W.B.position.clone(), q.res==="assist" ? tgt : new THREE.Vector3(tx*.4, 1.3, kz + .3), 360, .1),
             W.tween(330, k=>{ const e = ease(k); kp.position.x = (q.res==="assist" ? -tx*.4 : tx*.4)*e; })]);
-          if (q.res==="assist"){ const tc = performance.now(); W.tween(1400, ()=>pose(R, "cheer", (performance.now() - tc)/1000)); await W.inNet(SX()); }
+          if (q.res==="assist"){ await W.inNet(SX()); W.goalShow(R, R.at.position.clone().setY(0).lerp(me.at.position, .5), new THREE.Vector3(-side*9, 3.6, 14), new THREE.Vector3(0, 1, 5)); }
           else W.fadeTrail();
         } else if (q.res==="cleared"){ await W.tween(220, k=>{ mk.at.position.y = Math.sin(k*Math.PI)*.4; pose(mk, "header", k); }); await flight(W, W.B.position.clone(), new THREE.Vector3(W.B.position.x + side*6, 3, W.B.position.z + 14), 520, 1.4); W.fadeTrail(); }
         else { const p0 = W.B.position.clone(); await flight(W, p0, new THREE.Vector3(p0.x - side*3, .11, p0.z - 1), 420, .3); W.fadeTrail(); }
