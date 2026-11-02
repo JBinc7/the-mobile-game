@@ -193,6 +193,7 @@ const G3 = (() => {
       r.arm[-1].rotation.x = r.arm[1].rotation.x = -.3*(1 - k); r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.1;
       r.leg[-1].rotation.z = -.25*k; r.leg[1].rotation.z = .25*k; r.leg[-1].rotation.x = r.leg[1].rotation.x = -.1; r.knee[-1].rotation.x = r.knee[1].rotation.x = .3*k; },
     // running: legs and arms swinging in time, a lean into it (k: how hard)
+    move(r, ph, w){ POSE.idle(r, performance.now()/1000); if (w > .02) POSE.run(r, ph*1.3, w); },
     run(r, t, k = 1){ const w = Math.sin(t*11)*k; r.leg[1].rotation.x = w*.75; r.leg[-1].rotation.x = -w*.75; r.knee[1].rotation.x = .3 + Math.max(0, -w)*1.1; r.knee[-1].rotation.x = .3 + Math.max(0, w)*1.1;
       r.arm[1].rotation.x = -w*.6; r.arm[-1].rotation.x = w*.6; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -1.1; r.arm[-1].rotation.z = -.15; r.arm[1].rotation.z = .15; r.chest.rotation.x = .18*k; r.hips.position.y = .94 + Math.abs(Math.cos(t*11))*.03; },
     // a header: arms up for balance, the neck snapping through (k: 0 to 1 through the jump)
@@ -319,9 +320,15 @@ const G3 = (() => {
     bone.parent.getWorldQuaternion(Q1); bone.quaternion.copy(Q1.invert().multiply(Q2)); bone.updateMatrixWorld(true);
   }
   // a clip at time t, set on every bone it moves, every time (so the moves put on top never pile up from frame to frame)
+  // a clip's tracks on this player's bones: [bone, "quaternion" | "position", sampler, spare]
+  function clipList(P, name){
+    const c = clips && clips[name]; if (!c) return [];
+    return P.act[name] ||= c.tracks.map(tr=>{ const [bn, prop] = tr.name.split("."), b = P.byName[bn];
+      return b && (prop==="quaternion" || prop==="position") ? [b, prop, tr.createInterpolant(), prop==="quaternion" ? new THREE.Quaternion() : new THREE.Vector3()] : null; }).filter(Boolean);
+  }
   function clip(P, name, t){
     const c = clips && clips[name]; if (!c) return;
-    const L = P.act[name] ||= c.tracks.map(tr=>{ const [bn, prop] = tr.name.split("."), b = P.byName[bn]; return b && (prop==="quaternion" || prop==="position") ? [b, prop, tr.createInterpolant()] : null; }).filter(Boolean);
+    const L = clipList(P, name);
     const tt = ((t % c.duration) + c.duration) % c.duration;
     for (const [b, prop, it] of L){ const v = it.evaluate(tt); if (prop==="quaternion") b.quaternion.fromArray(v); else b.position.fromArray(v); }
     P.model.position.y = 0; P.model.updateMatrixWorld(true);
@@ -334,6 +341,12 @@ const G3 = (() => {
   const REAL = {
     idle(P, t){ clip(P, "idle", t); },
     run(P, t){ clip(P, "run", t); },
+    // standing to running and back without a snap: the two clips blended by w (0 standing, 1 running), the stride at phase ph
+    move(P, ph, w){ if (w >= .99) return clip(P, "run", ph); clip(P, "idle", performance.now()/1000); if (w <= .01) return;
+      const L = clipList(P, "run"); for (const [b, prop, , sp] of L) sp.copy(b[prop]);   // standing...
+      clip(P, "run", ph);                                                                   // ...running...
+      for (const [b, prop, , sp] of L){ if (prop==="quaternion") b.quaternion.copy(sp.slerp(b.quaternion, w)); else b.position.copy(sp.lerp(b.position, w)); }   // ...and between
+      P.model.position.y = 0; P.model.updateMatrixWorld(true); },
     cheer(P, t){ clip(P, "cheer2", t); },
     // a keeper on his toes: knees bent, weight forward, hands out
     ready(P, t){ clip(P, "breathe", t); P.model.position.y = -.1;
@@ -624,6 +637,12 @@ const G3 = (() => {
     W.add = (look, x, z, face = 0) => { const P = makePlayer(look), h = grp(x, 0, z); h.rotation.y = face; h.add(P.root); scene.add(h); P.at = h; W.dyn.push(h, P.root); return P; };
     /* a goal: the scorer wheels away to celebrate, then a slow-motion replay of the recording from a second camera
        (from behind the goal, through the net), then back to him celebrating. It runs on behind the result card */
+    // a player eased out of whatever he was doing (a header, a strike) back to standing, over ms, then standing on
+    const sq = new THREE.Quaternion();
+    W.settle = (P, ms = 350, dur = 4000) => { const t1 = performance.now(), from = [];
+      if (P.real) P.model.traverse(o=>{ if (o.isBone) from.push([o, o.quaternion.clone()]); });
+      return W.tween(dur, ()=>{ const e = Math.min(1, (performance.now() - t1)/ms); pose(P, "idle", performance.now()/1000);
+        if (e < 1 && from.length){ const s2 = e*e*(3 - 2*e); for (const [b, q] of from) b.quaternion.copy(sq.copy(q).slerp(b.quaternion, s2)); P.model.updateMatrixWorld(true); } }); };
     // the crowd on its feet: the banks bounce, fading out over ms
     W.roar = ms => { const y0 = crowd.map(c=>c.position.y); W.tween(ms, k=>crowd.forEach((c, i)=>{ c.position.y = y0[i] + .35*(1 - k)*Math.abs(Math.sin(k*ms/1000*7.5 + i)); })); };
     W.goalShow = async (P, runTo, camAt, lookAt) => {
@@ -716,6 +735,7 @@ const G3 = (() => {
         W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); ks.position.x = kp.position.x; })
       ]);
       const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
+      if (!q.goal) W.settle(taker, 450);   // no goal: he comes out of the follow-through and stands
       if (q.goal){
         W.mode = "goal";
         await W.inNet(spinAxis);
@@ -788,35 +808,43 @@ const G3 = (() => {
   // a ball's flight from a to b over ms, rising h at the top of the arc
   const flight = (W, a, b, ms, h, after) => W.tween(ms, k=>{ const e = k; W.ballTo(a.x + (b.x - a.x)*e, Math.max(.11, a.y + (b.y - a.y)*e + h*4*e*(1 - e)), a.z + (b.z - a.z)*e); W.B.rotateOnAxis(SX(), -.3); W.trailPush(); after && after(k); });
 
-  /* a header: the cross comes in from the right wing, you rise and head it at goal. The ring game drives the ball (k);
-     at is where it's met, as a point on the stage, for the rings */
+  /* a header (or, with o.volley, a volley) as 2D plays it: a ring closes on the spot where you meet the ball, and you
+     tap as it gets there. The camera's behind you, the goal ahead, so the ball comes in to where the ring is */
   function header(stage, o){
     if (!stage || !fast()) return null;
-    const H = new THREE.Vector3(-1.1, 2.05, 7.2), start = new THREE.Vector3(7.2, .11, 3.6);   // a cross from near the byline on the right
+    const V = !!o.volley;
+    // where you meet it: your head (a cross from near the byline on the right), or your right boot (a dropping ball)
+    const H = V ? new THREE.Vector3(-.4, .5, 9.3) : new THREE.Vector3(-1.1, 2.05, 7.2), start = V ? new THREE.Vector3(H.x + 5*(o.from || 1), 0, 6.8) : new THREE.Vector3(7.2, .11, 3.6);
     const W = base(stage, o, start), {cam} = W;
-    const me = W.add(o.me, H.x, H.z + .35, Math.PI), mk = W.add(o.marker, H.x + .75, H.z + .9, Math.PI + .4);
-    const crosser = W.add(o.crosser, start.x + .45, start.z - .35, -Math.PI/2 + .35);
+    const me = V ? W.add(o.me, H.x - .22, H.z + .5, Math.PI) : W.add(o.me, H.x, H.z + .35, Math.PI), mk = V ? W.add(o.marker, H.x - 1.5, H.z - 1.7, -.5) : W.add(o.marker, H.x + .6, H.z - .25, Math.PI + .5);   // the man marking you, goal-side
+    const crosser = W.add(o.crosser, V ? 9 : start.x + .45, V ? 3 : start.z - .35, -Math.PI/2 + .35); if (V) crosser.at.visible = false;
     const kz = .5, kp = grp(0, .94, kz), K = makePlayer(o.keeper); K.root.position.y = -.94; kp.add(K.root); W.scene.add(kp); W.dyn.push(kp);
-    cam.fov = 44; cam.position.set(2.6, 4.1, 18.5); cam.lookAt(.6, 1.3, 4); cam.updateProjectionMatrix();
+    // the camera: over your shoulder, the goal ahead
+    cam.fov = 42; if (V){ cam.position.set(.6, 1.95, 13.1); cam.lookAt(-.3, 1.05, 3); } else { cam.position.set(.4, 2.6, 12.4); cam.lookAt(-.5, 1.5, 3); } cam.updateProjectionMatrix();
     W.idle = t => { pose(me, "idle", t); pose(mk, "idle", t + 1); pose(crosser, "idle", t + 2); pose(K, "ready", t); };
     W.start();
     let kicked = false;
     return {stop:W.stop, at:W.toStage(H),
       // the cross on its way: 0 when it's struck, 1 when it reaches you
-      k(k){ if (!kicked && k > 0){ kicked = true; W.rec = []; W.tween(220, q=>pose(crosser, "kick", .45 + .55*q)); }
-        const e = Math.min(1.15, k); W.ballTo(start.x + (H.x - start.x)*e, Math.max(.11, start.y + (H.y - start.y)*e + 3.2*Math.sin(Math.min(1, e)*Math.PI)), start.z + (H.z - start.z)*e); W.B.rotateOnAxis(SX(), -.2); W.trailPush(); },
+      k(k){ if (!kicked && k > 0){ kicked = true; W.rec = []; if (!V) W.tween(220, q=>pose(crosser, "kick", .45 + .55*q)); }
+        const e = Math.min(1.15, k);
+        // the volley: k is 2D's drop (its height 120(1 - k²), met at 18, when k is .922), the ball in over your boot then
+        if (V){ const f = Math.min(1.08, k/.922), z2 = 120*(1 - k*k); W.ballTo(start.x + (H.x - start.x)*f, Math.max(.11, H.y*z2/18), start.z + (H.z - start.z)*f); }
+        else W.ballTo(start.x + (H.x - start.x)*e, Math.max(.11, start.y + (H.y - start.y)*e + 1.6*Math.sin(Math.min(1, e)*Math.PI)), start.z + (H.z - start.z)*e);
+        W.B.rotateOnAxis(SX(), -.2); W.trailPush(); },
       // you meet it (on: you got your head to it); q has the 2D goal's numbers for where it goes and where the keeper goes
       async finish(q){
         W.mode = "play";
-        const jump = W.tween(260, k=>{ me.at.position.y = Math.sin(k*Math.PI)*.42; pose(me, "header", k); });
+        const jump = V ? W.tween(240, k=>pose(me, "kick", .45 + .55*k)) : W.tween(260, k=>{ me.at.position.y = Math.sin(k*Math.PI)*.42; pose(me, "header", k); });
         if (!q.goal) W.rec = null;
-        if (!q.on){ await jump; await flight(W, W.B.position.clone(), new THREE.Vector3(H.x - 3, 3.4, H.z - 12), 520, .6); W.fadeTrail(); return; }
+        const settle = () => { me.at.position.y = 0; W.settle(me); };   // and back on his feet
+        if (!q.on){ await jump; settle(); await flight(W, W.B.position.clone(), new THREE.Vector3(H.x - 3, 3.4, H.z - 12), 520, .6); W.fadeTrail(); return; }
         const tgt = new THREE.Vector3(gx(q.tx), Math.max(.11, gy(q.ty)), q.ty < 18 ? -3 : 0);
         const kFrom = kp.position.clone(), kTo = new THREE.Vector3(gx(q.kx), Math.max(.55, gy(q.ky)), kz), roll = -(q.rot || 0)*Math.PI/180;
         await Promise.all([jump, flight(W, W.B.position.clone(), tgt, 380, .15),
           W.tween(330, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", Math.abs(roll) > .2 ? e : e*.4); })]);
         if (q.goal){ await W.inNet(SX()); W.goalShow(me, new THREE.Vector3(-3.6, 0, 10.2), new THREE.Vector3(-9, 3.6, 13.5), new THREE.Vector3(0, 1.1, 3.5)); }
-        else { W.fadeTrail(); const p0 = W.B.position.clone(); await W.tween(420, k=>W.ballTo(p0.x + Math.sign(p0.x || 1)*1.4*ease(k), Math.max(.11, p0.y + .2*k - 1.2*k*k), p0.z + 1.4*ease(k))); }
+        else { settle(); W.fadeTrail(); const p0 = W.B.position.clone(); await W.tween(420, k=>W.ballTo(p0.x + Math.sign(p0.x || 1)*1.4*ease(k), Math.max(.11, p0.y + .2*k - 1.2*k*k), p0.z + 1.4*ease(k))); }
       }};
   }
 
@@ -1003,6 +1031,9 @@ const G3 = (() => {
     const stop0 = W.stop; W.stop = () => { stop0(); LV_MAP = null; svg.style.transform = svg.style.transformOrigin = "";
       stage.querySelectorAll('[style*="--lx"]').forEach(el=>{ el.style.left = (+el.style.getPropertyValue("--lx")/3).toFixed(2) + "%"; el.style.top = (+el.style.getPropertyValue("--ly")/1.8).toFixed(2) + "%"; }); };
   }
+  const BSZ = 1.25;
+  // the ball seen through a player in front of it (from behind, he'd hide it at his feet): a faint ghost drawn over everything
+  const ghost = B => { const g = new THREE.Mesh(B.geometry, new THREE.MeshBasicMaterial({color:0xFFFFFF, transparent:true, opacity:.5, depthTest:false, depthWrite:false})); g.renderOrder = 5; B.add(g); B.material.transparent = true; B.renderOrder = 6; return B; };   // (the ball itself drawn after it, over it when it's in view)   // the ball in the from-above games: a touch big, to follow, but in proportion to the players (1.3)
   function mirror(stage){
     if (!stage || !fast() || stage.classList.contains("g3")) return null;
     const svg = stage.querySelector(":scope > svg[data-view]"); if (!svg) return null;
@@ -1032,7 +1063,7 @@ const G3 = (() => {
         for (let i = 0; i <= n; i++){ const q = el.getPointAtLength(L*i/n), v = G(q.x, q.y, .02); if (prev) pts.push(prev.x, prev.y, prev.z, v.x, v.y, v.z); prev = v; } });
       const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
       scene.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({color:0xF2F5EF, transparent:true, opacity:.85}))); }
-    W.B.scale.setScalar(1.8); W.bs.scale.setScalar(1.8); scene.fog = null;   // (the camera's 80 m off: the stadium's fog would hide everything)
+    W.B.scale.setScalar(BSZ); W.bs.scale.setScalar(BSZ); ghost(W.B); W.B.renderOrder = 6; scene.fog = null;   // (the camera's 80 m off: the stadium's fog would hide everything)
     // the camera: up and back on the near side (2D's bottom edge), looking at the middle of the picture
     const f = ey.clone().multiplyScalar(-CE).add(new THREE.Vector3(0, -SE, 0));
     cam.position.copy(O).addScaledVector(f, -80); cam.up.set(0, 1, 0); cam.lookAt(O); cam.updateProjectionMatrix();
@@ -1052,8 +1083,8 @@ const G3 = (() => {
       svg.querySelectorAll("g[id] > .lv-bb").forEach((bb, i)=>{
         const g = bb.parentNode; if (!g.getClientRects().length) return; const m = inv.multiply(g.getScreenCTM());
         const tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || ""), z = tz ? -(+tz[1])*Math.hypot(m.a, m.b) : 0;
-        let B = balls.get(g); if (!B){ B = i===0 && !balls.size ? W.B : (()=>{ const b = ball(); b.scale.setScalar(1.8); scene.add(b); return b; })(); balls.set(g, B); }
-        if (V.track) G(m.e, V.track, .11*1.8 + Math.max(0, V.track - m.f + z)*MK/CE, B.position); else G(m.e, m.f, .11*1.8 + Math.max(0, z)*MK/CE, B.position);
+        let B = balls.get(g); if (!B){ B = i===0 && !balls.size ? W.B : (()=>{ const b = ball(); b.scale.setScalar(BSZ); ghost(b); b.renderOrder = 6; scene.add(b); return b; })(); balls.set(g, B); }
+        if (V.track) G(m.e, V.track, .11*BSZ + Math.max(0, V.track - m.f + z)*MK/CE, B.position); else G(m.e, m.f, .11*BSZ + Math.max(0, z)*MK/CE, B.position);
         B.rotation.x -= .05; seen.add(g); if (!ballAt) ballAt = B.position.clone();
         if (B===W.B) W.bs.position.set(B.position.x, .006, B.position.z);
       });
@@ -1061,13 +1092,14 @@ const G3 = (() => {
       svg.querySelectorAll(".lv-man").forEach(el=>{
         if (!el.getClientRects().length) return; seen.add(el);
         let M = men.get(el);
-        if (!M){ M = W.add(lookFor(el), 0, 0, 0); M.root.scale.setScalar(1.3); M.last = null; M.v = 0; M.yaw = null; men.set(el, M); }
+        if (!M){ M = W.add(lookFor(el), 0, 0, 0); M.root.scale.setScalar(1.3); M.last = null; M.v = 0; M.yaw = null; M.ph = Math.random(); M.w = 0; men.set(el, M); }
+        const dt = M.last ? Math.min(.1, Math.max(0, (now - M.lt)/1000)) : 0;
         const m = inv.multiply(el.getScreenCTM()), p = G(m.e, m.f), at = M.at;
         // facing: the way he's moving, or towards the ball
-        if (M.last){ const d = p.clone().sub(M.last), sp = d.length()/Math.max(.001, (now - M.lt)/1000); M.v = M.v*.8 + sp*.2; if (d.lengthSq() > 1e-6) M.yaw = Math.atan2(d.x, d.z); }
+        if (M.last){ const d = p.clone().sub(M.last), sp = d.length()/Math.max(.001, (now - M.lt)/1000); M.v += (Math.min(12, sp) - M.v)*(1 - Math.exp(-dt*9)); if (d.lengthSq() > 1e-6) M.yaw = Math.atan2(d.x, d.z); }
         else if (ballAt) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
         if (M.v < .6 && ballAt && p.distanceTo(ballAt) > .5) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
-        M.last = p.clone(); M.lt = now; at.position.copy(p); if (M.yaw!=null) at.rotation.y += Math.atan2(Math.sin(M.yaw - at.rotation.y), Math.cos(M.yaw - at.rotation.y))*.3;
+        M.last = p.clone(); M.lt = now; at.position.copy(p); if (M.yaw!=null) at.rotation.y += Math.atan2(Math.sin(M.yaw - at.rotation.y), Math.cos(M.yaw - at.rotation.y))*(1 - Math.exp(-dt*11));
         // what he's doing: the 2D picture's own animations (kick, hop, cheer), a dive (his tilt), running, or standing
         const cls = el.classList, anc = el.parentNode && el.parentNode.classList, rot = Math.atan2(m.b, m.a);
         const flag = (k, on) => { if (on){ M[k] ||= now; return (now - M[k])/1000; } M[k] = 0; return -1; };
@@ -1077,8 +1109,9 @@ const G3 = (() => {
         else if (hop >= 0){ pose(M, "header", Math.min(1, hop/.46)); at.position.y = Math.sin(Math.min(1, hop/.46)*Math.PI)*.4; }
         else if (cheer >= 0) pose(M, "cheer", cheer);
         else if (Math.abs(rot) > .35 || (anc && anc.contains("dive")) || el.closest(".dive")){ pose(M, "dive", Math.min(1, Math.abs(rot)/1.1)); M.root.rotation.z = -rot; }
-        else if (M.v > .7 || el.querySelector(".lv-legs.run")) pose(M, "run", T()*(.8 + Math.min(1.4, M.v/5)));
-        else pose(M, "idle", T() + (M.root.id%7));
+        else {   // standing, jogging, running: one stride that speeds up with him, blended in and out (no snapping between them)
+          const wt = el.querySelector(".lv-legs.run") ? 1 : Math.min(1, Math.max(0, (M.v - .3)/1.3));
+          M.w += (wt - M.w)*(1 - Math.exp(-dt*7)); M.ph += dt*(.7 + Math.min(1.1, M.v/4.5)); pose(M, "move", M.ph, M.w); }
       });
       men.forEach((M, el)=>{ M.at.visible = seen.has(el); if (!el.isConnected){ scene.remove(M.at); men.delete(el); } });
       // props the 2D game draws (slalom poles), stood where they are

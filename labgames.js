@@ -298,22 +298,27 @@ function lgVolley(st){
     st.lab.tally = `${got} of 3`;
     const from = Math.random()<.5 ? 40 : 260, fall = clamp(1250*(1 + e*.4) - k*110, 850, 1600);
     lgShow(st, "Volley", `Go ${k+1} of 3. Strike it as it drops through the gold ring.`,
-      lvGoalSvg(kit.them, null, false, {extra:`<g transform="translate(150 ${166 - H})"><circle r="${(7 + w).toFixed(1)}" fill="none" stroke="#F5C542" stroke-width="2.4" stroke-dasharray="4 3"/><circle r="2" fill="#F5C542"/></g>`}) + lgHud(got, "goals"),
+      lvGoalSvg(kit.them, null, false, {extra:`<g id="lgVr" transform="translate(150 ${166 - H})"><circle r="${(7 + w).toFixed(1)}" fill="none" stroke="#F5C542" stroke-width="2.4" stroke-dasharray="4 3"/><circle r="2" fill="#F5C542"/></g>`}) + lgHud(got, "goals"),
       `<button type="button" class="btn primary big lv-act">Volley!</button>`);
     const fin = r => res(r); lvSkippable(fin);
+    // in 3D: from behind you, the ball dropping in over your boot, the gold ring where you meet it
+    const stage = lv$(".lv-stage"), L = typeof G3!=="undefined" ? lv3dLooks(st, kit, "box") : null;
+    const g3 = L ? G3.header(stage, {...L, marker:L.foe, crosser:L.mates[0], volley:true, from:from < 150 ? -1 : 1}) : null;
+    if (g3){ lv$("#lgVr")?.remove(); stage.insertAdjacentHTML("beforeend", `<span class="lv-ring tgt" style="${lvPct(...g3.at)}"></span>`); }
     const t0 = performance.now() + 400; let z = 120, done = false, kx = 150;
     // the ball drops in from the side: high, then falling faster and faster to the ground
     const at = t => { const k = clamp((t - t0)/fall, 0, 1.25); return [from + (150 - from)*Math.min(1, k), 120*(1 - k*k)]; };
-    lvLoop(now=>{ if (done) return false; const [x, zz] = at(now); z = zz; lvBallAt("#lvBall", x, 166, 1, Math.max(0, z), now*.5, now>t0); if (z<-4){ go(true); return false; } });
+    lvLoop(now=>{ if (done) return false; const [x, zz] = at(now); z = zz; lvBallAt("#lvBall", x, 166, 1, Math.max(0, z), now*.5, now>t0); if (g3) g3.k(clamp((now - t0)/fall, 0, 1.25)); if (z<-4){ go(true); return false; } });
     const go = async late => {
       if (done) return; done = true; cancelAnimationFrame(lvRaf); lv$(".lv-act").disabled = true;
-      const d = late ? 99 : z - H, q = clamp(1 - Math.abs(d)/w, 0, 1), on = Math.abs(d)<=w;
+      const d = late ? -99 : z - H, q = clamp(1 - Math.abs(d)/w, 0, 1), on = Math.abs(d)<=w;
       const col = pick(["l","r"]), tx = on ? (col==="l" ? 60 : 240) + Math.random()*20 - 10 : 150 + Math.random()*120 - 60, ty = !on && d>0 ? -14 : on ? 40 + (1-q)*50 : 100;
       const save = on ? .12 + (1-q)*.55 : 1, goal = on && Math.random()>save, kcol = goal ? (col==="l" ? "r" : "l") : col;
       const [kx2, ky, rot] = lvKeeperTo(tx, ty, goal ? "wrong" : on ? "save" : "wrong", kcol);
-      await Promise.all([lvFly("#lvBall", [150, 166 - Math.max(0, z)], [tx, ty], on ? 360 : 520, {s0:1, s1:.6, spin:2, curve:(col==="l" ? -1 : 1)*8}),
+      if (g3) await g3.finish({on, goal, tx, ty, kx:kx2, ky, rot});
+      else await Promise.all([lvFly("#lvBall", [150, 166 - Math.max(0, z)], [tx, ty], on ? 360 : 520, {s0:1, s1:.6, spin:2, curve:(col==="l" ? -1 : 1)*8}),
         on ? lvTween(300, kk=>{ const qq = lvEaseOut(kk); lvMove("#lvKp", 150 + (kx2-150)*qq, 84 + (ky-84)*qq, rot*qq); }) : null]);
-      if (goal){ got++; lgSetHud(got); lvRipple(tx, ty); }
+      if (goal){ got++; lgSetHud(got); if (!g3) lvRipple(tx, ty); }
       fin(goal ? {ok:true, big:"Goal!", small:q>.7 ? "Caught it perfectly" : "Bundled in"} : {ok:false, big:on ? "Saved" : d>0 ? "Skied it" : "Scuffed it", small:on ? "Not clean enough" : d>0 ? "Too early: wait for it to drop" : "Too late: it was nearly on the ground"});
     };
     lvTap(lv$(".lv-act"), ()=>go(false)); lvTap(lv$(".lv-stage"), ()=>go(false)); lvKey = k=>{ if (k==="go") go(false); };
