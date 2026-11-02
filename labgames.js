@@ -244,7 +244,7 @@ function lgSlalom(st){
   const pole = (x, y, id) => `<g id="${id}" data-prop="pole" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})"><ellipse cy="2" rx="4.5" ry="1.8" fill="rgba(0,0,0,.35)"/><path d="M0 2V-20" stroke="#F8FAFC" stroke-width="2.4"/><path d="M0-20 10-16 0-12z" fill="#F97316"/></g>`;
   return new Promise(res=>{
     lgShow(st, "Dribble slalom", "Hold left or right to steer through every gate. Don't touch the poles.",
-      `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="top"><defs>${LV_DEFS}<radialGradient id="lgVg" cx="50%" cy="50%" r="70%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>
+      `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="top" data-nogoal="1"><defs>${LV_DEFS}<radialGradient id="lgVg" cx="50%" cy="50%" r="70%"><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>
         <rect width="300" height="180" fill="#195C33"/><g id="lgC">${[...Array(Math.ceil((L+260)/36))].map((_,i)=>`<rect x="0" y="${180 - (i+1)*36}" width="300" height="18" fill="#1E6A3B"/>`).join("")}
           <path d="M44 180V${-L-80}M256 180V${-L-80}" stroke="rgba(255,255,255,.6)" stroke-width="2"/><path d="M44 ${-L-20}h212" stroke="#F5C542" stroke-width="4" stroke-dasharray="10 6"/>
           <text x="150" y="${-L-30}" text-anchor="middle" font-family="Big Shoulders Display,Impact,sans-serif" font-weight="900" font-size="14" fill="#FFE9A8" letter-spacing="2">FINISH</text>
@@ -915,7 +915,7 @@ function lgBend(st){
     let done = false, fired = false, pts = [], down = false;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
-    svg.insertAdjacentHTML("beforeend", `<path id="lgSw" fill="none" stroke="#F5C542" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><text id="lgHint" x="150" y="150" text-anchor="middle" font-family="Barlow Condensed,sans-serif" font-weight="700" font-size="11" letter-spacing="1" fill="#FFE9A8">SWIPE UP FROM THE BALL</text>`);
+    svg.insertAdjacentHTML("beforeend", `<path id="lgSw" class="lv-dragline" fill="none" stroke="#F5C542" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/><text id="lgHint" x="150" y="150" text-anchor="middle" font-family="Barlow Condensed,sans-serif" font-weight="700" font-size="11" letter-spacing="1" fill="#FFE9A8">SWIPE UP FROM THE BALL</text>`);
     const draw = () => lv$("#lgSw")?.setAttribute("d", pts.length ? "M" + pts.map(p=>p.map(v=>v.toFixed(1)).join(" ")).join("L") : "");
     stage.addEventListener("pointerdown", ev=>{ if (done || fired) return; ev.preventDefault(); stage.setPointerCapture?.(ev.pointerId); down = true; pts = [lgAt(ev, stage)]; draw(); lv$("#lgHint")?.remove(); });
     stage.addEventListener("pointermove", ev=>{ if (!down || fired) return; const p = lgAt(ev, stage), q = pts[pts.length - 1]; if (Math.hypot(p[0] - q[0], p[1] - q[1])>2.5){ pts.push(p); draw(); } });
@@ -1411,7 +1411,7 @@ function lgFinesse(st){
     lv$(".lv-stage svg").style.cssText = `transform:perspective(560px) rotateY(${tilt.toFixed(1)}deg) scale(1.1);transform-origin:50% 62%`;
     const fin = r => { done = true; res(r); }; lvSkippable(fin);
     const stage = lv$(".lv-stage"), svg = stage.querySelector("svg");
-    svg.insertAdjacentHTML("beforeend", `<path id="lgSw" fill="none" stroke="#F5C542" stroke-width="3" stroke-linecap="round" opacity=".9"/>`);
+    svg.insertAdjacentHTML("beforeend", `<path id="lgSw" class="lv-dragline" fill="none" stroke="#F5C542" stroke-width="3" stroke-linecap="round" opacity=".9"/>`);
     // the keeper starts on the near side, a step off his line
     const K0 = [side==="l" ? 178 : 122, 84]; lvMove("#lvKp", K0[0], K0[1]);
     let done = false, down = false, pts = [], t0 = 0, p = 0, locked = false;

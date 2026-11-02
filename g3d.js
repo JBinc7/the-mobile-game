@@ -20,6 +20,11 @@ const G3 = (() => {
   // a phone that can't draw the 3D mini-games smoothly gets the 2D ones for the rest of the session: timing games
   // (saves, shots) have to be fair, and a slow picture shows the ball late
   let slow = false; try{ slow = sessionStorage.getItem("efp-3d-slow")==="1"; }catch(e){}
+  /* older phones (little memory, few cores, or a phone that's struggled before): no antialiasing, one pixel per pixel,
+     kits and faces painted at half size (a quarter of the work for each new kit) and no bump maps */
+  let lite = false; try{ lite = localStorage.getItem("efp-3d-lite")==="1"; }catch(e){}
+  lite ||= (navigator.deviceMemory > 0 && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 4);
+  const goLite = () => { lite = true; try{ localStorage.setItem("efp-3d-lite", "1"); }catch(e){} };
   const fast = () => ready() && !slow;
   function set(v){ try{ localStorage.setItem(KEY, v ? "1" : "0"); }catch(e){} if (v) load().then(()=>typeof render==="function" && S && render()); else { card.stop(); typeof render==="function" && S && render(); } }
 
@@ -237,7 +242,7 @@ const G3 = (() => {
   const texCache = new Map();
   function painted(key, im, fn){
     if (texCache.has(key)) return texCache.get(key);
-    const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0);
+    const k = lite ? .5 : 1, c = document.createElement("canvas"); c.width = Math.round(im.width*k); c.height = Math.round(im.height*k); const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(im, 0, 0, c.width, c.height);
     fn(c, x); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache.set(key, t); return t;
   }
   const tint = (M, look) => { const a = hex(M.skin), b = hex(look.skin); return a.map((v, i)=>Math.max(.45, Math.min(1.6, b[i]/v))); };
@@ -287,12 +292,15 @@ const G3 = (() => {
     const body = kitTex(M, look), head = headTex(M, look);
     model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false;
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
-        : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:M.headN, roughness:.62}))
-        : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:M.bodyN, roughness:.78})));
+        : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite ? null : M.headN, roughness:.62}))
+        : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:lite ? null : M.bodyN, roughness:.78})));
       o.material = ms.length===1 ? ms[0] : ms; });
     const bones = {}, byName = {}; model.traverse(o=>{ if (o.isBone){ bones[o.name.replace(/^Bip01_?/, "") || "root"] = o; byName[o.name] = o; } });
     // a keeper's gloves
     if (look.gk) ["L_Hand", "R_Hand"].forEach(n=>{ const b = bones[n]; if (!b) return; const gl = new THREE.Mesh(sph(5.2, 14, 10), mat(look.gloves || "#C8F04A", .6)); gl.scale.set(1.9, .75, 1.25); gl.position.set(7, 0, 0); b.add(gl); });
+    // everyone a little different: taller or shorter, slighter or stockier (the same for the same player every time)
+    const hs = [...String(look.name || "") + (look.num ?? "") + look.skin + look.c1].reduce((a, ch)=>(a*31 + ch.charCodeAt(0)) >>> 0, 7);
+    const h = .95 + (hs % 101)/1000, g = .94 + ((hs >>> 8) % 131)/1000; model.scale.multiply(new THREE.Vector3(g, h, g));
     const shadow = blob(.9, .6); root.add(shadow);
     return {root, model, real:true, act:{}, bones, byName, shadow, rig:null};
   }
@@ -364,8 +372,8 @@ const G3 = (() => {
 
   /* ---------- renderers: one for the card, one for the mini-games, kept for the whole session ---------- */
   function makeRenderer(){
-    const r = new THREE.WebGLRenderer({antialias:true, alpha:true, powerPreference:"low-power"});
-    r.setPixelRatio(Math.min(1.75, window.devicePixelRatio || 1)); r.outputColorSpace = THREE.SRGBColorSpace;
+    const r = new THREE.WebGLRenderer({antialias:!lite, alpha:true, powerPreference:"low-power"});
+    r.setPixelRatio(lite ? 1 : Math.min(1.75, window.devicePixelRatio || 1)); r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1.05;
     r.domElement.className = "g3-canvas"; r.domElement.setAttribute("aria-hidden", "true");
     return r;
@@ -431,6 +439,7 @@ const G3 = (() => {
   function pitch(scene, lines = true){
     // mown stripes across the pitch, then the lines as thin strips
     const g1 = mat("#1D6B3A", .95), g2 = mat("#22793F", .95), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), g1); ground.rotation.x = -Math.PI/2; ground.position.set(0, -.01, 0); scene.add(ground);   // grass to the horizon
     for (let i = -2; i < 20; i++){ const s = new THREE.Mesh(new THREE.PlaneGeometry(120, 4), i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); scene.add(s); }
     if (!lines) return;
     const strip = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), line); m.rotation.x = -Math.PI/2; m.position.set(x, .01, z); scene.add(m); };
@@ -583,7 +592,7 @@ const G3 = (() => {
     let nf = 0, last = 0, sum = 0, cnt = 0;
     const watch = now => { if (last && ++nf > 4){ sum += now - last; cnt++;
         if (cnt >= 12){ const avg = sum/cnt; sum = cnt = 0;
-          if (avg > 45){ if (r.getPixelRatio() > 1){ r.setPixelRatio(1); r._w = 0; } else { slow = true; try{ sessionStorage.setItem("efp-3d-slow", "1"); }catch(e){} } } } }
+          if (avg > 45){ goLite(); if (r.getPixelRatio() > 1){ r.setPixelRatio(1); r._w = 0; } else { slow = true; try{ sessionStorage.setItem("efp-3d-slow", "1"); }catch(e){} } } } }
       last = now; };
     const frame = now => {
       raf = 0; if (stopped) return; if (!r.domElement.isConnected){ W.stop(); return; }
@@ -661,11 +670,14 @@ const G3 = (() => {
     const ks = blob(1, .7); ks.position.set(0, .006, kz); scene.add(ks);
     // a wall for free kicks, 9.15 m out
     if (o.v==="freekick") for (let i = 0; i < 4; i++){ const w = makePlayer(o.wall); w.root.position.set(-.75 + i*.5, 0, D - 9.15); scene.add(w.root); pose(w, "wall", i); }
+    // the referee, off to one side, watching
+    const ref = makePlayer({skin:["#8D5A3B", "#E0B590", "#C08368", "#5C3A26"][Math.floor(D)%4], c1:"#141414", c2:"#F5C542", shorts:"#141414", socks:"#141414", num:"", name:""});
+    const rz = D - 5 > kz + 3 ? D - 5 : D + 1; ref.root.position.set(3.4, 0, rz); ref.root.rotation.y = Math.atan2(-3.4, D/2 - rz); scene.add(ref.root);
     // the camera: high behind the ball and dead centre, so the taker sits below the goal and both corners are clear;
     // the ball where your finger goes (92% down), just over the bar 13% down
     frameCam(cam, new THREE.Vector3(0, 2.75, D + 4.7), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.75, 0), .13);
     Object.assign(W, {taker, K, kp, ks, kz, D});
-    W.idle = t => { pose(taker, "idle", t); pose(K, "ready", t); };
+    W.idle = t => { pose(taker, "idle", t); pose(K, "ready", t); pose(ref, "idle", t + 2.3); };
     W.start();
     return W;
   }
@@ -919,6 +931,8 @@ const G3 = (() => {
     let lo = 4, hi = 40; for (let i = 0; i < 30; i++){ const D = (lo + hi)/2, x = new THREE.Vector3(3.66, 1.2, 0).project(fr(D)).x; if (x > .8) lo = D; else hi = D; }
     const D = (lo + hi)/2, W = base(stage, {}, new THREE.Vector3(0, .11, D)), {scene, cam} = W, c0 = fr(D); W.looks = MLOOKS;
     cam.fov = c0.fov; cam.position.copy(c0.position); cam.quaternion.copy(c0.quaternion); cam.updateProjectionMatrix();
+    // a 2D goal drawn at an angle (the finesse shot's) is front-on here, so its swipe lines up with the 3D goal
+    const tilt = svg.style.cssText; if (tilt){ svg.style.cssText = ""; const st0 = W.stop; W.stop = () => { st0(); if (svg.isConnected) svg.style.cssText = tilt; }; }
     const rc = new THREE.Raycaster(), hit = new THREE.Vector3(), plane = new THREE.Plane(), nz = new THREE.Vector3(0, 0, 1), ny = new THREE.Vector3(0, 1, 0);
     const cast = (x, y, onZ) => { rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam); if (onZ != null) plane.set(nz, -onZ); else plane.set(ny, 0); return rc.ray.intersectPlane(plane, hit) ? hit.clone() : null; };
     // their keeper (or you, in goal), on his line
@@ -1008,6 +1022,9 @@ const G3 = (() => {
       const back = G(150, 124), bd = scene.children.find(o=>o.isMesh && o.material && o.material.map===boardTex), cr = scene.children.find(o=>o.isMesh && o.material && o.material.map===crowdTex);
       if (bd){ bd.position.set(back.x, .45, back.z); bd.scale.set(.6, 1, 1); }
       if (cr){ cr.position.set(back.x, 5.4, back.z - .05); cr.rotation.x = 0; cr.scale.set(.42, .45, 1); } }
+    // a 2D scene with no goal in it (the slalom's course): no goal, and the stand behind it pushed well back
+    if (svg.dataset.nogoal){ scene.children.forEach(o=>{ if (o.isLineSegments || o.renderOrder===-1 || (o.isMesh && o.geometry && o.geometry.type==="CylinderGeometry")) o.visible = false; });
+      if (W.crowd[0]) W.crowd[0].parent.position.z -= 60; }
     // the 2D pitch's own markings (its boxes, arcs and centre circle), traced onto the grass
     const mk = svg.querySelector('g[fill="none"]');
     if (mk){ const pts = [];
