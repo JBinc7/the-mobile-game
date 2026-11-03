@@ -1233,9 +1233,16 @@ const G3 = (() => {
     const W = base(stage, {cam, noLines:true, focus:G(150, 90), shadowSize:15}, G(150, 90, .11)), {scene} = W;
     if (V.track){ // side-on: the middle of the picture is the grass behind the line of play, and there's no goal in it
       O.copy(new THREE.Vector3(...V.o)).addScaledVector(ey, (90 - V.track)*MK/SE); scene.children.forEach(o=>{ if (o.isLineSegments || (o.isMesh && o.geometry && o.geometry.type==="CylinderGeometry")) o.visible = false; });
-      const back = G(150, 124), bd = scene.children.find(o=>o.isMesh && o.material && o.material.map===boardTex), cr = scene.children.find(o=>o.isMesh && o.material && o.material.map===crowdTex);
-      if (bd){ bd.position.set(back.x, .45, back.z); bd.scale.set(.6, 1, 1); }
-      if (cr){ cr.position.set(back.x, 5.4, back.z - .05); cr.rotation.x = 0; cr.scale.set(.42, .45, 1); } }
+      // the stand as 2D draws it, just behind: the crowd (2D's y 0 to 106) over the advertising boards (106 to 126) where the grass ends
+      scene.children.forEach(o=>{ if (o.userData.stand || o.userData.pylon || o.renderOrder===-1) o.visible = false; });
+      const back = G(150, 126), CE2 = Math.cos(EL), bh = 20*MK/CE2, ch = 106*MK/CE2 + 1;
+      const bdm = new THREE.Mesh(new THREE.PlaneGeometry(60, bh), new THREE.MeshBasicMaterial({map:boardTex})); bdm.position.set(back.x, bh/2, back.z); scene.add(bdm);
+      const ct = crowdTex.clone(); ct.wrapS = ct.wrapT = THREE.RepeatWrapping; ct.repeat.set(1.7, ch/11); ct.needsUpdate = true;   // (closer than a real stand: the fans tiled smaller)
+      const crm = new THREE.Mesh(new THREE.PlaneGeometry(60, ch), new THREE.MeshBasicMaterial({map:ct, color:0xB4BCB7})); crm.position.set(back.x, bh + ch/2 - .05, back.z - .6); scene.add(crm);
+      const rw = new THREE.Mesh(new THREE.PlaneGeometry(60, 2), mat("#1B2228", .85)); rw.position.set(back.x, bh + .6, back.z - .3); rw.rotation.x = -Math.PI/2; scene.add(rw);
+      // a goal at the side when 2D has one (lgSideGoal: its post at x 30, the net back to the left), side-on to us, its mouth to the play
+      const sg = svg.querySelector('path[fill="url(#lvNetS)"]');
+      if (sg){ const px = +(/M\s*([-\d.]+)/.exec(sg.getAttribute("d")) || [0, 30])[1], at = G(px, V.track), gg = new THREE.Group(); goalFrame(gg); gg.rotation.y = Math.PI/2; gg.position.set(at.x, 0, at.z); scene.add(gg); } }
     // looking out of your own goal, the camera's high behind it: the stand there (and the pylons) would be in the way
     if (vk==="bottom"){ if (W.crowd[0]) W.crowd[0].parent.visible = false; scene.children.forEach(o=>{ if (o.userData.pylon) o.visible = false; }); }
     // a 2D scene with no goal in it (the slalom's course): no goal, and the stand behind it pushed well back
@@ -1277,12 +1284,17 @@ const G3 = (() => {
       svg.querySelectorAll(".lv-man").forEach(el=>{
         if (!el.getClientRects().length) return; seen.add(el);
         let M = men.get(el);
-        if (!M){ M = W.add(lookFor(el), 0, 0, 0); M.root.scale.setScalar(1.3); M.last = null; M.v = 0; M.yaw = null; M.ph = Math.random(); M.w = 0; men.set(el, M); }
+        if (!M){ M = W.add(lookFor(el), 0, 0, 0); M.root.scale.setScalar(1.3); M.sz = 1.3; M.last = null; M.v = 0; M.yaw = null; M.ph = Math.random(); M.w = 0; men.set(el, M); }
         const dt = M.last ? Math.min(.1, Math.max(0, (now - M.lt)/1000)) : 0;
-        const m = inv.multiply(el.getScreenCTM()), p = G(m.e, m.f), at = M.at;
+        const m = inv.multiply(el.getScreenCTM()), at = M.at;
+        // his size as 2D draws him (bigger in the side-on games)
+        const sz = 1.3*Math.min(1.9, Math.max(.6, Math.hypot(m.a, m.b))); if (Math.abs(sz - M.sz) > .01){ M.sz = sz; M.root.scale.setScalar(sz); }
+        // side-on, 2D shows a jump by moving him up the picture: here he stays on his line and goes up
+        let p; if (V.track){ M.y0 = Math.max(M.y0 ?? m.f, m.f); p = G(m.e, M.y0, Math.max(0, M.y0 - m.f)*MK/CE); }
+        else p = G(m.e, m.f);
         // facing: the way he's moving, or towards the ball
         const moved = M.last ? Math.hypot(p.x - M.last.x, p.z - M.last.z) : 0, yaw0 = at.rotation.y;
-        if (M.last){ const d = p.clone().sub(M.last), sp = d.length()/Math.max(.001, (now - M.lt)/1000); M.v += (Math.min(12, sp) - M.v)*(1 - Math.exp(-dt*9)); if (d.lengthSq() > 1e-6) M.yaw = Math.atan2(d.x, d.z); }
+        if (M.last){ const d = p.clone().sub(M.last).setY(0), sp = d.length()/Math.max(.001, (now - M.lt)/1000); M.v += (Math.min(12, sp) - M.v)*(1 - Math.exp(-dt*9)); if (d.lengthSq() > 1e-6) M.yaw = Math.atan2(d.x, d.z); }
         else if (ballAt) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
         if (M.v < .6 && ballAt && p.distanceTo(ballAt) > .5) M.yaw = Math.atan2(ballAt.x - p.x, ballAt.z - p.z);
         M.last = p.clone(); M.lt = now; at.position.copy(p); if (M.yaw!=null) at.rotation.y += Math.atan2(Math.sin(M.yaw - at.rotation.y), Math.cos(M.yaw - at.rotation.y))*(1 - Math.exp(-dt*11));
@@ -1296,7 +1308,7 @@ const G3 = (() => {
         else if (cheer >= 0) pose(M, "cheer", cheer);
         else if (Math.abs(rot) > .35 || (anc && anc.contains("dive")) || el.closest(".dive")){ pose(M, "dive", Math.min(1, Math.abs(rot)/1.1)); M.root.rotation.z = -rot; }
         else {   // standing, walking, jogging, running or sprinting, by his speed; the stride matched to the ground he covers
-          let v = M.v/1.3, d = moved/1.3;
+          let v = M.v/M.sz, d = moved/M.sz;
           if (el.querySelector(".lv-legs.run") && v < 3.2){ v = 3.6; d = v*dt; }   // running on the spot (the 2D world scrolls past him)
           M.ph += strideBy(d, v); pose(M, "move", M.ph, v);
           // leaning into his turns, more the faster he goes
