@@ -546,7 +546,7 @@ function lgChip(st){
     st.lab.tally = `${got} of 3`;
     const rush = clamp(2300*(1 + e*.4) - k*160, 1500, 2900), charge = 1100;
     lgShow(st, "Chip the keeper", `Go ${k+1} of 3. He's rushing out. Hold to lift it; let go with the bar in the green.`,
-      lvGoalSvg(kit.them, null, false, {dist:18}) + lgHud(got, "chips"),
+      lvGoalSvg(kit.them, null, false, {dist:18, run:true}) + lgHud(got, "chips"),
       `<div class="lv-bar lg-chipbar" aria-hidden="true"><span class="lv-zone"></span><span class="lg-fill"></span></div><button type="button" class="btn primary big lv-act">Hold to chip</button>`);
     const fin = r => { off(); res(r); }, off = lgKeys(k2=>{ if (k2===" " || k2==="Enter"){ press(true); return 1; } }, k2=>{ if (k2===" " || k2==="Enter") press(false); });
     lvSkippable(fin);

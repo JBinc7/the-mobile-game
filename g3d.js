@@ -424,7 +424,7 @@ const G3 = (() => {
   /* ---------- renderers: one for the card, one for the mini-games, kept for the whole session ---------- */
   function makeRenderer(){
     const r = new THREE.WebGLRenderer({antialias:!lite, alpha:true, powerPreference:"low-power"});
-    r.setPixelRatio(lite ? 1 : Math.min(1.75, window.devicePixelRatio || 1)); r.outputColorSpace = THREE.SRGBColorSpace;
+    r.setPixelRatio(lite ? 1 : Math.min(2, window.devicePixelRatio || 1)); r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping; r.toneMappingExposure = 1;
     if (!lite){ r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; }   // real shadows under the floodlights (not on older phones)
     r.domElement.className = "g3-canvas"; r.domElement.setAttribute("aria-hidden", "true");
@@ -470,7 +470,7 @@ const G3 = (() => {
       for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]){ x.save(); x.translate(ox, oy); x.fillRect(px - rr, py - rr, rr*2, rr*2); x.restore(); } }
     for (let i = 0; i < 26000; i++){ const px = R()*N, py = R()*N, l = 2 + R()*5, sh = R(); x.strokeStyle = sh < .5 ? `rgba(255,255,255,${(.1 + R()*.2).toFixed(2)})` : `rgba(0,0,0,${(.1 + R()*.22).toFixed(2)})`;
       x.lineWidth = .8 + R()*.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - .5)*1.6, py - l); x.stroke(); }
-    grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 8; return grassTex; }
+    grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 16; return grassTex; }
   const grassMat = c2 => { const k = "grass|" + c2; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({color:col(c2), map:grassFor(), roughness:.92, envMapIntensity:.55})); return mats.get(k); };
   const tileUV = (g, u, v) => { const a = g.attributes.uv; for (let i = 0; i < a.count; i++) a.setXY(i, a.getX(i)*u, a.getY(i)*v); return g; };
   /* ---------- the picture: a broadcast look over the render ----------
@@ -933,7 +933,7 @@ const G3 = (() => {
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
       await Promise.all([
         W.tween(sw*1.05, k=>pose(taker, "kick", .55 + .45*k)),
-        W.tween(q.ms, k=>{ const e = glide(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
+        W.tween(q.ms, k=>{ const e = glide(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e) + (q.swerve || 0)*.32*Math.sin(3*Math.PI*e)*4*e*(1 - e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
           cam.fov = fov0 - 3*e; cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
         W.tween(q.kms, k=>{ const e = ease(Math.max(0, (k - .14)/.86)); kp.position.lerpVectors(kFrom, kTo, e); kp.position.y -= .09*Math.sin(Math.min(1, k/.3)*Math.PI);   // a dip to set himself, then he goes
@@ -1144,6 +1144,9 @@ const G3 = (() => {
         W.mode = "play"; W.rec = q.res==="assist" ? [] : null; runners.forEach(R=>pose(R, "idle", 0)); pose(mk, "idle", 0);
         await W.tween(200, k=>pose(me, "kick", .45 + .55*k));
         const s = P3(...spot); s.y = q.res==="wasted" ? .11 : 1.9;
+        // the camera pushes in behind the runner as it comes to him, so you see what he does with it
+        const c0p = cam.position.clone(), c0l = new THREE.Vector3(side*1.2, .4, 6.2), c1p = new THREE.Vector3(s.x + side*2.2, 2.4, s.z + 5.5), c1l = new THREE.Vector3(s.x*.3, 1.1, 0), cl = new THREE.Vector3();
+        W.tween(900, k=>{ const e = k*k*(3 - 2*k); cam.position.lerpVectors(c0p, c1p, e); cam.lookAt(cl.lerpVectors(c0l, c1l, e)); });
         await flight(W, W.B.position.clone(), s, 520, 3.2);
         const R = runners[i];
         if (q.res==="assist" || q.res==="saved"){
@@ -1190,6 +1193,8 @@ const G3 = (() => {
     const W = base(stage, {}, new THREE.Vector3(0, .11, D)), {scene, cam} = W; W.looks = MLOOKS;
     if (far) frameCam(cam, new THREE.Vector3(.4, 2.6 + D*.03, D + 5.2), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.44, 0), .2);
     else { cam.fov = c0.fov; cam.position.copy(c0.position); cam.quaternion.copy(c0.quaternion); cam.updateProjectionMatrix(); }
+    // a breakaway (svg data-run: the chip): you run at goal with the ball as he comes out, the camera with you
+    const run = far && !!svg.dataset.run, cz0 = cam.position.z; let adv = 0, runT0 = 0;
     // a 2D goal drawn at an angle (the finesse shot's) is front-on here, so its swipe lines up with the 3D goal
     const tilt = svg.style.cssText; if (tilt){ svg.style.cssText = ""; const st0 = W.stop; W.stop = () => { st0(); if (svg.isConnected) svg.style.cssText = tilt; }; }
     const rc = new THREE.Raycaster(), hit = new THREE.Vector3(), plane = new THREE.Plane(), nz = new THREE.Vector3(0, 0, 1), ny = new THREE.Vector3(0, 1, 0);
@@ -1225,12 +1230,14 @@ const G3 = (() => {
       const now = performance.now(), b0 = svg.querySelector("#lvBall"), bs0 = b0 ? Math.hypot(...(m => [m.a, m.b])(inv.multiply(b0.getScreenCTM()))) : 1;
       if (s0==null) s0 = bs0;
       if (!kickAt && (svg.querySelector(".lv-boot") || bs0 < s0 - .01)) kickAt = now;
-      if (kickAt) pose(tk, "kick", Math.min(1, (now - kickAt)/300)); else pose(tk, "idle", T());
+      if (run && !kickAt && runT0){ const a0 = adv; adv = Math.min(7, (now - runT0)*2.8/1000); tk.at.position.z = D + .62 - adv; cam.position.z = cz0 - adv; cam.updateMatrixWorld(); stepTo(tk, adv - a0, Math.max(.001, (now - (W.rt || now))/1000)); W.rt = now; }
+      else if (kickAt) pose(tk, "kick", Math.min(1, (now - kickAt)/300)); else pose(tk, "idle", T());
       const kel = svg.querySelector("#lvKp");
       if (kel && kel.getClientRects().length){ const m = inv.multiply(kel.getScreenCTM()), rot = Math.atan2(m.b, m.a), ksz = Math.hypot(m.a, m.b);
         // off his line (2D draws him bigger as he comes out): how far, from his size
         const out = ksz > 1.1 ? Math.min(D0 - kz - .5, (c0.position.z - kz)*(1 - 1/ksz)) : 0, zo = kz + out, p = cast(m.e, m.f, zo);
-        if (p){ p.z = kz + out*S; if (out > 0) p.y = Math.max(p.y, .94); }
+        if (p){ p.z = Math.min(kz + out*S, D - adv - 1.1); if (out > 0) p.y = Math.max(p.y, .94); }
+        if (run && out > .05 && !runT0) runT0 = now;   // he's coming: off you go
         // diving, his hands go where 2D's keeper is (that's what 2D's saves are measured from); otherwise he's on his toes there
         const dv = Math.abs(rot) > .2 || kel.classList.contains("dive");
         if (p && dv){ const R = reachFor(new THREE.Vector3(p.x, Math.max(.15, p.y), p.z), reach); kp.position.copy(R.at); kp.rotation.z = R.roll; pose(K, "dive", R.k); }
@@ -1242,7 +1249,7 @@ const G3 = (() => {
       // the ball: how far it's come from its 2D size, then cast through the picture at that depth
       const bb = svg.querySelector("#lvBall > .lv-bb") || svg.querySelector("g[id] > .lv-bb");
       if (bb){ const g = bb.parentNode, m = inv.multiply(g.getScreenCTM()), s = Math.hypot(m.a, m.b), q = clamp((1 - s)/.4, 0, 1.15), tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || "");
-        const lift = tz ? -(+tz[1])*s : 0, p = cast(m.e, m.f - lift, D0*(1 - q)); if (p){ p.z *= S; W.B.position.set(p.x, Math.max(.11, p.y), p.z); W.bs.position.set(p.x, .006, p.z); } W.B.rotation.x -= .08; }
+        const lift = tz ? -(+tz[1])*s : 0, p = cast(m.e, m.f - lift, D0*(1 - q)); if (p){ p.z *= S*(D - adv)/D; if (run && !kickAt) p.x += .25; W.B.position.set(p.x, Math.max(.11, p.y), p.z); W.bs.position.set(p.x, .006, p.z); } W.B.rotation.x -= .08; }
       // anyone else: a wall, a striker, on the grass
       svg.querySelectorAll(".lv-man").forEach(el=>{ if (!el.getClientRects().length) return; seen.add(el); let M = men.get(el);
         if (!M){ const k = el.dataset.k || "#1D4ED8"; M = W.add({...W.looks.anyone(el), c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || "#FFFFFF", num:el.dataset.n || ""}, 0, 0, 0); men.set(el, M); }

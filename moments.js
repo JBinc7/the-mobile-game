@@ -311,7 +311,7 @@ function lvGoalSvg(kc, wall, me, o={}){
   const skin = you ? LV_SKIN[S.player.skin ?? 1] : "#D9A37A", hair = you ? (S.player.hair==="none" ? null : HAIRC[S.player.hairColour]) : "#1A120D";
   const ink = lvLight(kc) ? "#15171A" : "#FFFFFF", trim = LV_TRIM[kc] && !lvNear(LV_TRIM[kc], kc) ? LV_TRIM[kc] : lvLight(kc) ? "#1F2937" : "#E5E7EB";
   // o.dist: how far out it's taken, in metres, for 3D (a free kick, a chip); 2D's picture is the same either way
-  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="goal"${me ? ` data-kme="1"` : ""}${o.dist ? ` data-dist="${o.dist}"` : ""}>
+  return `<svg viewBox="0 0 300 180" aria-hidden="true" data-view="goal"${me ? ` data-kme="1"` : ""}${o.dist ? ` data-dist="${o.dist}"` : ""}${o.run ? ` data-run="1"` : ""}>
     <defs>${LV_DEFS}<pattern id="lvNet" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M10 0H0V10" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="1"/></pattern>
       <linearGradient id="lvPostV" x1="0" x2="1"><stop offset="0" stop-color="#BFC6C1"/><stop offset=".5" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3ABA6"/></linearGradient>
       <linearGradient id="lvPostH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#A3ABA6"/></linearGradient>
@@ -811,7 +811,10 @@ function lvShotCore(st, m, v, head, title, o = {}){
          penalty he picks a side as you strike: send him the wrong way and it's in, unless it's at where he stood */
       const pace = green ? 1 : short ? 1.25 + off*2 : 1.06;
       const kk = Math.sqrt(K.k), rx = (38 + kq*72)*pace*kk, ry = (46 + kq*26)*pace*kk;
-      let d = Math.hypot((x - 150)/rx, (y - 80)/ry), guess = 0;
+      // the curl: how far your flick bowed out from a straight line (the ball bends the same way, round and back to its spot)
+      const A0 = pts[0], fdx = q[0] - A0[0], fdy = q[1] - A0[1], fL = Math.hypot(fdx, fdy) || 1; let bow = 0;
+      pts.forEach(P=>{ const c = ((P[0] - A0[0])*fdy - (P[1] - A0[1])*fdx)/fL; if (Math.abs(c) > Math.abs(bow)) bow = c; });
+      let d = Math.hypot((x - 150)/rx, (y - 80)/ry)*(1 + Math.min(.25, Math.abs(bow)/90)), guess = 0;   // a well-bent shot is harder to read
       if (v==="pen"){ guess = Math.random() < .16 ? 0 : Math.random() < .5 ? -1 : 1;
         if (guess && guess!==side && Math.abs(x - 150)>22) d = 9; else if (!guess) d = Math.abs(x - 150)<30 && y>50 ? .3 : d*1.7; }
       // a shot at him (near the middle of the goal) he saves most of the time, however well it's struck; unless he's
@@ -825,11 +828,13 @@ function lvShotCore(st, m, v, head, title, o = {}){
       const kcol = guess ? (guess<0 ? "l" : "r") : green ? (col==="l" ? "r" : col==="r" ? "l" : pick(["l","r"])) : col;
       const [kx, ky, rot] = lvKeeperTo(clamp(wx, 36, 264), clamp(ty, 30, 116), !goal && !over && !wide && !wood && !wall ? "save" : guess && guess!==side ? "wrong" : d>1.6 ? "wrong" : "near", kcol);
       // pace follows the power: the harder you hit it, the quicker it's there
-      const ms = clamp(760 - Math.min(p, 1.05)*520, 290, 760)*(green ? .92 : 1), h = over ? 26 : y<72 ? 14 : y>96 ? 1 : 4, curve = (col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6);
+      const ms = clamp(760 - Math.min(p, 1.05)*520, 290, 760)*(green ? .92 : 1), h = over ? 26 : y<72 ? 14 : y>96 ? 1 : 4, curve = Math.abs(bow) > 3 ? clamp(-bow*2.2, -48, 48) : (col==="l" ? -1 : col==="r" ? 1 : 0)*(4 + Math.random()*4);
+      // struck clean and hard with little curl, it swerves late (a knuckleball)
+      const swerve = green && p > (lo + hi)/2 && Math.abs(bow) < 4 ? (Math.random() < .5 ? -1 : 1) : 0;
       // on target and not in: the keeper's saved it, so he gets there with the ball; he holds the ones at him, parries the rest
       const saved = !goal && !over && !wide && !wood && !wall, held = saved && (d<.6 || Math.random() < kq*.4);
       const kms = saved ? Math.min(330 + (1 - kq)*110, ms*.9) : 330 + (1 - kq)*110;
-      if (g3) await g3.play({wx:clamp(wx, -10, 310), ty, ms, h, curve, kx, ky, rot, kms, goal, over, wide, wood, wall, saved, held, power:p});
+      if (g3) await g3.play({wx:clamp(wx, -10, 310), ty, ms, h, curve, swerve, kx, ky, rot, kms, goal, over, wide, wood, wall, saved, held, power:p});
       else {
         await lvStrike(st);
         await Promise.all([
@@ -921,7 +926,7 @@ function lvPassCore(st, head, title, sub, extra=0){
   const spots = [[50,72],[150,36],[250,72]].map(([x,y])=>[x + Math.random()*24-12, y + Math.random()*14-7]);
   return new Promise(res=>{
     lvShow(`${head}<h2 class="lv-t">${title}</h2><p class="lv-s">${sub}</p>
-      <div class="lv-stage">${lvField("top", spots.map(([x,y],i)=>lvMan(x, y, kit.us, {num:[9,10,7][i], id:`lvM${i}`})).join("") + lvMan(150, 166, kit.us, {ring:"#F5C542"})
+      <div class="lv-stage">${lvField("top", spots.map(([x,y],i)=>lvMan(x, y, kit.us, {num:[9,10,7][i], id:`lvM${i}`})).join("") + lvMan(150, 166, kit.us, {ring:"#F5C542"}) + `<g id="lvGk">${lvMan(0, 0, "#16A34A", {s:.95})}</g>`
           + [0,1,2].map(i=>`<g class="lv-dg" data-d="${i}" style="transform:translate(150px,110px)">${lvMan(0, 0, kit.them, {s:.92})}</g>`).join("") + lvBallSvg("lvPb", 150, 150, 4))}
         ${spots.map(([x,y],i)=>`<button type="button" class="lv-tap lv-mate" data-i="${i}" style="${lvPct(x, y-14)}" aria-label="Pass to number ${[9,10,7][i]}"></button>`).join("")}
       </div>
@@ -935,7 +940,7 @@ function lvPassCore(st, head, title, sub, extra=0){
       ds[2].style.transform = `translate(${110 + Math.random()*80}px,${112 + Math.random()*16}px)`;
       lv$(".lv-stage").dataset.open = open;
     };
-    place();
+    place(); lvMove("#lvGk", 150, 12);   // their keeper, on his line
     const t0 = performance.now(), bar = lv$(".lv-timer span"); let next = t0 + iv;
     lvLoop(now=>{
       if (done) return false;
@@ -950,7 +955,7 @@ function lvPassCore(st, head, title, sub, extra=0){
       // the ball goes to him, or to the defender who was waiting for it
       if (i>=0){ const [x,y] = spots[i], far = Math.hypot(x-150, y-150) > 90;
         lvKick(); await lvFly("#lvPb", [150, 150], ok ? [x, y] : [x + (x<150 ? 9 : x>150 ? -9 : 0), y + 8], far ? 420 : 320, {h:far ? 16 : 5, spin:1}); }
-      res({ok, i, why: i<0 ? "You took too long" : ok ? "" : "He was marked"});
+      res({ok, i, at:i>=0 ? spots[i] : null, why: i<0 ? "You took too long" : ok ? "" : "He was marked"});
     };
     lvEl.querySelectorAll(".lv-mate").forEach(b=>lvTap(b, ()=>finish(+b.dataset.i)));
     // a drag towards one of them: whoever was free when you started the drag counts, as a tap would have
@@ -968,7 +973,13 @@ async function lvGamePass(st, m){
   const r = await lvPassCore(st, lvHead(st, m.min), title, "Drag the ball to the teammate who's free before the defenders close him down.");
   if (r==="skip") return r;
   if (!r.ok) return {ok:false, big: r.i<0 ? "Closed down" : "Intercepted", small:r.why, bonus:-.1};
-  return Math.random() < lvConv(st, m, .32) ? {ok:true, big:"Assist!", small:"Your teammate finished it off", a:1} : {ok:true, big:"Chance created", small:"Great ball, but his shot was saved", bonus:.1};
+  const scored = Math.random() < lvConv(st, m, .32);
+  // what he did with it: a touch, a shot at goal, and the keeper going for it
+  if (r.at && lvEl){ const [x, y] = r.at, side = x < 150 ? 1 : -1, gx = scored ? 150 + side*(30 + Math.random()*20) : 150 + side*12, gy = scored ? 4 : 10;
+    await lvWait(160); lvKick(`#lvM${r.i}`);
+    await Promise.all([lvFly("#lvPb", [x, y], [gx, gy], 360, {h:6, spin:1.6}), lvTween(300, k=>{ const q = lvEaseOut(k); lvMove("#lvGk", 150 + (scored ? -side*14 : side*12)*q, 12, (scored ? -side : side)*40*q); })]);
+    if (scored) await lvWait(200); }
+  return scored ? {ok:true, big:"Assist!", small:"Your teammate finished it off", a:1} : {ok:true, big:"Chance created", small:"Great ball, but his shot was saved", bonus:.1};
 }
 
 /* ---------- take-ons: read the defender and go the other way ---------- */
