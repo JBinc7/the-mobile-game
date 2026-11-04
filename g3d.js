@@ -310,7 +310,7 @@ const G3 = (() => {
     model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = true;
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
         : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite || F!==M ? null : M.headN, roughness:.62}))
-        : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:lite ? null : M.bodyN, roughness:.78})));
+        : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:lite ? null : M.bodyN, roughness:.6})));
       o.material = ms.length===1 ? ms[0] : ms; });
     const bones = {}, byName = {}; model.traverse(o=>{ if (o.isBone){ bones[o.name.replace(/^Bip01_?/, "") || "root"] = o; byName[o.name] = o; } });
     // a keeper's gloves
@@ -473,16 +473,80 @@ const G3 = (() => {
     grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 8; return grassTex; }
   const grassMat = c2 => { const k = "grass|" + c2; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({color:col(c2), map:grassFor(), roughness:.92, envMapIntensity:.55})); return mats.get(k); };
   const tileUV = (g, u, v) => { const a = g.attributes.uv; for (let i = 0; i < a.count; i++) a.setXY(i, a.getX(i)*u, a.getY(i)*v); return g; };
+  /* ---------- the picture: a broadcast look over the render ----------
+     The scene's drawn into a high-range buffer (with its own antialiasing), then: bloom (the floodlights, the roof
+     strips, white kit and the ball glow a little), a grade (cooler in the shadows, warmer in the highlights, a touch
+     richer), a vignette and a fine grain, and the tone mapping. Older phones (lite) get the plain render */
+  const posts = new WeakMap();
+  const PV = "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }";
+  function postFor(r){
+    if (posts.has(r)) return posts.get(r);
+    const hf = {type:THREE.HalfFloatType, depthBuffer:false}, P = {
+      rt:new THREE.WebGLRenderTarget(4, 4, {type:THREE.HalfFloatType, samples:4}), a:new THREE.WebGLRenderTarget(4, 4, hf), b:new THREE.WebGLRenderTarget(4, 4, hf),
+      scene:new THREE.Scene(), cam:new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), w:0, h:0};
+    P.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2)); P.quad.frustumCulled = false; P.scene.add(P.quad);
+    P.bright = new THREE.ShaderMaterial({uniforms:{t:{value:null}}, vertexShader:PV, toneMapped:false, depthTest:false,
+      fragmentShader:"uniform sampler2D t; varying vec2 vUv; void main(){ vec3 c = texture2D(t, vUv).rgb; float l = max(c.r, max(c.g, c.b)); gl_FragColor = vec4(c*smoothstep(.7, 1.5, l), 1.); }"});
+    // a soft copy of the whole picture, for the shallow focus on the far crowd
+    P.c = new THREE.WebGLRenderTarget(4, 4, hf); P.d = new THREE.WebGLRenderTarget(4, 4, hf);
+    P.copy = new THREE.ShaderMaterial({uniforms:{t:{value:null}}, vertexShader:PV, toneMapped:false, depthTest:false, fragmentShader:"uniform sampler2D t; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(t, vUv).rgb, 1.); }"});
+    P.blur = new THREE.ShaderMaterial({uniforms:{t:{value:null}, d:{value:new THREE.Vector2()}}, vertexShader:PV, toneMapped:false, depthTest:false,
+      fragmentShader:"uniform sampler2D t; uniform vec2 d; varying vec2 vUv; void main(){ vec3 c = texture2D(t, vUv).rgb*.227; c += (texture2D(t, vUv + d*1.385).rgb + texture2D(t, vUv - d*1.385).rgb)*.316; c += (texture2D(t, vUv + d*3.231).rgb + texture2D(t, vUv - d*3.231).rgb)*.07; gl_FragColor = vec4(c, 1.); }"});
+    P.final = new THREE.ShaderMaterial({uniforms:{t:{value:null}, b:{value:null}, s:{value:null}, time:{value:0}}, vertexShader:PV, toneMapped:true, depthTest:false,
+      fragmentShader:`uniform sampler2D t; uniform sampler2D b; uniform sampler2D s; uniform float time; varying vec2 vUv;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)))*43758.5453); }
+        void main(){
+          vec2 e = (vUv - .5)*dot(vUv - .5, vUv - .5)*.012;                          // a little colour fringing towards the edges
+          vec4 s0 = texture2D(t, vUv); s0.r = texture2D(t, vUv + e).r; s0.b = texture2D(t, vUv - e).b;
+          float fo = smoothstep(.86, .99, vUv.y)*.85 + smoothstep(.07, 0., vUv.y)*.35;   // shallow focus: the far crowd soft
+          s0.rgb = mix(s0.rgb, texture2D(s, vUv).rgb, fo);
+          vec3 bl = texture2D(b, vUv).rgb*.72, c = s0.rgb + bl;
+          float al = clamp(s0.a + dot(bl, vec3(.33)), 0., 1.);   // (the home card's drawn over the page: keep its see-through)
+          float l = dot(c, vec3(.2126, .7152, .0722));
+          c = mix(c, c*vec3(.9, 1., 1.12), (1. - smoothstep(0., .45, l))*.6);    // cool shadows
+          c = mix(c, c*vec3(1.08, 1., .9), smoothstep(.3, 1.4, l)*.5);           // warm highlights
+          c = mix(vec3(l), c, 1.14);                                              // richer colour
+          c = pow(max(c, 0.), vec3(1.06));                                        // a little more contrast
+          vec2 q = (vUv - .5)*vec2(1., 1.2); c *= 1. - dot(q, q)*.75;             // vignette
+          gl_FragColor = vec4(max(c, 0.), al);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+          gl_FragColor.rgb += (hash(vUv*1031. + fract(time)*17.) - .5)*.022*al;   // grain
+        }`});
+    posts.set(r, P); return P;
+  }
+  function present(r, scene, cam){
+    if (lite || !r.capabilities.isWebGL2){ r.render(scene, cam); return; }
+    const P = postFor(r), w = r.domElement.width, h = r.domElement.height;
+    if (w !== P.w || h !== P.h){ P.w = w; P.h = h; P.rt.setSize(w, h); P.a.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2)); P.b.setSize(Math.max(1, w >> 2), Math.max(1, h >> 2));
+      P.c.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); P.d.setSize(Math.max(1, w >> 1), Math.max(1, h >> 1)); }
+    const pass = (m, to) => { P.quad.material = m; r.setRenderTarget(to); r.render(P.scene, P.cam); };
+    r.setRenderTarget(P.rt); r.render(scene, cam);
+    P.bright.uniforms.t.value = P.rt.texture; pass(P.bright, P.a);
+    const tx = 1/Math.max(1, w >> 2), ty = 1/Math.max(1, h >> 2);
+    for (let i = 0; i < 2; i++){ P.blur.uniforms.t.value = P.a.texture; P.blur.uniforms.d.value.set(tx*(1 + i), 0); pass(P.blur, P.b);
+      P.blur.uniforms.t.value = P.b.texture; P.blur.uniforms.d.value.set(0, ty*(1 + i)); pass(P.blur, P.a); }
+    // the soft copy: half size, blurred both ways
+    P.copy.uniforms.t.value = P.rt.texture; pass(P.copy, P.c);
+    const hx = 1/Math.max(1, w >> 1), hy = 1/Math.max(1, h >> 1);
+    P.blur.uniforms.t.value = P.c.texture; P.blur.uniforms.d.value.set(hx*1.5, 0); pass(P.blur, P.d);
+    P.blur.uniforms.t.value = P.d.texture; P.blur.uniforms.d.value.set(0, hy*1.5); pass(P.blur, P.c);
+    P.final.uniforms.t.value = P.rt.texture; P.final.uniforms.b.value = P.a.texture; P.final.uniforms.s.value = P.c.texture; P.final.uniforms.time.value = performance.now()/1000;
+    pass(P.final, null);
+  }
   function lights(scene, o = {}){
     const env = !!scene.environment;
-    scene.add(new THREE.HemisphereLight(0xE6EEFF, 0x1A3A22, (o.hemi ?? 1.1)*(env ? .45 : 1)));
-    const a = new THREE.DirectionalLight(0xFFF1D6, o.key ?? 2.2); a.position.set(-4, 7, o.keyZ ?? -5); scene.add(a);
+    scene.add(new THREE.HemisphereLight(0xD8E4FF, 0x16301E, (o.hemi ?? 1.1)*(env ? .32 : 1)));
+    const a = new THREE.DirectionalLight(0xFFE2BE, (o.key ?? 2.2)*1.3); a.position.set(-4, 7, o.keyZ ?? -5); scene.add(a);
     // the main floodlight casts the shadows: of the players, the ball and the goal, round where the play is
     if (o.at && !lite){ const at = o.at, dir = a.position.clone().normalize(); a.target.position.copy(at); scene.add(a.target); a.position.copy(at).addScaledVector(dir, 40);
       a.castShadow = true; a.shadow.mapSize.set(2048, 2048); const sc = a.shadow.camera, z = o.size || 17; sc.left = -z; sc.right = z; sc.top = z; sc.bottom = -z; sc.near = 5; sc.far = 90; sc.updateProjectionMatrix();
       a.shadow.bias = -.0004; a.shadow.normalBias = .03; a.shadow.radius = 3; }
     const b = new THREE.DirectionalLight(0xDDE8FF, o.fill ?? .9); b.position.set(5, 5, 6); scene.add(b);
     const c = new THREE.DirectionalLight(0xFFE9B0, o.rim ?? 1.3); c.position.set(0, 4, -8); scene.add(c);
+    // the floodlights behind the play: a cool edge of light round the players, the ball and the posts
+    const rim = new THREE.DirectionalLight(0xBFD6FF, env ? 2.4 : 1.2); rim.position.set(6, 9, -14); scene.add(rim);
+    const rim2 = new THREE.DirectionalLight(0xFFD9A8, env ? 1.4 : .7); rim2.position.set(-9, 6, -10); scene.add(rim2);
   }
   // empty a scene, freeing what isn't shared (the shared geometries and materials stay for the next one)
   function clear(scene){
@@ -503,7 +567,7 @@ const G3 = (() => {
       if (!drag) spin += Math.min(.05, (now - (frame.last || now))/1000)*.38;   // a slow turn, about one every 17 seconds
       frame.last = now;
       P.root.rotation.y = Math.PI + spin; pose(P, "idle", t);
-      R.render(scene, cam); raf = requestAnimationFrame(frame);
+      present(R, scene, cam); raf = requestAnimationFrame(frame);
     }
     function stop(){ if (raf) cancelAnimationFrame(raf); raf = 0; if (io){ io.disconnect(); io = null; } }
     function mount(el, pl, club){
@@ -669,7 +733,7 @@ const G3 = (() => {
       // the pylon under it, and its bank of lamps
       const py = new THREE.Mesh(new THREE.CylinderGeometry(.35, .6, 24, 8), wallM); py.position.set(s*24, 12, -22.5); py.userData.pylon = true; scene.add(py);
       const hd = new THREE.Mesh(new THREE.BoxGeometry(5, 2.6, .4), lightM); hd.position.set(s*24, 24, -22.2); hd.lookAt(0, 0, 8); hd.userData.pylon = true; scene.add(hd); sp.userData.pylon = true; });
-    scene.fog = new THREE.Fog(0x07120C, 30, 70);
+    scene.fog = new THREE.Fog(0x0C1620, 34, 92);   // a haze over the far stands, for depth
     return crowd;
   }
   let ballTex = null;
@@ -709,7 +773,8 @@ const G3 = (() => {
     W.toStage = v => { cam.updateMatrixWorld(); pv.copy(v).project(cam); return [(pv.x + 1)/2*300, (1 - pv.y)/2*180]; };
     // watch how fast it draws: too slow, and drop the resolution; still too slow, and the next moments are 2D
     let nf = 0, last = 0, sum = 0, cnt = 0;
-    const watch = now => { if (last && ++nf > 4){ sum += now - last; cnt++;
+    const watch = now => { if (window.__g3full) return;   // (testing: keep full quality whatever the speed)
+      if (last && ++nf > 4){ sum += now - last; cnt++;
         if (cnt >= 12){ const avg = sum/cnt; sum = cnt = 0;
           if (avg > 45){ goLite(); if (r.getPixelRatio() > 1){ r.setPixelRatio(1); r._w = 0; } else { slow = true; try{ sessionStorage.setItem("efp-3d-slow", "1"); }catch(e){} } } } }
       last = now; };
@@ -721,16 +786,16 @@ const G3 = (() => {
       anims.forEach(f=>f(now)); net.update(now);
       if (W.rec){ W.rec.push({t:now, o:W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]), p:poseLog}); poseLog = null; }
       if (W.view) fit(r, W.view, host);
-      r.render(scene, W.view || cam); raf = requestAnimationFrame(frame);
+      present(r, scene, W.view || cam); raf = requestAnimationFrame(frame);
     };
     W.start = () => { try{ r.compile(scene, cam); }catch(e){} raf = requestAnimationFrame(frame); };
     W.stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); if (r.domElement.parentNode===host) r.domElement.remove(); if (SR.cur===W) SR.cur = null; };
     // an animation step run every frame for ms milliseconds (several can run at once)
     W.tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
     // the ball into the net: it hits the back of the net, which stretches round it and throws it back out, and it drops
-    W.inNet = async (spinAxis) => { const p0 = B.position.clone(), back = -net.D + .11;
+    W.inNet = async (spinAxis, speed) => { const p0 = B.position.clone(), back = -net.D + .11;
       net.touch(B.position);
-      const t1 = Math.max(90, Math.abs(back - p0.z)*90);
+      const t1 = speed ? Math.max(60, Math.abs(back - p0.z)/speed) : Math.max(90, Math.abs(back - p0.z)*90);
       await W.tween(t1, k=>{ B.position.set(p0.x*(1 - .06*k), Math.max(.11, p0.y - .12*k*k), p0.z + (back - p0.z)*k); trailPush(); B.rotateOnAxis(spinAxis, -.25); });
       W.fadeTrail();
       const p1 = B.position.clone();
@@ -743,6 +808,13 @@ const G3 = (() => {
     W.add = (look, x, z, face = 0) => { const P = makePlayer(look), h = grp(x, 0, z); h.rotation.y = face; h.add(P.root); scene.add(h); P.at = h; W.dyn.push(h, P.root); return P; };
     /* a goal: the scorer wheels away to celebrate, then a slow-motion replay of the recording from a second camera
        (from behind the goal, through the net), then back to him celebrating. It runs on behind the result card */
+    /* a keeper coming down from his dive: a full-length one lands him on his side on the grass, a smaller one back on his
+       feet; a ball he's held comes down with him */
+    W.land = (K, kp, ball) => { const y0 = kp.position.y, r0 = kp.rotation.z, lying = Math.abs(r0) > .6 || y0 > 1.35, rT = lying ? Math.sign(r0 || 1)*1.45 : 0, yT = lying ? .32 : .94;
+      if (Math.abs(y0 - yT) < .04 && Math.abs(r0 - rT) < .04) return Promise.resolve();
+      const off = ball ? ball.position.clone().sub(kp.position) : null;
+      return W.tween(lying ? 440 : 320, k=>{ const g = k*k; kp.position.y = y0 + (yT - y0)*g; kp.rotation.z = r0 + (rT - r0)*(1 - (1 - k)*(1 - k));
+        if (off){ ball.position.copy(kp.position).add(off); bs.position.set(ball.position.x, .006, ball.position.z); } if (!lying && k > .5) pose(K, "ready", performance.now()/1000); }); };
     // a player eased out of whatever he was doing (a header, a strike) back to standing, over ms, then standing on
     const sq = new THREE.Quaternion();
     W.settle = (P, ms = 350, dur = 4000) => { const t1 = performance.now(), from = [];
@@ -798,9 +870,9 @@ const G3 = (() => {
     // the referee, off to one side, watching
     const ref = makePlayer({skin:["#8D5A3B", "#E0B590", "#C08368", "#5C3A26"][Math.floor(D)%4], c1:"#141414", c2:"#F5C542", shorts:"#141414", socks:"#141414", num:"", name:""});
     const rz = D - 5 > kz + 3 ? D - 5 : D + 1; ref.root.position.set(3.4, 0, rz); ref.root.rotation.y = Math.atan2(-3.4, D/2 - rz); scene.add(ref.root);
-    // the camera: high behind the ball and dead centre, so the taker sits below the goal and both corners are clear;
+    // the camera: low behind the ball and dead centre (the ball where your finger goes), so the taker sits below the goal and both corners are clear;
     // the ball where your finger goes (92% down), just over the bar 13% down
-    frameCam(cam, new THREE.Vector3(0, 2.75, D + 4.7), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.75, 0), .13);
+    frameCam(cam, new THREE.Vector3(0, 2.05, D + 4.4), new THREE.Vector3(0, .11, D), .922, new THREE.Vector3(0, 2.75, 0), .13);
     Object.assign(W, {taker, K, kp, ks, kz, D});
     // how far his hands reach above his hips, arms up in a dive (measured on him: everyone's built a little differently)
     W.reach = reachOf(K, kp);
@@ -809,6 +881,8 @@ const G3 = (() => {
     return W;
   }
   const ease = k => 1 - Math.pow(1 - k, 2);
+  // a struck ball through the air: barely slowing (it keeps 85% of its pace to the end), so it carries on into the net
+  const glide = k => k*(1.15 - .15*k);
   // a point of the 2D goal (x 30-270 post to post, y 20 bar to 124 line) in the 3D goal mouth
   const kTarget = (kx, ky) => new THREE.Vector3(gx(kx), Math.max(.55, gy(ky)), 0);
   /* the keeper getting his hands to P (a point on his line): which way he goes (sideways, a full-length dive with his
@@ -859,18 +933,19 @@ const G3 = (() => {
       const spinAxis = new THREE.Vector3(1, q.curve ? -.4*Math.sign(q.curve) : 0, 0).normalize();
       await Promise.all([
         W.tween(sw*1.05, k=>pose(taker, "kick", .55 + .45*k)),
-        W.tween(q.ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
+        W.tween(q.ms, k=>{ const e = glide(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + arcH*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); bs.scale.setScalar(Math.max(.3, 1 - B.position.y*.25));
           cam.fov = fov0 - 3*e; cam.updateProjectionMatrix(); }),   // a slight zoom as it flies
-        W.tween(q.kms, k=>{ const e = ease(k); kp.position.lerpVectors(kFrom, kTo, e); kp.rotation.z = roll*e; pose(K, "dive", e*dk); ks.position.x = kp.position.x; })
+        W.tween(q.kms, k=>{ const e = ease(Math.max(0, (k - .14)/.86)); kp.position.lerpVectors(kFrom, kTo, e); kp.position.y -= .09*Math.sin(Math.min(1, k/.3)*Math.PI);   // a dip to set himself, then he goes
+          kp.rotation.z = roll*e; pose(K, "dive", e*dk); ks.position.x = kp.position.x; })
       ]);
       const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
       if (!q.goal) W.settle(taker, 450);   // no goal: he comes out of the follow-through and stands
       if (q.goal){
-        W.mode = "goal";
-        await W.inNet(spinAxis);
+        W.mode = "goal"; W.land(K, kp);
+        await W.inNet(spinAxis, .85*from.distanceTo(tgt)/q.ms);
         W.goalShow(taker, new THREE.Vector3(-2.3, 0, D - 2), new THREE.Vector3(-7, 3.4, D + (D > 16 ? 6 : 8)), new THREE.Vector3(0, .9, D*.3));
-      } else if (q.over || q.wide){ W.rec = null; fade();
+      } else if (q.over || q.wide){ W.rec = null; fade(); W.land(K, kp);
         await W.tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
       } else if (q.wood){ fade();
         await W.tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
@@ -878,7 +953,8 @@ const G3 = (() => {
         await W.tween(420, k=>{ B.position.set(p0.x + .6*k, Math.max(.11, p0.y + .3*k - 1.2*k*k), p0.z + 3.5*ease(k)); });
       } else if (q.held){ fade();   // held: into his chest, and he keeps it
         await W.tween(240, k=>{ const e = ease(k); B.position.set(p0.x + (kp.position.x - p0.x)*e*.85, p0.y + (kp.position.y + .15 - p0.y)*e*.85, p0.z + .1*e); bs.position.set(B.position.x, .006, B.position.z); });
-      } else { fade();   // parried: pushed away, out and wide
+        await W.land(K, kp, B);
+      } else { fade(); W.land(K, kp);   // parried: pushed away, out and wide
         await W.tween(480, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.8*ease(k), Math.max(.11, p0.y + .3*k - 1.3*k*k), p0.z + 2.6*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
       }
     }
@@ -904,7 +980,7 @@ const G3 = (() => {
     const W = world(stage, o, "save"), {B, bs, taker, K, kp, ks, kz, D} = W;
     // he starts further back for his run-up
     const start = new THREE.Vector3(-1.5, 0, D + 2.6), plant = taker.root.position.clone(); taker.root.position.copy(start);
-    let flying = null, spinAxis = new THREE.Vector3(1, 0, 0), released = false;
+    let flying = null, spinAxis = new THREE.Vector3(1, 0, 0), released = false, flySpeed = 0;
     const rc = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -kz), hitP = new THREE.Vector3();
     return {
       stop:W.stop,
@@ -918,7 +994,7 @@ const G3 = (() => {
         const tgt = new THREE.Vector3(gx(x), Math.max(.11, gy(y)), 0), from = B.position.clone(), cv = (curl || 0)/120*3.66;
         spinAxis = new THREE.Vector3(1, curl ? -.4*Math.sign(curl) : 0, 0).normalize();
         W.tween(200, k=>pose(taker, "kick", .45 + .55*k));
-        flying = W.tween(ms, k=>{ const e = ease(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + .25*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
+        flySpeed = .85*from.distanceTo(tgt)/ms; flying = W.tween(ms, k=>{ const e = glide(k); B.position.set(from.x + (tgt.x - from.x)*e + cv*Math.sin(Math.PI*e), from.y + (tgt.y - from.y)*e + .25*4*e*(1 - e), from.z + (tgt.z - from.z)*e);
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); });
         return flying;
       },
@@ -941,7 +1017,8 @@ const G3 = (() => {
           const R = reachFor(new THREE.Vector3(p0.x, p0.y, kz), W.reach), k0 = kp.position.clone(), r0 = kp.rotation.z, hand = new THREE.Vector3();
           await W.tween(200, k=>{ const e = ease(k); kp.position.lerpVectors(k0, R.at, e); kp.rotation.z = r0 + (R.roll - r0)*e; pose(K, "dive", R.k); kp.updateMatrixWorld(true);
             (K.real ? K.bones[(p0.x < 0 ? "L" : "R") + "_Hand"] : K.rig.elbow[p0.x < 0 ? -1 : 1]).getWorldPosition(hand); B.position.lerpVectors(p0, hand.add(new THREE.Vector3(0, 0, .12)), e); });
-        } else await W.inNet(spinAxis);
+          await W.land(K, kp, B);
+        } else { W.land(K, kp); await W.inNet(spinAxis, flySpeed); }
       }
     };
   }
@@ -1281,6 +1358,10 @@ const G3 = (() => {
         if (B===W.B) W.bs.position.set(B.position.x, .006, B.position.z);
       });
       balls.forEach((B, g)=>{ B.visible = seen.has(g); });
+      // a touch: the ball suddenly away at pace from near a player means he's just played it
+      if (ballAt){ const bt = (now - (W.bt || now))/1000, bsp = W.bp && bt > 0 ? ballAt.distanceTo(W.bp)/bt : 0;
+        if (W.bsp != null && bsp - W.bsp > 3.5 && W.bp){ let best = null, bd = 1.6; men.forEach(M=>{ if (!M.last) return; const d = Math.hypot(M.last.x - W.bp.x, M.last.z - W.bp.z)/(M.sz || 1.3)*1.3; if (d < bd){ bd = d; best = M; } }); if (best) best.touchAt = now; }
+        W.bsp = bsp; W.bp = ballAt.clone(); W.bt = now; }
       svg.querySelectorAll(".lv-man").forEach(el=>{
         if (!el.getClientRects().length) return; seen.add(el);
         let M = men.get(el);
@@ -1306,6 +1387,7 @@ const G3 = (() => {
         if (kick >= 0) pose(M, "kick", Math.min(1, kick/.33));
         else if (hop >= 0){ pose(M, "header", Math.min(1, hop/.46)); at.position.y = Math.sin(Math.min(1, hop/.46)*Math.PI)*.4; }
         else if (cheer >= 0) pose(M, "cheer", cheer);
+        else if (M.touchAt && now - M.touchAt < 300) pose(M, "kick", .45 + .55*(now - M.touchAt)/300);   // the touch
         else if (Math.abs(rot) > .35 || (anc && anc.contains("dive")) || el.closest(".dive")){ pose(M, "dive", Math.min(1, Math.abs(rot)/1.1)); M.root.rotation.z = -rot; }
         else {   // standing, walking, jogging, running or sprinting, by his speed; the stride matched to the ground he covers
           let v = M.v/M.sz, d = moved/M.sz;

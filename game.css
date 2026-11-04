@@ -1355,3 +1355,5 @@ small.boot{display:inline-flex;align-items:center}
 /* the goal view played from further out in 3D: 2D's layer stays hidden, and its drag lines are redrawn where they are in the picture */
 .lv-stage.g3-far>svg:not(.g3-ov),.lv-stage.g3-far>svg:not(.g3-ov) *{visibility:hidden!important}
 .g3-ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}
+/* the interception's three passing lanes stay on in 3D, faint, so you can see where he might pass */
+.lv-stage.g3>svg [id^="lvLn"]{visibility:visible}

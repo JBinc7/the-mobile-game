@@ -763,12 +763,17 @@ function lvShotCore(st, m, v, head, title, o = {}){
     let done = false, pts = [], p = 0, t0 = 0;
     const stage = lv$(".lv-stage");
     const g3 = typeof G3!=="undefined" ? G3.shot(stage, lv3dLooks(st, kit, v)) : null;   // in 3D, when it's on
+    if (g3 && window.__g3full){ window.__shotG3 = g3; const pl = g3.play; g3.play = q => { window.__lastQ = q; return pl(q); }; }   // (testing only)
     // as the old shot: put your finger on the ball and the power starts to build and swing; flick while it's in the green
     // the power locks the moment the flick starts, so you start it in the green
     let locked = false, flickT0 = 0, aimEl = null;
     // where the flick points, across the goal (2D: a gold marker on the line; 3D: a line on the grass)
-    const aimX = q => clamp(150 + clamp((q[0] - pts[0][0])/Math.max(1, pts[0][1] - q[1]), -1.9, 1.9)*110, -40, 340);
-    const showAim = q => { const x = aimX(q); if (g3) return g3.aim(x);
+    /* in 2D the flick's direction is turned into a point across the goal. In 3D it's where the flick, carried on up the
+       picture, crosses the goal line as the 3D goal is drawn: flick at the left corner and that's where it's going */
+    // (at the height it's going in at: flick at the top corner and it's the top corner, not the line under it)
+    const aimX = (q, ty = 124) => { if (g3 && g3.map){ const gY = g3.map.fwd(150, ty)[1], B = pts[0], dy = B[1] - q[1]; if (dy < 1) return 150; const X = B[0] + (q[0] - B[0])*(B[1] - gY)/dy; return clamp(g3.map.inv(X, gY)[0], -40, 340); }
+      return clamp(150 + clamp((q[0] - pts[0][0])/Math.max(1, pts[0][1] - q[1]), -1.9, 1.9)*110, -40, 340); };
+    const showAim = q => { const x = aimX(q, 112 - clamp((150 - (flickT0 ? performance.now() - flickT0 : 120))/100, 0, 1)*80); if (g3) return g3.aim(x);
       const svg = stage.querySelector("svg"); if (!svg) return;
       if (!aimEl){ svg.insertAdjacentHTML("beforeend", `<g class="lv-aimmark" pointer-events="none"><path d="M0 0V-100" stroke="#F5C542" stroke-width="2.5" stroke-dasharray="5 5" opacity=".75"/><path d="M-7 8 0 0 7 8" fill="none" stroke="#F5C542" stroke-width="3" stroke-linecap="round"/></g>`); aimEl = svg.lastElementChild; }
       aimEl.setAttribute("transform", `translate(${x.toFixed(1)} 124)`); };
@@ -790,8 +795,9 @@ function lvShotCore(st, m, v, head, title, o = {}){
          aimed at full pace; the further off the green, the slower and wilder (too much and it rises, too little and it
          dies low). Your finishing tightens it up */
       const green = p>=lo && p<=hi, short = p<lo, long = p>hi, off = green ? 0 : short ? lo - p : p - hi;
-      const ft = flickT0 ? performance.now() - flickT0 : 120, lift = clamp((190 - ft)/130, 0, 1);
-      let x = aimX(q), y = 112 - lift*80;
+      // a quick flick lifts it to the top corner; a steady one drives it low along the ground
+      const ft = flickT0 ? performance.now() - flickT0 : 120, lift = clamp((150 - ft)/100, 0, 1);
+      let y = 112 - lift*80, x = aimX(q, y);
       const spray = (1.35 - attr/100)*9 + off*110;
       x += gauss()*spray; y += gauss()*spray*.55;
       if (long) y -= off*190; else if (short) y += off*45;
@@ -819,7 +825,7 @@ function lvShotCore(st, m, v, head, title, o = {}){
       const kcol = guess ? (guess<0 ? "l" : "r") : green ? (col==="l" ? "r" : col==="r" ? "l" : pick(["l","r"])) : col;
       const [kx, ky, rot] = lvKeeperTo(clamp(wx, 36, 264), clamp(ty, 30, 116), !goal && !over && !wide && !wood && !wall ? "save" : guess && guess!==side ? "wrong" : d>1.6 ? "wrong" : "near", kcol);
       // pace follows the power: the harder you hit it, the quicker it's there
-      const ms = clamp(760 - Math.min(p, 1.05)*520, 290, 760)*(green ? .92 : 1), h = over ? 26 : y<72 ? 14 : 4, curve = (col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6);
+      const ms = clamp(760 - Math.min(p, 1.05)*520, 290, 760)*(green ? .92 : 1), h = over ? 26 : y<72 ? 14 : y>96 ? 1 : 4, curve = (col==="l" ? -1 : col==="r" ? 1 : 0)*(5 + Math.random()*6);
       // on target and not in: the keeper's saved it, so he gets there with the ball; he holds the ones at him, parries the rest
       const saved = !goal && !over && !wide && !wood && !wall, held = saved && (d<.6 || Math.random() < kq*.4);
       const kms = saved ? Math.min(330 + (1 - kq)*110, ms*.9) : 330 + (1 - kq)*110;
