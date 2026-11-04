@@ -6,7 +6,7 @@
    calls Account.boot(start) once it has loaded, and this file calls back into the game (render, exportBackup…)
    only after that. */
 const Account = (() => {
-  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.69";
+  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.70";
   const OLD = {career:"efp-career-v1", hall:"efp-hall-v1"};   // where saves lived before accounts existed
   const $id = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -205,6 +205,8 @@ const Account = (() => {
       ${typeof G3!=="undefined" && G3.glOK() ? `<section><h3>Graphics</h3>
         <label class="chk"><input type="checkbox" data-acct="g3" ${G3.on() ? "checked" : ""}> 3D graphics: your player on the home screen, and shots and penalties</label>
         <p class="hint">Turn it off to save battery on an older phone.</p></section>` : ""}
+      ${typeof SND!=="undefined" ? `<section><h3>Sound</h3>
+        <label class="chk"><input type="checkbox" data-acct="snd" ${SND.on() ? "checked" : ""}> The crowd, the ball and the referee's whistle</label></section>` : ""}
       <section><h3>Get the app</h3><div data-install>${installHTML()}</div></section>
       <details class="dlg-more"><summary>Change password</summary>
         <form id="pwForm" class="acct-form">
@@ -239,6 +241,7 @@ const Account = (() => {
     else if (a==="pick"){ nameVal = b.dataset.v; gateNote = ""; gate(); $id("a-pw")?.focus(); }
     else if (a==="open") openMenu();
     else if (a==="g3") G3.set(b.checked);
+    else if (a==="snd") SND.set(b.checked);
     else if (a==="close") closeMenu();
     else if (a==="signout") signOut();
     else if (a==="update"){ b.textContent = "Checking…"; try{ const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); }catch(err){} location.reload(); }

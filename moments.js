@@ -48,12 +48,13 @@ function lvOpen(label = "Match"){
   lvEl = document.createElement("div"); lvEl.className = "lv"; lvEl.setAttribute("role", "dialog"); lvEl.setAttribute("aria-modal", "true"); lvEl.setAttribute("aria-label", label);
   document.body.appendChild(lvEl); document.documentElement.classList.add("lv-open");
 }
-function lvClose(){ lvRelease(); lvCountNext = false; cancelAnimationFrame(lvRaf); lvKey = null; lvEl?.remove(); lvEl = null; document.documentElement.classList.remove("lv-open"); }
+function lvClose(){ if (typeof SND!=="undefined") SND.ambient(false); lvRelease(); lvCountNext = false; cancelAnimationFrame(lvRaf); lvKey = null; lvEl?.remove(); lvEl = null; document.documentElement.classList.remove("lv-open"); }
 // a new screen eases in (only when it first appears: parts swapped in later, like a scoreboard, don't)
 function lvShow(html){
   cancelAnimationFrame(lvRaf); lvKey = null; lvEl.innerHTML = `<div class="lv-in enter">${html}</div>`; lvEl.scrollTop = 0;
   const box = lvEl.firstElementChild; setTimeout(()=>box.classList.remove("enter"), 450);
   if (lvCountNext && box.querySelector(".lv-stage")){ lvCountNext = false; lvCountdown(); }
+  if (typeof SND!=="undefined" && box.querySelector(".lv-stage")) SND.ambient(true);   // the crowd
   // in 3D: any mini-game without its own 3D scene is mirrored into one (g3d.js), once this one's had the chance to make its own
   if (typeof G3!=="undefined" && G3.ready()) setTimeout(()=>{ const stg = box.querySelector(".lv-stage"); if (stg && stg.isConnected && !stg.classList.contains("g3")) G3.mirror(stg, lv3dMirrorLooks()); }, 0);
   (lvEl.querySelector("[data-lv-focus]") || lvEl.querySelector("button:not([data-lv-skip]):not(.lv-tap)"))?.focus({preventScroll:true});   // never "Sim the rest" or a tap zone: an outline there looks like a hint
@@ -233,7 +234,7 @@ function lvFly(id, a, b, ms, o={}){
 }
 // a short animation on a player (a CSS class, taken off again when it's done): a kick or a jump
 function lvAnim(sel, cls, ms){ lvEl?.querySelectorAll(sel).forEach(g=>{ g.classList.remove(cls); void g.getBBox; g.classList.add(cls); setTimeout(()=>g.classList.remove(cls), ms); }); }
-const lvKick = (sel = ".lv-you") => lvAnim(sel, "kick", 330), lvHop = sel => lvAnim(sel, "hop", 460);
+const lvKick = (sel = ".lv-you") => { if (typeof SND!=="undefined") SND.kick(); return lvAnim(sel, "kick", 330); }, lvHop = sel => lvAnim(sel, "hop", 460);
 // a goal: you celebrate, arms up, and the crowd jumps
 function lvCheer(){
   lvEl?.querySelectorAll(".lv-you").forEach(g=>{ g.querySelector(".lv-legs")?.classList.remove("run"); g.classList.add("cheer"); });
@@ -248,6 +249,7 @@ function lvStrike(st){
   const b = svg.lastElementChild, at = k => `translate(${(240 - 78*k).toFixed(1)} ${(204 - 34*k).toFixed(1)}) rotate(${(34 - 36*k).toFixed(1)})`;
   b.setAttribute("transform", at(0));
   return lvTween(105, k=>b.setAttribute("transform", at(k*k))).then(()=>{
+    if (typeof SND!=="undefined") SND.kick(1);   // contact
     const t0 = performance.now(), f = now=>{ const k = Math.min(1, (now - t0)/260); b.setAttribute("transform", at(1 + .45*lvEaseOut(k))); b.setAttribute("opacity", (1 - k*k).toFixed(2)); if (k<1 && b.isConnected) requestAnimationFrame(f); else b.remove(); };
     requestAnimationFrame(f);
   });
@@ -466,6 +468,7 @@ function lvResHTML(R, cls = "lv-res"){
 }
 function lvOutcome(st, R){
   const goal = !!(R.g || R.a || R.gf);
+  if (typeof SND!=="undefined") SND.verdict(R);
   lv$(".lv-stage").insertAdjacentHTML("beforeend", lvResHTML(R));
   if (R.g || R.a){ lv$(".lv-res").insertAdjacentHTML("beforeend", lvBurst(lvCols(st))); lvCheer(); }
   lvBuzz(goal ? "goal" : R.ok ? "good" : "bad");
@@ -834,6 +837,7 @@ function lvShotCore(st, m, v, head, title, o = {}){
       // on target and not in: the keeper's saved it, so he gets there with the ball; he holds the ones at him, parries the rest
       const saved = !goal && !over && !wide && !wood && !wall, held = saved && (d<.6 || Math.random() < kq*.4);
       const kms = saved ? Math.min(330 + (1 - kq)*110, ms*.9) : 330 + (1 - kq)*110;
+      if (g3 && typeof SND!=="undefined") SND.kick(.7 + Math.min(.4, p*.4));
       if (g3) await g3.play({wx:clamp(wx, -10, 310), ty, ms, h, curve, swerve, kx, ky, rot, kms, goal, over, wide, wood, wall, saved, held, power:p});
       else {
         await lvStrike(st);
@@ -1112,7 +1116,7 @@ function lvGameCross(st, m){
         : d>rr ? {ok:false, big:"Wasted", small: t<1 && Math.hypot(x-r.from[0], y-r.from[1]) < Math.hypot(r.spot[0]-r.from[0], r.spot[1]-r.from[1]) ? "Crossed too early" : "Crossed too late", bonus:-.08, k:"wasted"}
         : Math.random() < lvConv(st, m, .42) ? {ok:true, big:"Assist!", small:"A perfect cross, buried with a header", a:1, k:"assist"} : {ok:true, big:"Great cross", small:"His header was saved", bonus:.12, k:"saved"};
       lvEl.querySelectorAll(".lv-legs.run").forEach(l=>l.classList.remove("run"));
-      if (g3) await g3.go(i, r.spot, {res:R2.k}); else { lvKick(); await lvFly("#lvCb", [X(262), 36], r.spot, 420, {h:30, spin:1.4}); }
+      if (g3){ if (typeof SND!=="undefined") SND.kick(.8); await g3.go(i, r.spot, {res:R2.k}); } else { lvKick(); await lvFly("#lvCb", [X(262), 36], r.spot, 420, {h:30, spin:1.4}); }
       delete R2.k; res(R2);
     };
     btns.forEach(b=>lvTap(b, ()=>end(+b.dataset.i)));
@@ -1243,7 +1247,7 @@ function lvGameSave(st, m){
     };
     lvLoop(now=>{
       if (done) return false;
-      if (!target && now-t0>=windUp){ target = pickTarget(); rel = now; curl = (Math.random()*2-1)*(pen ? 4 : 12); lv$(".lv-cue")?.remove(); g3?.release(target[0], target[1], curl, react); }
+      if (!target && now-t0>=windUp){ target = pickTarget(); rel = now; curl = (Math.random()*2-1)*(pen ? 4 : 12); lv$(".lv-cue")?.remove(); g3?.release(target[0], target[1], curl, react); if (typeof SND!=="undefined") SND.kick(.9); }
       if (target){ const k = Math.min(1, (now-rel)/react), q = lvEaseOut(k); lvBallAt("#lvBall", 150 + (target[0]-150)*q + curl*Math.sin(Math.PI*q), 166 + (target[1]-166)*q, 1 - .38*q, 0, k*480, true); if (k>=1){ end(); return false; } }
     });
     // a dive towards where you tapped, as far as you can reach
