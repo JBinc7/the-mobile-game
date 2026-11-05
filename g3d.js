@@ -761,7 +761,9 @@ const G3 = (() => {
     const bank = (w, x, z, ry, d) => { const g = grp(x, 0, z); g.rotation.y = ry; g.userData.stand = true; scene.add(g);
       const c = new THREE.Mesh(new THREE.PlaneGeometry(w, 20), cm); c.position.set(0, 11.2, -d); c.rotation.x = .22; g.add(c); crowd.push(c);
       const fw = new THREE.Mesh(new THREE.PlaneGeometry(w, 1.8), wallM); fw.position.set(0, .9, -1.2); g.add(fw);
-      const deck = new THREE.Mesh(new THREE.PlaneGeometry(w, d + 1), wallM); deck.rotation.x = -Math.PI/2; deck.position.set(0, 1.62, -1.2 - (d - 1.2)/2); g.add(deck);
+      // the front rows, between the wall behind the boards and the raked stand: fans, not bare concrete
+      const dd = Math.max(.5, d - 10*Math.sin(.22) - 1.2), ft = crowdTex.clone(); ft.wrapS = ft.wrapT = THREE.RepeatWrapping; ft.repeat.set(1, .18); ft.needsUpdate = true;
+      const deck = new THREE.Mesh(new THREE.PlaneGeometry(w, dd), new THREE.MeshBasicMaterial({map:ft, color:cm.color})); deck.rotation.x = -Math.PI/2 + .35; deck.position.set(0, 1.5, -1.2 - dd/2); g.add(deck);
       const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 4, .35, 13), roofM); roof.position.set(0, 21.6, -d - 2.4); roof.rotation.x = -.08; g.add(roof);
       const strip = new THREE.Mesh(new THREE.BoxGeometry(w*.92, .28, .28), lightM); strip.position.set(0, 21.05, -d + 4); g.add(strip);
       const b = new THREE.Mesh(new THREE.PlaneGeometry(w*.6, .9), bm); b.position.set(0, .45, 0); g.add(b); };
@@ -772,9 +774,9 @@ const G3 = (() => {
     crowd.flags = [];
     const flag = (g, x, y, z, c1) => { const geo2 = new THREE.PlaneGeometry(1.7, 1.05, 10, 3), f = new THREE.Mesh(geo2, flagTex(c1)); f.position.set(x, y, z); g.add(f);
       f.userData.base = Float32Array.from(geo2.attributes.position.array); f.userData.ph = Math.random()*6; crowd.flags.push(f); };
-    bank(80, 0, -5, 0, 11);
-    { const g = crowd[0].parent; [[-30, 4.2], [-22, 6.5], [-8, 3.6], [6, 7.2], [17, 4.6], [29, 6]].forEach(([fx, fy], i)=>flag(g, fx, fy, -11 + (fy - 11.2)/Math.cos(.22)*Math.sin(.22) + .6, ka && fx < -20 ? ka : kc)); }
-    [-1, 1].forEach(s=>bank(66, s*36, 27, -s*Math.PI/2, 7));
+    bank(80, 0, -5, 0, 6.5);   // (close to the pitch, like a modern ground: the fans right behind the boards)
+    { const g = crowd[0].parent; [[-30, 4.2], [-22, 6.5], [-8, 3.6], [6, 7.2], [17, 4.6], [29, 6]].forEach(([fx, fy], i)=>flag(g, fx, fy, -6.5 + (fy - 11.2)/Math.cos(.22)*Math.sin(.22) + .6, ka && fx < -20 ? ka : kc)); }
+    [-1, 1].forEach(s=>bank(66, s*36, 27, -s*Math.PI/2, 4.5));
     // the touchlines
     const tl = new THREE.MeshBasicMaterial({color:0xF2F5EF}); [-1, 1].forEach(s=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(.12, 58), tl); m.rotation.x = -Math.PI/2; m.position.set(s*34, .01, 29); scene.add(m); });
     // the floodlights' glow
