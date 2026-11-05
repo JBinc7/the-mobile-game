@@ -1073,16 +1073,20 @@ function lvTakeonCore(st, head, title, sub, hard = 1){
         <button type="button" class="lv-tap lv-half l" data-s="l" aria-label="Go left"></button><button type="button" class="lv-tap lv-half r" data-s="r" aria-label="Go right"></button></div>
       <div class="lv-row lv-lr"><button type="button" class="btn big" data-s="l">◀ Left</button><button type="button" class="btn big" data-s="r">Right ▶</button></div>`);
     lvSkippable(res);
-    lvMove("#lvDef", 150, 92); lvMove("#lvMe", 150, 150);
-    const stage = lv$(".lv-stage"), t0 = performance.now(); let commit = null, at = 0, faked = false, done = false;
+    lvMove("#lvDef", 150, 92); lvMove("#lvMe", 150, 162);
+    // on the move: you carry it at him with little touches, he backpedals and jockeys, the gap closing as you read him
+    const stage = lv$(".lv-stage"), t0 = performance.now(); let commit = null, at = 0, faked = false, done = false, me = [150, 162], dy = 92, dxj = 0;
+    lv$("#lvMe .lv-legs")?.classList.add("run"); lv$("#lvDef .lv-legs")?.classList.add("run");
     lvLoop(now=>{
       if (done) return false;
       const t = now - t0;
-      if (fake && !faked && t>wait-420 && t<wait-200){ lvMove("#lvDef", 150 + (Math.random()<.5 ? -6 : 6), 92); }
-      else if (fake && !faked && t>=wait-200){ faked = true; lvMove("#lvDef", 150, 92); }
+      if (!commit){ const k = Math.min(1, t/Math.max(600, wait)); me = [150 + Math.sin(t*.004)*3, 162 - 30*k]; dy = 92 - 10*k; dxj = Math.sin(t*.0032)*4;
+        lvMove("#lvMe", me[0], me[1]); lvMove("#lvDef", 150 + dxj, dy); lvBallAt("#lvTb", me[0] + 4, me[1] - 12 - Math.abs(Math.sin(t*.008))*3, 1, 0, t*.5); }
+      if (fake && !faked && t>wait-420 && t<wait-200){ lvMove("#lvDef", 150 + (Math.random()<.5 ? -6 : 6), dy); }
+      else if (fake && !faked && t>=wait-200){ faked = true; lvMove("#lvDef", 150, dy); }
       if (!commit && t>=wait){ commit = pick(["l","r"]); at = now; stage.dataset.commit = commit;
         const b = lv$("#lvBang"); b.setAttribute("x", 150 + (commit==="l" ? -30 : 22)); b.setAttribute("y", 58); b.setAttribute("opacity", 1); }
-      if (commit) lvMove("#lvDef", 150 + (commit==="l" ? -16 : 16)*lvEaseOut(Math.min(1, (now-at)/140)), 92);
+      if (commit) lvMove("#lvDef", 150 + dxj + (commit==="l" ? -16 : 16)*lvEaseOut(Math.min(1, (now-at)/140)), dy);
       if (commit && now-at > react){ end(null, "He closed you down"); return false; }
     });
     const end = async (side, why)=>{
@@ -1092,9 +1096,9 @@ function lvTakeonCore(st, head, title, sub, hard = 1){
       else if (side){ ok = side!==commit; why = ok ? "" : "He was waiting for that"; }
       const dx = side==="l" ? -46 : 46;
       lv$("#lvMe .lv-legs")?.classList.add("run");
-      if (ok) await lvTween(340, k=>{ const q = lvEaseOut(k); lvMove("#lvMe", 150 + dx*q, 150 - 80*q); lvBallAt("#lvTb", 150 + dx*q + 4, 136 - 84*q, 1, 0, k*400); });
+      if (ok) await lvTween(340, k=>{ const q = lvEaseOut(k); lvMove("#lvMe", me[0] + dx*q, me[1] - 80*q); lvBallAt("#lvTb", me[0] + dx*q + 4, me[1] - 14 - 84*q, 1, 0, k*400); });
       else { const dd = commit || (side==="l" ? "l" : "r"), bx = 150 + (dd==="l" ? -10 : 10);
-        await lvTween(260, k=>{ const q = lvEaseOut(k); lvMove("#lvDef", 150 + (bx-150)*q, 92 + 34*q); lvBallAt("#lvTb", 150 + (dd==="l" ? -50 : 50)*q, 136 + 10*q, 1, 6*Math.sin(Math.PI*q), k*300); }); }
+        await lvTween(260, k=>{ const q = lvEaseOut(k); lvMove("#lvDef", 150 + (bx-150)*q, dy + (me[1] - 24 - dy)*q); lvBallAt("#lvTb", me[0] + 4 + (dd==="l" ? -50 : 50)*q, me[1] - 12 + 10*q, 1, 6*Math.sin(Math.PI*q), k*300); }); }   // he steps in and takes it
       res({ok, why});
     };
     lvEl.querySelectorAll("[data-s]").forEach(b=>lvTap(b, ()=>end(b.dataset.s)));
