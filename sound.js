@@ -22,10 +22,16 @@ const SND = (() => {
     let p = 0; for (let i = 0; i < n; i++){ const w = Math.random()*2 - 1; p = .97*p + .03*w; d[i] = w*.5 + p*3; } noiseBuf = b; return b; };
   const src = () => { const s = ac.createBufferSource(); s.buffer = noise(); s.loop = true; s.playbackRate.value = .85 + Math.random()*.3; return s; };
   const band = (f, q) => { const b = ac.createBiquadFilter(); b.type = "bandpass"; b.frequency.value = f; b.Q.value = q; return b; };
+  // now and then the crowd sings: a chant (three rising "oh"s) and claps in time
+  let chantT = 0;
+  function chant(){ if (!ctx()) return; const beat = .52;
+    for (let i = 0; i < 3; i++) voice(380 + i*30, 880 + i*60, .5, .26, 1.04, .06, i*beat);
+    for (let i = 0; i < 4; i++) setTimeout(()=>applause(.12, .2), (3*beat + i*beat*.5)*1000); }
+  const nextChant = () => { clearTimeout(chantT); chantT = setTimeout(()=>{ if (bedGain && bedGain.gain.value > .05) chant(); nextChant(); }, 9000 + Math.random()*7000); };
   // the crowd's murmur: noise through a few voice-like bands, each swaying slowly on its own
   function ambient(v){
-    if (!v){ if (bedGain && ac){ bedGain.gain.cancelScheduledValues(ac.currentTime); bedGain.gain.setTargetAtTime(0, ac.currentTime, .5); } return; }
-    if (!ctx()) return;
+    if (!v){ clearTimeout(chantT); if (bedGain && ac){ bedGain.gain.cancelScheduledValues(ac.currentTime); bedGain.gain.setTargetAtTime(0, ac.currentTime, .5); } return; }
+    if (!ctx()) return; nextChant();
     if (!bed){
       bedGain = ac.createGain(); bedGain.gain.value = 0; bedGain.connect(master);
       bed = [[300, .5], [650, .45], [1250, .3], [2500, .1]].map(([f, w], i)=>{ const s = src(), bp = band(f, 1.1), g = ac.createGain(); g.gain.value = w;
