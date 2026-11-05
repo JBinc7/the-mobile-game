@@ -494,6 +494,31 @@ const G3 = (() => {
     return r;
   }
   function fit(r, cam, el){ const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight); if (r._w===w && r._h===h) return false; r._w = w; r._h = h; r.setSize(w, h, false); if (cam.isPerspectiveCamera) cam.aspect = w/h; cam.updateProjectionMatrix(); return true; }
+  /* the match screens: the picture runs out to the screen's edges and on down the page below the stage, fading away,
+     so the play fills the screen. The stage keeps its own camera (everything laid over the picture, and every touch,
+     is worked out in the stage, just as before); only the view drawn is widened to take in the rest of the canvas.
+     Not on older phones (lite), where the canvas is the stage */
+  function fitWide(r, cam, el, W){
+    const w = Math.max(1, el.clientWidth), h = Math.max(1, el.clientHeight), c = r.domElement;
+    const e = !lite && el.closest(".lv") ? (g => ({l:g, r:g, t:Math.round(h*.16), b:Math.round(h*(W && W.extB != null ? W.extB : 1.25))}))(Math.round(Math.max(0, Math.min(24, el.getBoundingClientRect().left)))) : null;
+    const W2 = w + (e ? e.l + e.r : 0), H2 = h + (e ? e.t + e.b : 0);
+    if (r._w===W2 && r._h===H2 && r._sw===w) return false;   // (W2, H2: the whole canvas; w: the stage)
+    r._w = W2; r._h = H2; r._sw = w; r._ext = e && {l:e.l/w, r:e.r/w, t:e.t/h, b:e.b/h};
+    c.classList.toggle("g3-wide", !!e); el.classList.toggle("g3-wide", !!e);
+    if (e) [["--g3l", -e.l], ["--g3t", -e.t], ["--g3w", W2], ["--g3h", H2], ["--g3a", e.t], ["--g3b", e.t + h], ["--g3c", e.t + h + e.b*.45]].forEach(([k, v])=>c.style.setProperty(k, v + "px"));
+    r.setSize(W2, H2, false); if (cam.isPerspectiveCamera) cam.aspect = w/h; cam.updateProjectionMatrix(); return true;
+  }
+  // the camera that draws the widened view: the stage's own, its picture scaled down into the middle of the bigger canvas
+  let wideP = null, wideO = null, wideM = null;
+  function widen(cam, x){
+    if (!x) return cam;
+    const c = cam.isOrthographicCamera ? (wideO ||= new THREE.OrthographicCamera()) : (wideP ||= new THREE.PerspectiveCamera());
+    cam.updateMatrixWorld(); c.matrixWorldAutoUpdate = false; c.matrixWorld.copy(cam.matrixWorld); c.matrixWorldInverse.copy(cam.matrixWorldInverse); c.near = cam.near; c.far = cam.far;
+    const x0 = -1 - 2*x.l, x1 = 1 + 2*x.r, y0 = -1 - 2*x.b, y1 = 1 + 2*x.t, sx = (x1 - x0)/2, sy = (y1 - y0)/2, cx = (x1 + x0)/2, cy = (y1 + y0)/2;
+    (wideM ||= new THREE.Matrix4()).set(1/sx, 0, 0, -cx/sx, 0, 1/sy, 0, -cy/sy, 0, 0, 1, 0, 0, 0, 0, 1);
+    c.projectionMatrix.multiplyMatrices(wideM, cam.projectionMatrix); c.projectionMatrixInverse.copy(c.projectionMatrix).invert();
+    return c;
+  }
   /* ---------- the look ----------
      The light: a night stadium all round (a dark sky, the glow of the stands, four banks of floodlights, the pitch below),
      made once per renderer and used as image-based light, so the kit, the skin, the ball and the posts pick up the
@@ -758,10 +783,10 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
   /* light through the grass: looking towards a floodlight (or the sun), the blades glow a warm yellow-green where it
      shines through them, as real grass does against the light */
   const GRASS_LIGHT = `vec3 irradiance = dotNL * directLight.color;
-	{ float bl = saturate(-dot(directLight.direction, geometryViewDir)); reflectedLight.directDiffuse += bl*bl*bl*saturate(dotNL + 0.35)*0.42*vec3(1.05, 1.2, 0.55)*directLight.color*BRDF_Lambert(material.diffuseColor); }`;
+	{ float bl = saturate(-dot(directLight.direction, geometryViewDir)); reflectedLight.directDiffuse += bl*bl*bl*saturate(dotNL + 0.35)*0.3*vec3(1.05, 1.2, 0.55)*directLight.color*BRDF_Lambert(material.diffuseColor); }`;
   function pitchShader(sh){
     const u = this.userData.pitch;
-    Object.assign(sh.uniforms, {uGrass:{value:u.grass}, uNoise:{value:u.noise}, uLines:{value:u.lines}, uWet:{value:u.wet}, uC1:{value:col("#22693A")}, uC2:{value:col("#358F4E")}});
+    Object.assign(sh.uniforms, {uGrass:{value:u.grass}, uNoise:{value:u.noise}, uLines:{value:u.lines}, uWet:{value:u.wet}, uC1:{value:col("#2B6A2F")}, uC2:{value:col("#3F8A3D")}});
     sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vPitch;")
       .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vPitch = (modelMatrix*vec4(transformed, 1.0)).xyz;");
     sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + PITCH_GLSL)
@@ -966,19 +991,33 @@ void main(){
     // the crowd: rows of fans on the steps, faces of every skin tone, shirts in the home colours, white, and everyday darks,
     // the odd scarf held up; the rows under the roof in its shadow
     const ck = kc + "|" + (ka || ""); crowdTex = crowdTexes.get(ck) || null;
-    if (!crowdTex){ const c = document.createElement("canvas"); c.width = 2048; c.height = 512; const x = c.getContext("2d"); x.fillStyle = "#0A120E"; x.fillRect(0, 0, 2048, 512);
-      const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(11), sk = ["#F1C9A5","#D9A37A","#B57D52","#8A5A3B","#5C3A24"], dk = ["#2B3440","#3A3F46","#1F2A33","#4B5563","#343434","#5B4636"];
+    if (!crowdTex){ const c = document.createElement("canvas"); c.width = 2048; c.height = 512; const x = c.getContext("2d"); x.fillStyle = "#0B0F12"; x.fillRect(0, 0, 2048, 512);
+      const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(11), sk = ["#F1C9A5","#D9A37A","#B57D52","#8A5A3B","#5C3A24"];
+      const dk = ["#262E38","#33383F","#1C252D","#454D59","#2E2E2E","#4F3F31","#3B4A5E","#22303F"], md = ["#5A6B7D","#6E6255","#666B73","#7A7F86","#4E5E4A"];
+      // a colour a shade lighter or darker (for the light on each fan's shoulders and the shade under it)
+      const shade = (h, k) => { const v = hex(h).map(c => Math.max(0, Math.min(255, Math.round(k > 1 ? c + (255 - c)*(k - 1) : c*k)))); return `rgb(${v.join(",")})`; };
       for (let row = 0; row < 16; row++){ const cy = 22 + row*30;
-        x.fillStyle = "rgba(255,255,255,.035)"; x.fillRect(0, cy + 17, 2048, 4);   // the step
-        for (let i = 0; i < 120; i++){ if (R() < .06) continue;   // an empty seat
+        x.fillStyle = "rgba(255,255,255,.05)"; x.fillRect(0, cy + 19, 2048, 3); x.fillStyle = "rgba(0,0,0,.35)"; x.fillRect(0, cy + 22, 2048, 6);   // the step, and its shadow
+        for (let i = 0; i < 120; i++){ const cx = i*17.1 + (row%2)*8.5 + R()*4;
+          if (R() < .06){ x.fillStyle = "#1B2530"; x.fillRect(cx - 6, cy + 10, 12, 10); x.fillStyle = "#26323F"; x.fillRect(cx - 6, cy + 4, 12, 7); continue; }   // an empty seat
           const away = ka && i < 30, team = away ? ka : kc;   // the away end: a block in their colours
-          const cx = i*17.1 + (row%2)*8.5 + R()*4, r = R(), shirt = r < (away ? .5 : .34) ? team : r < .5 ? "#E8E8E4" : dk[Math.floor(R()*dk.length)];
-          x.fillStyle = shirt; x.beginPath(); x.ellipse(cx, cy + 15, 7.5, 9, 0, Math.PI, 0); x.fill(); x.fillRect(cx - 7.5, cy + 14, 15, 9);
-          x.fillStyle = sk[Math.floor(R()*sk.length)]; x.beginPath(); x.arc(cx, cy + 3, 5.2, 0, 7); x.fill();
-          if (R() < .5){ x.fillStyle = R() < .7 ? "#17120E" : "#6B4A2B"; x.beginPath(); x.arc(cx, cy + 1.2, 5.3, Math.PI, 0); x.fill(); }   // hair
-          if (R() < .07){ x.fillStyle = team; x.fillRect(cx - 9, cy - 9, 18, 4.5); x.fillStyle = "#F4F4F0"; x.fillRect(cx - 9, cy - 9, 4, 4.5); x.fillRect(cx + 1, cy - 9, 4, 4.5); }   // a scarf held up
+          const r = R(), shirt = r < (away ? .48 : .32) ? team : r < .39 ? "#DCDCD6" : r < .55 ? md[Math.floor(R()*md.length)] : dk[Math.floor(R()*dk.length)];
+          const up = R() < .3 ? -2 - R()*3 : R()*2, y = cy + up, w = 7 + R()*1.6;   // (some on their feet, some sat back)
+          // the body: shoulders catching the light, darker below
+          x.fillStyle = shade(shirt, .62); x.fillRect(cx - w, y + 15, w*2, 10);
+          x.fillStyle = shirt; x.beginPath(); x.ellipse(cx, y + 15, w, 8.5, 0, Math.PI, 0); x.fill();
+          x.fillStyle = shade(shirt, 1.18); x.beginPath(); x.ellipse(cx - 1, y + 13, w*.62, 3.2, 0, Math.PI, 0); x.fill();
+          if (R() < .05){ x.fillStyle = shirt; x.fillRect(cx - w - 1, y - 6, 3.2, 17); x.fillRect(cx + w - 2, y - 6, 3.2, 17);   // arms up
+            x.fillStyle = sk[Math.floor(R()*sk.length)]; x.beginPath(); x.arc(cx - w + .6, y - 7, 2.2, 0, 7); x.arc(cx + w - .4, y - 7, 2.2, 0, 7); x.fill(); }
+          // the head: rounded by a darker underside and a lit brow
+          const s0 = sk[Math.floor(R()*sk.length)]; x.fillStyle = shade(s0, .7); x.beginPath(); x.arc(cx, y + 3.4, 5.2, 0, 7); x.fill();
+          x.fillStyle = s0; x.beginPath(); x.arc(cx - .5, y + 2.6, 4.4, 0, 7); x.fill();
+          const hat = R(); if (hat < .45){ x.fillStyle = R() < .7 ? "#17120E" : "#6B4A2B"; x.beginPath(); x.arc(cx, y + 1.6, 5.3, Math.PI, 0); x.fill(); }   // hair
+          else if (hat < .52){ x.fillStyle = R() < .6 ? team : "#20262C"; x.beginPath(); x.arc(cx, y + 2, 5.6, Math.PI, 0); x.fill(); x.fillRect(cx - 5.6, y + 1.2, 11.2, 2); }   // a hat
+          if (R() < .07){ x.fillStyle = team; x.fillRect(cx - 9, y - 9, 18, 4.5); x.fillStyle = "#F4F4F0"; x.fillRect(cx - 9, y - 9, 4, 4.5); x.fillRect(cx + 1, y - 9, 4, 4.5); }   // a scarf held up
         } }
-      const sh = x.createLinearGradient(0, 0, 0, 512); sh.addColorStop(0, "rgba(0,0,0,.55)"); sh.addColorStop(.3, "rgba(0,0,0,.12)"); sh.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = sh; x.fillRect(0, 0, 2048, 512);
+      // the back rows under the roof, in its shadow
+      const sh = x.createLinearGradient(0, 0, 0, 512); sh.addColorStop(0, "rgba(0,0,0,.62)"); sh.addColorStop(.35, "rgba(0,0,0,.18)"); sh.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = sh; x.fillRect(0, 0, 2048, 512);
       crowdTex = new THREE.CanvasTexture(c); crowdTex.colorSpace = THREE.SRGBColorSpace; crowdTex.anisotropy = 4; crowdTexes.set(ck, crowdTex); }
     if (!boardTex){ const c = document.createElement("canvas"); c.width = 1024; c.height = 64; const x = c.getContext("2d"); x.fillStyle = "#0B1A12"; x.fillRect(0, 0, 1024, 64);
       x.font = "900 40px Big Shoulders Display, Impact, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
@@ -986,7 +1025,7 @@ void main(){
       boardTex = new THREE.CanvasTexture(c); boardTex.colorSpace = THREE.SRGBColorSpace; boardTex.wrapS = THREE.RepeatWrapping; boardTex.repeat.x = 2; }
     // the stands all round: behind the goal and down both sides (so a replay from the side has a crowd behind it),
     // each a raked bank of fans over a strip of advertising boards
-    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:day ? 0xE4E8E5 : 0xB4BCB7}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
+    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:day ? 0xD9DDDA : 0x9AA39E}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
     const roofM = day ? mat("#7C848C", .7, {metal:.3}) : mat("#14191E", .7, {metal:.3}), wallM = day ? mat("#8A9097", .85) : mat("#1B2228", .85), lightM = day ? mat("#8E959C", .5, {metal:.5}) : new THREE.MeshBasicMaterial({color:new THREE.Color(2.2, 2.1, 1.85)});   // (the floodlights off by day)
     // a stand: the raked crowd over a concourse wall and the advertising boards, under a roof with a strip of floodlights along its edge
     const bank = (w, x, z, ry, d) => { const g = grp(x, 0, z); g.rotation.y = ry; g.userData.stand = true; scene.add(g);
@@ -1090,22 +1129,22 @@ void main(){
     const watch = now => { if (window.__g3full) return;   // (testing: keep full quality whatever the speed)
       if (last && ++nf > 4){ sum += now - last; cnt++;
         if (cnt >= 12){ const avg = sum/cnt; sum = cnt = 0;
-          if (avg > 45){ goLite(); if (r.getPixelRatio() > 1){ r.setPixelRatio(1); r._w = 0; } else { slow = true; try{ sessionStorage.setItem("efp-3d-slow", "1"); }catch(e){} } } } }
+          if (avg > 45){ const pr = r.getPixelRatio(); if (pr > 1.5){ r.setPixelRatio(1.5); r._w = 0; } else { goLite(); if (pr > 1){ r.setPixelRatio(1); r._w = 0; } else { slow = true; try{ sessionStorage.setItem("efp-3d-slow", "1"); }catch(e){} } } } } }
       last = now; };
     const frame = now => {
       raf = 0; if (stopped) return; if (!r.domElement.isConnected){ W.stop(); return; }
-      watch(now); if (fit(r, cam, host) && W.onFit) W.onFit();
+      watch(now); if (fitWide(r, cam, host, W) && W.onFit) W.onFit();
       if (W.rec) poseLog = [];
       if (W.mode==="idle" && W.idle) W.idle((now - t0)/1000);
       anims.forEach(f=>f(now)); net.update(now);
       if (W.rec){ W.rec.push({t:now, o:W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]), p:poseLog}); poseLog = null; }
-      if (W.view) fit(r, W.view, host);
+      if (W.view && W.view.isPerspectiveCamera && W.view.aspect !== cam.aspect){ W.view.aspect = cam.aspect; W.view.updateProjectionMatrix(); }
       if (window.__g3cam) window.__g3cam(cam, W);   // (testing: a fixed camera for comparison pictures)
       if (shells){ if (r.capabilities.isWebGL2 && !lite) placeShells(shells, W.view || cam, now); else shells.visible = false; }
-      present(r, scene, W.view || cam); raf = requestAnimationFrame(frame);
+      present(r, scene, widen(W.view || cam, r._ext)); raf = requestAnimationFrame(frame);
     };
     W.start = () => { try{ r.compile(scene, cam); }catch(e){} raf = requestAnimationFrame(frame); };
-    W.stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3"); if (r.domElement.parentNode===host) r.domElement.remove(); if (SR.cur===W) SR.cur = null; };
+    W.stop = () => { if (stopped) return; stopped = true; if (raf) cancelAnimationFrame(raf); raf = 0; host.classList.remove("g3", "g3-wide"); if (r.domElement.parentNode===host) r.domElement.remove(); if (SR.cur===W) SR.cur = null; };
     // an animation step run every frame for ms milliseconds (several can run at once)
     W.tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
     // the ball into the net: it hits the back of the net, which stretches round it and throws it back out, and it drops
@@ -1770,7 +1809,7 @@ void main(){
       const sg = svg.querySelector('path[fill="url(#lvNetS)"]');
       if (sg){ const px = +(/M\s*([-\d.]+)/.exec(sg.getAttribute("d")) || [0, 30])[1], at = G(px, V.track), gg = new THREE.Group(); goalFrame(gg); gg.rotation.y = Math.PI/2; gg.position.set(at.x, 0, at.z); scene.add(gg); } }
     // looking out of your own goal, the camera's high behind it: the stand there (and the pylons) would be in the way
-    if (vk==="bottom"){ if (W.crowd[0]) W.crowd[0].parent.visible = false; scene.children.forEach(o=>{ if (o.userData.pylon) o.visible = false; }); }
+    if (vk==="bottom"){ if (W.crowd[0]) W.crowd[0].parent.visible = false; scene.children.forEach(o=>{ if (o.userData.pylon) o.visible = false; }); W.extB = .3; }   // (and the picture stops not far below the goal: there's no stand behind it to see)
     // a 2D scene with no goal in it (the slalom's course): no goal, and the stand behind it pushed well back
     if (svg.dataset.nogoal){ scene.children.forEach(o=>{ if (o.userData.goal) o.visible = false; });
       if (W.crowd[0]) W.crowd[0].parent.position.z -= 60; }

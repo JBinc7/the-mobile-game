@@ -140,10 +140,11 @@ Prefer to log a real FC career? With the Editor pen, use *Enter your stats by ha
 
 - **Kick-off times and weather.** Most league games are afternoons in the sun; some, and the cups, Europe and the big games, are evenings under the floodlights. About one match in five is played in the rain (a wet pitch, grey skies by day). Training's in daylight. (`LV_DAY`, `LV_RAIN` in `moments.js`.)
 - **The ground.** The home fans in the home club's colours with an away end in the visitors', flags waving, stands with roofs and floodlights, a worn goalmouth. The crowd murmurs, chants, draws breath at a strike, roars for a goal, ooh's a near miss and groans a miss; the referee whistles kick-off, cards and full time (`sound.js`, with a Sound switch in Settings).
+- **The picture.** Each moment fills the screen: the 3D view runs to the screen's edges and on down the page below the play, fading out, under a TV-style scoreboard (the teams' colours under their names, the clock in its own box). A goal's result sits on the grass below the celebration. Close to the camera the grass has real depth (blades standing up, leaning the way they were mown), the players are full-detail models that shadow themselves, and the crowd's shaded fans sit and stand in the floodlights' shade.
 - **Commentary.** A line as each of your moments begins, with what's happened since your last one (goals elsewhere, the score).
 - **Replays.** Goals (after the scorer's celebration: a cheer, the aeroplane or a knee slide), shots off the woodwork and flying saves play again in slow motion from another angle.
 - **The play.** Moments are on the move, not still pictures: passes are played into a runner as the attack moves up the pitch, take-ons start with you running at your man, interceptions read moving lanes. Winning a chance-making moment carries straight on into your own shot. Shots go where your flick points on the 3D goal, the shape of the flick curls it, and the ball moves under real physics when it's loose.
-- **Older phones** get a lighter version (no shadows or finishing effects, smaller textures); a phone that struggles switches to it by itself.
+- **Older phones** get a lighter version (no shadows, finishing effects or grass blades, smaller textures, the picture kept to the stage); a phone that struggles first drops the resolution, then switches to it by itself.
 
 ## Installing it on a phone
 

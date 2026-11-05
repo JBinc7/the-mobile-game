@@ -388,13 +388,15 @@ function lvBarSet(p, lo, hi){ const m = lv$(".lv-mark"); if (!m) return; m.style
 // 92 is "90+2'" in normal time; in extra time the clock just runs on to 120
 const lvMinTxt = (st, min) => min>90 && !st.et ? `90+${min - 90}'` : min>120 ? `120+${min - 120}'` : `${min}'`;
 function lvScore(st, min){ let f = 0, a = 0; st.ev.forEach(e=>{ if (e.min<min){ if (e.us) f++; else a++; } }); return [f, a]; }
+// the scoreboard's team colours (a stripe under each name, as on TV), home side first
+function lvBugCols(st, left){ try{ const u = meta(lvUs(st)).c1, o = meta(st.f.opp).c1; return left ? [u, o] : [o, u]; }catch(e){ return ["#F5C542", "#7FD7C4"]; } }
 function lvHead(st, min, step){
   if (st.lab && !st.lab.match) return labHead(st, step);   // the mini-game lab (lab.js) has its own
   if (st.lab && min==null) min = st.lab.min;   // a lab game played as a match moment (lvGameLab)
   if (st.drill) return drHead(st);   // a training drill (drills.js) has its own scoreboard
   const [f, a] = lvScore(st, min), left = st.f.home || st.f.neutral, us = lvAbbr(left ? lvUs(st) : st.f.opp), them = lvAbbr(left ? st.f.opp : lvUs(st));
-  const [l, r] = left ? [f, a] : [a, f];
-  return `<div class="lv-top"><span class="lv-sc"><b>${esc(us)}</b> ${l}–${r} <b>${esc(them)}</b></span><span>${lvMinTxt(st, min)}</span>
+  const [l, r] = left ? [f, a] : [a, f], [cl, cr] = lvBugCols(st, left);
+  return `<div class="lv-top bug"><span class="lv-sc"><b style="--tc:${cl}">${esc(us)}</b><i>${l}–${r}</i><b style="--tc:${cr}">${esc(them)}</b></span><span class="lv-min">${lvMinTxt(st, min)}</span>
     ${step ? `<span class="lv-steps-dots" aria-label="Step ${step[0]} of ${step[1]}">${[...Array(step[1])].map((_,i)=>`<i class="${i<step[0]?"on":""}"></i>`).join("")}</span>` : ""}
     ${st.left>1 || step ? `<button type="button" class="lv-skip" data-lv-skip>Sim the rest</button>` : ""}</div>`;
 }
@@ -679,7 +681,7 @@ async function lvShootout(st){
   const decided = () => { const x = n(me), y = n(them), nx = me.length, ny = them.length;
     if (nx<=5 && ny<=5) return x + (5 - nx) < y || y + (5 - ny) < x;
     return nx===ny && x!==y; };
-  const head = () => `<div class="lv-top"><span class="lv-sc"><b>${esc(left ? us : op)}</b> ${left ? g : a}–${left ? a : g} <b>${esc(left ? op : us)}</b></span><span>Pens ${left ? n(me) : n(them)}–${left ? n(them) : n(me)}</span>
+  const head = () => `<div class="lv-top bug"><span class="lv-sc"><b>${esc(left ? us : op)}</b><i>${left ? g : a}–${left ? a : g}</i><b>${esc(left ? op : us)}</b></span><span class="lv-min">Pens ${left ? n(me) : n(them)}–${left ? n(them) : n(me)}</span>
     <button type="button" class="lv-skip" data-lv-skip>Sim the rest</button></div>`;
   const simTo = () => { while (!decided() && me.length<30){ if (me.length===them.length) me.push(Math.random()<.76); else them.push(Math.random()<.74); } };
   lvCountNext = true;
