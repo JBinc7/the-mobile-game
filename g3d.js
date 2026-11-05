@@ -223,7 +223,7 @@ const G3 = (() => {
   const FACES = {m007:{skin:"#6A4634"}, m006:{skin:"#83583D"}, m017:{skin:"#B28665"}, m019:{skin:"#C29475", blond:true}, m003:{skin:"#B5896E"}, m013:{skin:"#BF8462"}, m001:{skin:"#CF9475"}};
   const FACE_TONES = [["#F1C9A5", ["m301", "m019", "m001", "m003"]], ["#D9A37A", ["m301", "m013", "m003", "m017", "m001", "m019"]], ["#B57D52", ["m300", "m013", "m017", "m003"]],
     ["#8A5A3B", ["m006", "m300", "m007"]], ["#5C3A24", ["m007", "m006"]]];
-  const faceImg = {};
+  const faceImg = {}, faceN = {}; let headRough = null;
   let peopleP = null, people = null, clips = null;
   const img = src => new Promise((res, rej)=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = rej; i.src = src; });
   const script = src => new Promise((res, rej)=>{ const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
@@ -244,6 +244,9 @@ const G3 = (() => {
         try{ const gg = await L.loadAsync(dir + "gaits.glb"); gg.animations.forEach(a=>{ if (!clips[a.name]) clips[a.name] = a; }); }catch(e){}
         // the extra faces (a face that won't load is just left out)
         await Promise.all(Object.keys(FACES).map(k=>img(dir + k + "_head.jpg").then(i=>{ faceImg[k] = i; }, ()=>{})));
+        // each face's relief (its own wrinkles, brows, lips) and where a face is glossy (eyes, lips) or matte; optional
+        const TX = i => { const t = new THREE.Texture(i); t.anisotropy = 4; t.needsUpdate = true; return t; };
+        if (!lite) await Promise.all([...Object.keys(FACES).map(k=>img(dir + k + "_head_n.jpg").then(i=>{ faceN[k] = TX(i); }, ()=>{})), img(dir + "head_rough.jpg").then(i=>{ headRough = TX(i); }, ()=>{})]);
         people = out; return true;
       }catch(e){ console.warn("players", e); return false; }
     })();
@@ -271,17 +274,23 @@ const G3 = (() => {
     const c1 = hex(look.c1), c2 = hex(look.c2 || "#FFFFFF"), sh = hex(look.shorts || look.c2 || "#FFFFFF"), so = hex(look.socks || look.c1), tn = tint(M, look);
     return painted(`k|${M.key}|${look.skin}|${look.c1}|${look.c2}|${look.shorts}|${look.socks}|${look.num}|${look.name}`, M.body, (c, x)=>{
       const W = c.width, H = c.height, s = W/1024, d = x.getImageData(0, 0, W, H), p = d.data;
+      const part = (u, v, L) => v < 205 && (u < 300 || u > 724) ? 0 : v > 316 && v < 578 && (u < 262 || u > 762) ? (L > .27 ? 1 : 2) : 3;   // shorts, sock, sock hoop, shirt
+      const boot = (u, v) => v > 735 && ((u > 226 && u < 336) || (u > 688 && u < 800) || (v > 866 && ((u > 226 && u < 408) || (u > 616 && u < 800))));
+      /* the shorts' and socks' creases and folds are kept, as light and shade around the average of their own dark or light
+         parts (so the original's design doesn't show through); the shirt's design is bold stripes, so it's flat colour,
+         its folds coming from the relief the floodlights pick out */
+      const cls = (k, L) => k*2 + (L < .4 ? 1 : 0), sum = new Float32Array(8), cnt = new Float32Array(8);
+      for (let y = 0; y < H; y += 2) for (let X = 0; X < W; X += 2){ const i = (y*W + X)*4, r = p[i], g = p[i+1], b = p[i+2], u = X/s, v = y/s;
+        if (boot(u, v) || isSkin(r, g, b) || isTrim(r, g, b)) continue; const L = (r*.3 + g*.59 + b*.11)/255, c = cls(part(u, v, L), L); sum[c] += L; cnt[c]++; }
+      const mean = Array.from(sum, (v, c)=>cnt[c] ? v/cnt[c] : .7);
       for (let y = 0; y < H; y++) for (let X = 0; X < W; X++){
         const i = (y*W + X)*4, r = p[i], g = p[i+1], b = p[i+2], u = X/s, v = y/s;
-        if (v > 735 && ((u > 226 && u < 336) || (u > 688 && u < 800) || (v > 866 && ((u > 226 && u < 408) || (u > 616 && u < 800))))) continue;   // the boots
+        if (boot(u, v)) continue;   // the boots
         if (isSkin(r, g, b)){ p[i] = Math.min(255, r*tn[0]); p[i+1] = Math.min(255, g*tn[1]); p[i+2] = Math.min(255, b*tn[2]); continue; }
-        const L = (r*.3 + g*.59 + b*.11)/255, trim = isTrim(r, g, b);
-        let o;
-        if (v < 205 && (u < 300 || u > 724)) o = trim ? c1 : sh;                          // shorts, with a trim in the shirt colour
-        else if (v > 316 && v < 578 && (u < 262 || u > 762)) o = L > .27 ? so : c2;        // socks, hooped
-        else o = trim ? c2 : c1;                                                            // the shirt and its trim
-        const f = trim ? .95 : .94 + .04*Math.min(1, L*1.4);
-        p[i] = o[0]*f; p[i+1] = o[1]*f; p[i+2] = o[2]*f;
+        const L = (r*.3 + g*.59 + b*.11)/255, trim = isTrim(r, g, b), k = part(u, v, L);
+        const o = k===0 ? (trim ? c1 : sh) : k===1 ? so : k===2 ? c2 : (trim ? c2 : c1);   // shorts (trim in the shirt colour), socks hooped, the shirt and its trim
+        const f = trim ? .95 : k===3 ? .94 + .04*Math.min(1, L*1.4) : Math.max(.68, Math.min(1.1, .45 + .55*L/mean[cls(k, L)]));   // (the fabric's own folds)
+        p[i] = Math.min(255, o[0]*f); p[i+1] = Math.min(255, o[1]*f); p[i+2] = Math.min(255, o[2]*f);
       }
       x.putImageData(d, 0, 0);
       const ink = `rgb(${c2.join(",")})`, font = "Big Shoulders Display, Impact, sans-serif";
@@ -297,6 +306,38 @@ const G3 = (() => {
       x.font = `900 ${34*s}px ${font}`; x.fillStyle = `rgb(${(lum("#" + sh.map(v=>v.toString(16).padStart(2, "0")).join("")) > .5 ? [21, 23, 26] : [245, 245, 245]).join(",")})`; x.fillText(String(look.num ?? ""), 175*s, 172*s);
     });
   }
+  const masks = new Map();
+  function maskFor(M){
+    if (masks.has(M.key)) return masks.get(M.key);
+    const S2 = 1024, c = document.createElement("canvas"); c.width = c.height = S2; const x = c.getContext("2d", {willReadFrequently:true}); x.drawImage(M.body, 0, 0, S2, S2);
+    const src = x.getImageData(0, 0, S2, S2).data, N = 256, m = document.createElement("canvas"); m.width = m.height = N; const mx = m.getContext("2d"), im = mx.createImageData(N, N), d = im.data;
+    for (let y = 0; y < N; y++) for (let X = 0; X < N; X++){ const u = (X + .5)*4, v = (y + .5)*4, i = ((v|0)*S2 + (u|0))*4, o = (y*N + X)*4, r = src[i], g = src[i + 1], b = src[i + 2];
+      const boot = v > 735 && ((u > 226 && u < 336) || (u > 688 && u < 800) || (v > 866 && ((u > 226 && u < 408) || (u > 616 && u < 800))));
+      if (boot){ d[o] = 0; d[o + 1] = 80; d[o + 2] = 0; }
+      else if (isSkin(r, g, b)){ d[o] = 255; d[o + 1] = 128; d[o + 2] = 0; }
+      else { d[o] = 0; d[o + 1] = isTrim(r, g, b) ? 180 : 212; d[o + 2] = 255; }
+      d[o + 3] = 255; }
+    mx.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(m); masks.set(M.key, t); return t;
+  }
+  /* skin and cloth under the floodlights: on skin, a little light wraps round into the shadow side, warm (as light does
+     through skin); in the creases of the kit and the face, a touch of shade (from the relief map) */
+  const SKIN_LIGHT = `vec3 irradiance = dotNL * directLight.color;
+	{ float wNL = saturate((dot(geometryNormal, directLight.direction) + 0.5)/1.5); reflectedLight.directDiffuse += max(wNL - dotNL, 0.0)*skinAmt*vec3(0.6, 0.27, 0.19)*directLight.color*BRDF_Lambert(material.diffuseColor); }`;
+  function playerShader(sh){
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nfloat skinAmt = 0.0;")
+      .replace("#include <lights_physical_pars_fragment>", THREE.ShaderChunk.lights_physical_pars_fragment.replace("vec3 irradiance = dotNL * directLight.color;", SKIN_LIGHT))
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+#ifdef PLAYER_HEAD
+  skinAmt = 0.75;
+#elif defined( USE_ROUGHNESSMAP )
+  skinAmt = texelRoughness.r;
+#endif`)
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+#ifdef USE_NORMALMAP_TANGENTSPACE
+  diffuseColor.rgb *= mix(1.0, clamp((mapN.z - 0.55)/0.45, 0.0, 1.0), 0.32);
+#endif`);
+  }
+  const skinned = (m, head) => { m.onBeforeCompile = playerShader; if (head) m.defines = {PLAYER_HEAD:""}; m.customProgramCacheKey = () => "player"; return m; };
   const matCache = new Map();
   const matFor = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
   function makeReal(look){
@@ -311,10 +352,13 @@ const G3 = (() => {
     const body = kitTex(M, look), head = headTex(F, look);
     model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = true;
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
-        : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite || F!==M ? null : M.headN, roughness:.62}))
+        : m.name==="head" ? matFor("head|" + head.uuid, ()=>lite ? new THREE.MeshStandardMaterial({map:head, normalMap:F!==M ? null : M.headN, roughness:.62})
+          // the face: its own relief, glossy eyes and lips, skin with a soft sheen and the light wrapping round it
+          : skinned(new THREE.MeshPhysicalMaterial({map:head, normalMap:F===M ? M.headN : (faceN[face] || null), roughnessMap:headRough, roughness:headRough ? 1 : .55,
+              sheen:.25, sheenRoughness:.65, sheenColor:new THREE.Color(.5, .4, .36)}), true))
         : matFor("body|" + body.uuid, ()=>lite ? new THREE.MeshStandardMaterial({map:body, roughness:.6})
-          // the kit as cloth: a soft sheen at grazing angles, the way a shirt catches the floodlights
-          : new THREE.MeshPhysicalMaterial({map:body, normalMap:M.bodyN, roughness:.66, sheen:.7, sheenRoughness:.5, sheenColor:new THREE.Color(.55, .55, .55)})));
+          // the kit as cloth (a soft sheen at grazing angles, the way a shirt catches the floodlights), the boots shiny, the skin semi-gloss
+          : skinned(new THREE.MeshPhysicalMaterial({map:body, normalMap:M.bodyN, roughnessMap:maskFor(M), roughness:1, sheen:.7, sheenRoughness:.5, sheenColor:new THREE.Color(.55, .55, .55)}), false)));
       o.material = ms.length===1 ? ms[0] : ms; });
     const bones = {}, byName = {}; model.traverse(o=>{ if (o.isBone){ bones[o.name.replace(/^Bip01_?/, "") || "root"] = o; byName[o.name] = o; } });
     // a keeper's gloves
