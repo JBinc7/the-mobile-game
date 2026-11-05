@@ -607,6 +607,7 @@ async function lvPlayMatch(f, w){
         <button type="button" class="lv-skip" data-lv="help" style="justify-self:start">How to play</button>
       </div>`))==="help") await lvHelp(lvHelpAll(), false);
     if (go==="play"){
+      if (typeof SND!=="undefined") SND.whistle(.7);   // kick-off
       let auto = false;
       for (const m of plan.list){
         let R = null;
@@ -694,6 +695,7 @@ const lvCardIc = c => c ? `<i class="card-ic ${c==="y" ? "y" : "r"}" role="img" 
 const lvMinsLine = me => me.sent ? (me.st==="start" ? `${lvCardIc(me.card)} Sent off on ${me.sent}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>` : `On at ${me.sent - me.mins}', ${lvCardIc(me.card)} sent off on ${me.sent}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>`) : me.st==="start" ? (me.mins>=90 ? "Played the full <b>90 minutes</b>" : `Started, off on ${me.mins}' · <b>${me.mins} minutes</b>`) : `On at ${90 - me.mins}' · <b>${me.mins} minute${me.mins===1 ? "" : "s"}</b>`;
 async function lvFullTime(st, home, away){
   const f = st.f, me = f.me, [l, r] = f.home || f.neutral ? [f.res.gf, f.res.ga] : [f.res.ga, f.res.gf];
+  if (typeof SND!=="undefined"){ SND.whistle(.5, 3); setTimeout(()=>(f.res.gf > f.res.ga ? SND.roar : f.res.gf < f.res.ga ? SND.groan : SND.applause)(), 1700); }   // the final whistle, and the ground's verdict
   const bits = [me.g ? `${me.g} goal${me.g>1?"s":""}` : "", me.a ? `${me.a} assist${me.a>1?"s":""}` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : "",
     me.card==="y" ? "booked" : me.card ? "sent off" : ""].filter(Boolean);
   const html = `<div class="lv-card lv-ftc">

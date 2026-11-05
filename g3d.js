@@ -1460,6 +1460,10 @@ const G3 = (() => {
           M.lean = (M.lean || 0) + (Math.max(-.2, Math.min(.2, -turn*v*.035)) - (M.lean || 0))*(1 - Math.exp(-dt*6)); M.root.rotation.z = M.lean; }
       });
       men.forEach((M, el)=>{ M.at.visible = seen.has(el); if (!el.isConnected){ scene.remove(M.at); men.delete(el); } });
+      // their keeper, in the from-above attacking games whose 2D picture leaves him out: on his line, shuffling across
+      // to stay between the ball and his goal
+      if (W.gk){ const g = W.gk, tx = ballAt ? Math.max(-2.4, Math.min(2.4, ballAt.x*.45)) : 0, dx = tx - g.at.position.x, dtk = Math.min(.05, (now - (g.lt || now))/1000); g.lt = now;
+        const step = Math.sign(dx)*Math.min(Math.abs(dx), 3.2*dtk); g.at.position.x += step; pose(g, "ready", T() + (Math.abs(dx) > .05 ? T() : 0)); }
       // props the 2D game draws (slalom poles), stood where they are
       svg.querySelectorAll("[data-prop]").forEach(el=>{ let P = props.get(el);
         if (!P){ P = new THREE.Group(); const pm = new THREE.Mesh(geo("pole", ()=>new THREE.CylinderGeometry(.035, .035, 1.7, 10)), mat("#F8FAFC", .4)); pm.position.y = .85; P.add(pm);
@@ -1467,6 +1471,7 @@ const G3 = (() => {
         const m = inv.multiply(el.getScreenCTM()); G(m.e, m.f, 0, P.position); P.visible = !!el.getClientRects().length; });
     };
     const props = new Map();
+    if (vk==="top" && !svg.dataset.nogoal && !svg.querySelector("#lvGk, [data-gk]")){ const at = G(150, 8); W.gk = W.add({skin:"#C08368", c1:"#16A34A", c2:"#111827", shorts:"#111827", socks:"#16A34A", gk:true, gloves:"#C8F04A", num:1, name:""}, at.x, at.z, 0); W.gk.root.scale.setScalar(1.3); }
     W.start();
     return W;
   }
