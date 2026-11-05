@@ -1354,7 +1354,15 @@ async function lvGameLab(st, m){
   switch (K[0]){
     case "goal": case "pen": return ok ? {ok, big:"Goal!", small, g:1} : {ok:false, big:R.big, small, bonus:-.06};
     case "assist": return !ok ? {ok:false, big:R.big, small, bonus:-.05} : conv(.62) ? {ok, big:"Assist!", small, a:1} : {ok, big:R.big, small:"The chance went begging", bonus:.15};
-    case "chance": return !ok ? {ok:false, big:R.big, small, bonus:-.05} : conv(.4) ? {ok, big:"Goal!", small:"…and you finished it", g:1} : conv(.35) ? {ok, big:"Assist!", small:"…and you set it up", a:1} : {ok, big:R.big, small, bonus:.15};
+    case "chance": {
+      if (!ok) return {ok:false, big:R.big, small, bonus:-.05};
+      // one move: you've made the chance, now it's yours to finish (from the box, or from range if you're not a forward)
+      const fwd = ["ST","LW","RW","CAM"].includes(lvPos(st)), me = String(S.player.name || "").split(" ").slice(-1)[0] || "He";
+      lvLine = `${R.big}! And ${me} has the chance to finish it…`;
+      const sh = await lvShotCore(st, m, fwd ? "box" : "long", lvHead(st, m.min), "Now finish it!"); lvLine = null;
+      if (sh==="skip") return sh;
+      return sh.goal ? {ok:true, big:"Goal!", small:`${R.big}, then finished it`, g:1} : {ok:false, big:sh.big, small:`${R.big}, but ${String(sh.small || "no goal").replace(/^./, c=>c.toLowerCase())}`, bonus:.08};
+    }
     case "keep": return ok ? {ok, big:R.big, small, bonus:.2} : {ok:false, big:R.big, small, bonus:-.1};
     default: return ok ? {ok, big:R.big, small, bonus:.3} : conv(K[0]==="save" ? .6 : .4) ? {ok:false, big:"They score", small, ga:1, bonus:-.3} : {ok:false, big:R.big, small, bonus:-.1};
   }
