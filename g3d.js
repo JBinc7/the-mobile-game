@@ -312,7 +312,9 @@ const G3 = (() => {
     model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = true;
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
         : m.name==="head" ? matFor("head|" + head.uuid, ()=>new THREE.MeshStandardMaterial({map:head, normalMap:lite || F!==M ? null : M.headN, roughness:.62}))
-        : matFor("body|" + body.uuid, ()=>new THREE.MeshStandardMaterial({map:body, normalMap:lite ? null : M.bodyN, roughness:.6})));
+        : matFor("body|" + body.uuid, ()=>lite ? new THREE.MeshStandardMaterial({map:body, roughness:.6})
+          // the kit as cloth: a soft sheen at grazing angles, the way a shirt catches the floodlights
+          : new THREE.MeshPhysicalMaterial({map:body, normalMap:M.bodyN, roughness:.66, sheen:.7, sheenRoughness:.5, sheenColor:new THREE.Color(.55, .55, .55)})));
       o.material = ms.length===1 ? ms[0] : ms; });
     const bones = {}, byName = {}; model.traverse(o=>{ if (o.isBone){ bones[o.name.replace(/^Bip01_?/, "") || "root"] = o; byName[o.name] = o; } });
     // a keeper's gloves
