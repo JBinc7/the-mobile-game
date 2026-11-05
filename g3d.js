@@ -837,6 +837,16 @@ const G3 = (() => {
     W.add = (look, x, z, face = 0) => { const P = makePlayer(look), h = grp(x, 0, z); h.rotation.y = face; h.add(P.root); scene.add(h); P.at = h; W.dyn.push(h, P.root); return P; };
     /* a goal: the scorer wheels away to celebrate, then a slow-motion replay of the recording from a second camera
        (from behind the goal, through the net), then back to him celebrating. It runs on behind the result card */
+    /* the ball loose (off the post, parried, past the post, off the wall): it moves under gravity from velocity v (m/s),
+       bouncing and losing pace on the grass, rolling to a stop, spinning as it goes, and coming back off the boards */
+    W.loose = (v, ms = 1300) => { const p = B.position, vel = v.clone(), ax = new THREE.Vector3(); let last = performance.now();
+      return W.tween(ms, ()=>{ const now = performance.now(), dt = Math.min(.05, Math.max(0, (now - last)/1000)); last = now;
+        vel.y -= 9.8*dt; p.addScaledVector(vel, dt);
+        if (p.y < .11){ p.y = .11; if (vel.y < 0){ vel.y = -vel.y*.52; vel.x *= .85; vel.z *= .85; if (vel.y < .5) vel.y = 0; } }
+        if (p.y <= .111 && vel.y===0){ const f = Math.pow(.3, dt); vel.x *= f; vel.z *= f; }   // rolling, slowing
+        if (p.z < -4.85 && vel.z < 0 && p.y < .95){ p.z = -4.85; vel.z = -vel.z*.35; vel.x *= .7; }   // off the advertising boards
+        const sp = Math.hypot(vel.x, vel.z); if (sp > .02){ ax.set(vel.z, 0, -vel.x).normalize(); B.rotateOnWorldAxis(ax, sp*dt/.11); }
+        bs.position.set(p.x, .006, p.z); bs.scale.setScalar(Math.max(.3, 1 - (p.y - .11)*.25)); }); };
     /* a keeper coming down from his dive: a full-length one lands him on his side on the grass, a smaller one back on his
        feet; a ball he's held comes down with him */
     W.land = (K, kp, ball) => { const y0 = kp.position.y, r0 = kp.rotation.z, lying = Math.abs(r0) > .6 || y0 > 1.35, rT = lying ? Math.sign(r0 || 1)*1.45 : 0, yT = lying ? .32 : .94;
@@ -913,7 +923,11 @@ const G3 = (() => {
     Object.assign(W, {taker, K, kp, ks, kz, D});
     // how far his hands reach above his hips, arms up in a dive (measured on him: everyone's built a little differently)
     W.reach = reachOf(K, kp);
-    W.idle = t => { pose(taker, "idle", t); pose(K, "ready", t); pose(ref, "idle", t + 2.3); };
+    // the keeper reads you as you line it up: a shuffle across his line towards where you're aiming
+    W.kshift = 0;
+    W.idle = t => { pose(taker, "idle", t); pose(ref, "idle", t + 2.3);
+      const dx = W.kshift - kp.position.x; if (Math.abs(dx) > .01){ kp.position.x += Math.sign(dx)*Math.min(Math.abs(dx), .025); ks.position.x = kp.position.x; }
+      pose(K, "ready", t + (Math.abs(dx) > .03 ? t*1.5 : 0)); };
     W.start();
     return W;
   }
@@ -951,7 +965,7 @@ const G3 = (() => {
     aimL.visible = false; aimL.renderOrder = 5; W.scene.add(aimL);
     const aimM = new THREE.Mesh(new THREE.RingGeometry(.16, .26, 3), new THREE.MeshBasicMaterial({color:0xF5C542, transparent:true, opacity:.9, depthTest:false}));
     aimM.rotation.x = -Math.PI/2; aimM.visible = false; aimM.renderOrder = 5; W.scene.add(aimM);
-    function aim(x){ const ax = gx(x), P = aimG.attributes.position; P.setXYZ(1, ax, .02, 0); P.needsUpdate = true; aimL.computeLineDistances(); aimL.visible = true; aimM.position.set(ax, .03, .3); aimM.visible = true; }
+    function aim(x){ const ax = gx(x), P = aimG.attributes.position; W.kshift = Math.max(-.45, Math.min(.45, ax*.12)); P.setXYZ(1, ax, .02, 0); P.needsUpdate = true; aimL.computeLineDistances(); aimL.visible = true; aimM.position.set(ax, .03, .3); aimM.visible = true; }
     W.dyn.push(taker.root, kp);
     async function play(q){
       W.rec = []; W.mode = "shoot"; W.tween(250, k=>{ aimL.material.opacity = .85*(1 - k); aimM.material.opacity = .9*(1 - k); }).then(()=>{ aimL.visible = aimM.visible = false; });
@@ -976,24 +990,26 @@ const G3 = (() => {
         W.tween(q.kms, k=>{ const e = ease(Math.max(0, (k - .14)/.86)); kp.position.lerpVectors(kFrom, kTo, e); kp.position.y -= .09*Math.sin(Math.min(1, k/.3)*Math.PI);   // a dip to set himself, then he goes
           kp.rotation.z = roll*e; pose(K, "dive", e*dk); ks.position.x = kp.position.x; })
       ]);
-      const p0 = B.position.clone(), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
+      const p0 = B.position.clone(), vin = tgt.clone().sub(from).multiplyScalar(.85*1000/q.ms), fade = () => W.tween(300, k=>{ W.trail.material.opacity = .5*(1 - k); }).then(()=>{ W.trail.visible = false; });
       if (!q.goal) W.settle(taker, 450);   // no goal: he comes out of the follow-through and stands
       if (q.goal){
         W.mode = "goal"; W.land(K, kp);
         await W.inNet(spinAxis, .85*from.distanceTo(tgt)/q.ms);
         W.goalShow(taker, new THREE.Vector3(-2.3, 0, D - 2), new THREE.Vector3(-7, 3.4, D + (D > 16 ? 6 : 8)), new THREE.Vector3(0, .9, D*.3));
       } else if (q.over || q.wide){ W.rec = null; fade(); W.land(K, kp);
-        await W.tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
+        await W.loose(vin.clone().setY(q.over ? Math.max(1.5, vin.y) : vin.y), 1200);   // on past the goal, onto the boards
       } else if (q.wood){ fade();
-        await W.tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
+        // off the woodwork: the bar knocks it down and back out, a post back across the face of goal
+        const bar = p0.y > 2.2, rb = vin.clone(); if (bar){ rb.y = -Math.abs(rb.y)*.5 - 1; rb.z = -rb.z*.45; } else { rb.x = -rb.x*.6 - Math.sign(p0.x || 1)*1.5; rb.z = -rb.z*.4; rb.y = Math.max(rb.y, .8); }
+        await W.loose(rb, 1300);
         W.nearMiss(new THREE.Vector3(-7, 3.4, D + (D > 16 ? 6 : 8)), new THREE.Vector3(0, .9, D*.3));   // so close: see it again
       } else if (q.wall){ fade();
-        await W.tween(420, k=>{ B.position.set(p0.x + .6*k, Math.max(.11, p0.y + .3*k - 1.2*k*k), p0.z + 3.5*ease(k)); });
+        await W.loose(new THREE.Vector3(vin.x*.3 + (Math.random() - .5)*2, 2.2 + Math.random(), -vin.z*.3), 1200);   // off the wall and away
       } else if (q.held){ fade();   // held: into his chest, and he keeps it
         await W.tween(240, k=>{ const e = ease(k); B.position.set(p0.x + (kp.position.x - p0.x)*e*.85, p0.y + (kp.position.y + .15 - p0.y)*e*.85, p0.z + .1*e); bs.position.set(B.position.x, .006, B.position.z); });
         await W.land(K, kp, B);
       } else { fade(); W.land(K, kp);   // parried: pushed away, out and wide
-        await W.tween(480, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.8*ease(k), Math.max(.11, p0.y + .3*k - 1.3*k*k), p0.z + 2.6*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
+        await W.loose(new THREE.Vector3(Math.sign(p0.x || 1)*(4 + Math.random()*2), 1.6 + p0.y*.5, 3 + Math.random()*1.5), 1300);
         if (Math.abs(p0.x) > 1.6) W.nearMiss(new THREE.Vector3(Math.sign(p0.x)*6, 2.2, -2.6), new THREE.Vector3(p0.x*.3, 1, D*.35));   // a flying save: see it again, from beside the goal
       }
     }
