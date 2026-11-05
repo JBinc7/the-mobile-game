@@ -248,7 +248,7 @@ async function drPlay(k = S.train.focus, idx = null){
   if (!wk || !D || mcInjury(mcFrac(S.mc.wi)) || (idx!=null ? drSess(wk).done[idx] : wk.drill)) return;
   const attr = k==="prep" ? mcA().fin : mcA()[k];
   const st = {drill:D, f:{opp:"Training", oppStr:attr - 16, home:true}, base:attr - 16, X:{base:strOf(S.mc.club)}, ev:[], left:1, i:0, got:[], lvl:0, log:[]};
-  lvOpen();
+  lvOpen(); LV_DAY = true;   // training's in daylight
   try{
     if (!lvSeen().drills) await lvHelp(["drills"], true);
     if (!lvSeen()[D.help]) await lvHelp([D.help], true);

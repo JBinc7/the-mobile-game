@@ -435,7 +435,27 @@ const G3 = (() => {
      The light: a night stadium all round (a dark sky, the glow of the stands, four banks of floodlights, the pitch below),
      made once per renderer and used as image-based light, so the kit, the skin, the ball and the posts pick up the
      floodlights and the grass the way they would under them */
-  const envs = new WeakMap();
+  const envs = new WeakMap(), envsDay = new WeakMap();
+  // the afternoon: a blue sky, white haze over the roofs, the sun high to one side, the sunlit pitch below
+  function envDay(r){
+    if (envsDay.has(r)) return envsDay.get(r);
+    const sc = new THREE.Scene(), g = new THREE.SphereGeometry(60, 48, 24), P = g.attributes.position, cl = [], c = new THREE.Color();
+    const top = new THREE.Color(.16, .32, .72), haze = new THREE.Color(.75, .8, .86), stand = new THREE.Color(.22, .23, .24), grass = new THREE.Color(.1, .26, .09);
+    for (let i = 0; i < P.count; i++){ const y = P.getY(i)/60;
+      if (y < -.03) c.copy(grass); else if (y < .1) c.copy(stand).lerp(haze, (y + .03)/.13); else c.copy(haze).lerp(top, Math.min(1, (y - .1)/.6)); cl.push(c.r, c.g, c.b); }
+    g.setAttribute("color", new THREE.Float32BufferAttribute(cl, 3));
+    sc.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({vertexColors:true, side:THREE.BackSide})));
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(3.2, 16, 8), new THREE.MeshBasicMaterial({color:new THREE.Color(60, 56, 48)})); sun.position.copy(SUN()).multiplyScalar(50); sc.add(sun);
+    const pm = new THREE.PMREMGenerator(r), env = pm.fromScene(sc, .04).texture; pm.dispose();
+    sc.traverse(o=>{ if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    envsDay.set(r, env); return env;
+  }
+  let sunV = null; const SUN = () => sunV ||= new THREE.Vector3(.85, .8, -.3).normalize();   // where the sun is: off to the right and a little behind the goal, so the shadows lie long across the pitch
+  let skyDayTex = null;
+  function skyDay(){ if (skyDayTex) return skyDayTex;
+    const c = document.createElement("canvas"); c.width = 4; c.height = 256; const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, "#2F6DB8"); g.addColorStop(.55, "#7FAEDB"); g.addColorStop(.85, "#C8D9E6"); g.addColorStop(1, "#A9BBA3"); x.fillStyle = g; x.fillRect(0, 0, 4, 256);
+    skyDayTex = new THREE.CanvasTexture(c); skyDayTex.colorSpace = THREE.SRGBColorSpace; return skyDayTex; }
   function envFor(r){
     if (envs.has(r)) return envs.get(r);
     const sc = new THREE.Scene(), g = new THREE.SphereGeometry(60, 48, 24), P = g.attributes.position, cl = [], c = new THREE.Color();
@@ -492,22 +512,22 @@ const G3 = (() => {
     P.copy = new THREE.ShaderMaterial({uniforms:{t:{value:null}}, vertexShader:PV, toneMapped:false, depthTest:false, fragmentShader:"uniform sampler2D t; varying vec2 vUv; void main(){ gl_FragColor = vec4(texture2D(t, vUv).rgb, 1.); }"});
     P.blur = new THREE.ShaderMaterial({uniforms:{t:{value:null}, d:{value:new THREE.Vector2()}}, vertexShader:PV, toneMapped:false, depthTest:false,
       fragmentShader:"uniform sampler2D t; uniform vec2 d; varying vec2 vUv; void main(){ vec3 c = texture2D(t, vUv).rgb*.227; c += (texture2D(t, vUv + d*1.385).rgb + texture2D(t, vUv - d*1.385).rgb)*.316; c += (texture2D(t, vUv + d*3.231).rgb + texture2D(t, vUv - d*3.231).rgb)*.07; gl_FragColor = vec4(c, 1.); }"});
-    P.final = new THREE.ShaderMaterial({uniforms:{t:{value:null}, b:{value:null}, s:{value:null}, time:{value:0}}, vertexShader:PV, toneMapped:true, depthTest:false,
-      fragmentShader:`uniform sampler2D t; uniform sampler2D b; uniform sampler2D s; uniform float time; varying vec2 vUv;
+    P.final = new THREE.ShaderMaterial({uniforms:{t:{value:null}, b:{value:null}, s:{value:null}, time:{value:0}, bk:{value:.72}, dy:{value:0}}, vertexShader:PV, toneMapped:true, depthTest:false,
+      fragmentShader:`uniform sampler2D t; uniform sampler2D b; uniform sampler2D s; uniform float time; uniform float bk; uniform float dy; varying vec2 vUv;
         float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)))*43758.5453); }
         void main(){
           vec2 e = (vUv - .5)*dot(vUv - .5, vUv - .5)*.012;                          // a little colour fringing towards the edges
           vec4 s0 = texture2D(t, vUv); s0.r = texture2D(t, vUv + e).r; s0.b = texture2D(t, vUv - e).b;
           float fo = smoothstep(.86, .99, vUv.y)*.85 + smoothstep(.07, 0., vUv.y)*.35;   // shallow focus: the far crowd soft
           s0.rgb = mix(s0.rgb, texture2D(s, vUv).rgb, fo);
-          vec3 bl = texture2D(b, vUv).rgb*.72, c = s0.rgb + bl;
+          vec3 bl = texture2D(b, vUv).rgb*bk, c = s0.rgb + bl;
           float al = clamp(s0.a + dot(bl, vec3(.33)), 0., 1.);   // (the home card's drawn over the page: keep its see-through)
           float l = dot(c, vec3(.2126, .7152, .0722));
-          c = mix(c, c*vec3(.9, 1., 1.12), (1. - smoothstep(0., .45, l))*.6);    // cool shadows
+          c = mix(c, c*vec3(.9, 1., 1.12), (1. - smoothstep(0., .45, l))*mix(.6, .2, dy));    // cool shadows (less by day)
           c = mix(c, c*vec3(1.08, 1., .9), smoothstep(.3, 1.4, l)*.5);           // warm highlights
           c = mix(vec3(l), c, 1.14);                                              // richer colour
           c = pow(max(c, 0.), vec3(1.06));                                        // a little more contrast
-          vec2 q = (vUv - .5)*vec2(1., 1.2); c *= 1. - dot(q, q)*.75;             // vignette
+          vec2 q = (vUv - .5)*vec2(1., 1.2); c *= 1. - dot(q, q)*mix(.75, .4, dy);   // vignette (lighter by day)
           gl_FragColor = vec4(max(c, 0.), al);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -531,13 +551,13 @@ const G3 = (() => {
     const hx = 1/Math.max(1, w >> 1), hy = 1/Math.max(1, h >> 1);
     P.blur.uniforms.t.value = P.c.texture; P.blur.uniforms.d.value.set(hx*1.5, 0); pass(P.blur, P.d);
     P.blur.uniforms.t.value = P.d.texture; P.blur.uniforms.d.value.set(0, hy*1.5); pass(P.blur, P.c);
-    P.final.uniforms.t.value = P.rt.texture; P.final.uniforms.b.value = P.a.texture; P.final.uniforms.s.value = P.c.texture; P.final.uniforms.time.value = performance.now()/1000;
+    P.final.uniforms.t.value = P.rt.texture; P.final.uniforms.b.value = P.a.texture; P.final.uniforms.s.value = P.c.texture; P.final.uniforms.time.value = performance.now()/1000; P.final.uniforms.bk.value = scene.userData.day ? .38 : .72; P.final.uniforms.dy.value = scene.userData.day ? 1 : 0; r.toneMappingExposure = scene.userData.day ? 1.12 : 1;
     pass(P.final, null);
   }
   function lights(scene, o = {}){
     const env = !!scene.environment;
-    scene.add(new THREE.HemisphereLight(0xD8E4FF, 0x16301E, (o.hemi ?? 1.1)*(env ? .32 : 1)));
-    const a = new THREE.DirectionalLight(0xFFE2BE, (o.key ?? 2.2)*1.3); a.position.set(-4, 7, o.keyZ ?? -5); scene.add(a);
+    scene.add(new THREE.HemisphereLight(o.day ? 0xCFE3FF : 0xD8E4FF, o.day ? 0x2C5A2A : 0x16301E, (o.hemi ?? 1.1)*(env ? (o.day ? .55 : .32) : 1)));
+    const a = new THREE.DirectionalLight(o.day ? 0xFFF3DF : 0xFFE2BE, (o.key ?? 2.2)*(o.day ? 1.55 : 1.3)); if (o.day) a.position.copy(SUN()).multiplyScalar(12); else a.position.set(-4, 7, o.keyZ ?? -5); scene.add(a);
     // the main floodlight casts the shadows: of the players, the ball and the goal, round where the play is
     if (o.at && !lite){ const at = o.at, dir = a.position.clone().normalize(); a.target.position.copy(at); scene.add(a.target); a.position.copy(at).addScaledVector(dir, 40);
       a.castShadow = true; a.shadow.mapSize.set(2048, 2048); const sc = a.shadow.camera, z = o.size || 17; sc.left = -z; sc.right = z; sc.top = z; sc.bottom = -z; sc.near = 5; sc.far = 90; sc.updateProjectionMatrix();
@@ -545,8 +565,8 @@ const G3 = (() => {
     const b = new THREE.DirectionalLight(0xDDE8FF, o.fill ?? .9); b.position.set(5, 5, 6); scene.add(b);
     const c = new THREE.DirectionalLight(0xFFE9B0, o.rim ?? 1.3); c.position.set(0, 4, -8); scene.add(c);
     // the floodlights behind the play: a cool edge of light round the players, the ball and the posts
-    const rim = new THREE.DirectionalLight(0xBFD6FF, env ? 2.4 : 1.2); rim.position.set(6, 9, -14); scene.add(rim);
-    const rim2 = new THREE.DirectionalLight(0xFFD9A8, env ? 1.4 : .7); rim2.position.set(-9, 6, -10); scene.add(rim2);
+    const rim = new THREE.DirectionalLight(0xBFD6FF, (env ? 2.4 : 1.2)*(o.day ? .35 : 1)); rim.position.set(6, 9, -14); scene.add(rim);
+    const rim2 = new THREE.DirectionalLight(0xFFD9A8, (env ? 1.4 : .7)*(o.day ? .3 : 1)); rim2.position.set(-9, 6, -10); scene.add(rim2);
   }
   // empty a scene, freeing what isn't shared (the shared geometries and materials stay for the next one)
   function clear(scene){
@@ -605,6 +625,14 @@ const G3 = (() => {
     const ground = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(400, 400), 100, 100), g1); ground.rotation.x = -Math.PI/2; ground.position.set(0, -.01, 0); ground.receiveShadow = true; scene.add(ground);   // grass to the horizon
     const sg = geo("stripe", ()=>tileUV(new THREE.PlaneGeometry(120, 4), 30, 1));
     for (let i = -2; i < 20; i++){ const s = new THREE.Mesh(sg, i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); s.receiveShadow = true; scene.add(s); }
+    // wear: the goalmouth and the penalty spot, scuffed and sandy where the play's been
+    if (!mats.has("wear")){
+      const N = 256, c = document.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d"), R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(23);
+      for (let i = 0; i < 1400; i++){ const a = R()*Math.PI*2, rr = Math.pow(R(), .7)*N*.42, px = N/2 + Math.cos(a)*rr*1.05, py = N/2 + Math.sin(a)*rr, f = 1 - rr/(N*.42);
+        x.fillStyle = R() < .25 ? `rgba(70,52,30,${(.2*f).toFixed(3)})` : `rgba(150,128,82,${(.17*f).toFixed(3)})`; x.beginPath(); x.ellipse(px, py, 2 + R()*7, 1.5 + R()*4, R()*3, 0, 7); x.fill(); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+      mats.set("wear", new THREE.MeshStandardMaterial({map:t, transparent:true, depthWrite:false, roughness:1, polygonOffset:true, polygonOffsetFactor:-2})); }
+    [[0, 2.6, 8.5, 5.2], [0, 11, 2.4, 2.4], [0, .7, 5, 1.6]].forEach(([wx, wz, w, d])=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mats.get("wear")); m.rotation.x = -Math.PI/2; m.position.set(wx, .003, wz); m.receiveShadow = true; scene.add(m); });
     if (!lines) return;
     const strip = (x, z, w, d) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), line); m.rotation.x = -Math.PI/2; m.position.set(x, .01, z); scene.add(m); };
     const W = .12;
@@ -689,7 +717,7 @@ const G3 = (() => {
       }};
   }
   let crowdTex = null, boardTex = null;
-  function stands(scene, kc){
+  function stands(scene, kc, day){
     // the crowd: rows of fans on the steps, faces of every skin tone, shirts in the home colours, white, and everyday darks,
     // the odd scarf held up; the rows under the roof in its shadow
     if (!crowdTex){ const c = document.createElement("canvas"); c.width = 2048; c.height = 512; const x = c.getContext("2d"); x.fillStyle = "#0A120E"; x.fillRect(0, 0, 2048, 512);
@@ -711,8 +739,8 @@ const G3 = (() => {
       boardTex = new THREE.CanvasTexture(c); boardTex.colorSpace = THREE.SRGBColorSpace; boardTex.wrapS = THREE.RepeatWrapping; boardTex.repeat.x = 2; }
     // the stands all round: behind the goal and down both sides (so a replay from the side has a crowd behind it),
     // each a raked bank of fans over a strip of advertising boards
-    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:0xB4BCB7}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
-    const roofM = mat("#14191E", .7, {metal:.3}), wallM = mat("#1B2228", .85), lightM = new THREE.MeshBasicMaterial({color:new THREE.Color(2.2, 2.1, 1.85)});
+    const cm = new THREE.MeshBasicMaterial({map:crowdTex, color:day ? 0xE4E8E5 : 0xB4BCB7}), bm = new THREE.MeshBasicMaterial({map:boardTex}), crowd = [];
+    const roofM = day ? mat("#7C848C", .7, {metal:.3}) : mat("#14191E", .7, {metal:.3}), wallM = day ? mat("#8A9097", .85) : mat("#1B2228", .85), lightM = day ? mat("#8E959C", .5, {metal:.5}) : new THREE.MeshBasicMaterial({color:new THREE.Color(2.2, 2.1, 1.85)});   // (the floodlights off by day)
     // a stand: the raked crowd over a concourse wall and the advertising boards, under a roof with a strip of floodlights along its edge
     const bank = (w, x, z, ry, d) => { const g = grp(x, 0, z); g.rotation.y = ry; g.userData.stand = true; scene.add(g);
       const c = new THREE.Mesh(new THREE.PlaneGeometry(w, 20), cm); c.position.set(0, 11.2, -d); c.rotation.x = .22; g.add(c); crowd.push(c);
@@ -729,11 +757,11 @@ const G3 = (() => {
     const gc = document.createElement("canvas"); gc.width = gc.height = 64; const gx2 = gc.getContext("2d"), gr = gx2.createRadialGradient(32, 32, 0, 32, 32, 32);
     gr.addColorStop(0, "rgba(255,248,222,1)"); gr.addColorStop(.25, "rgba(255,226,154,.45)"); gr.addColorStop(1, "rgba(255,226,154,0)"); gx2.fillStyle = gr; gx2.fillRect(0, 0, 64, 64);
     const gt = new THREE.CanvasTexture(gc);
-    [-1, 1].forEach(s=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:gt, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); sp.position.set(s*24, 24, -22); sp.scale.set(16, 16, 1); scene.add(sp);
+    [-1, 1].forEach(s=>{ const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:gt, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); sp.position.set(s*24, 24, -22); sp.scale.set(16, 16, 1); sp.visible = !day; scene.add(sp);
       // the pylon under it, and its bank of lamps
       const py = new THREE.Mesh(new THREE.CylinderGeometry(.35, .6, 24, 8), wallM); py.position.set(s*24, 12, -22.5); py.userData.pylon = true; scene.add(py);
       const hd = new THREE.Mesh(new THREE.BoxGeometry(5, 2.6, .4), lightM); hd.position.set(s*24, 24, -22.2); hd.lookAt(0, 0, 8); hd.userData.pylon = true; scene.add(hd); sp.userData.pylon = true; });
-    scene.fog = new THREE.Fog(0x0C1620, 34, 92);   // a haze over the far stands, for depth
+    scene.fog = day ? new THREE.Fog(0xB4C6D6, 45, 150) : new THREE.Fog(0x0C1620, 34, 92);   // a haze over the far stands, for depth
     return crowd;
   }
   let ballTex = null;
@@ -751,10 +779,11 @@ const G3 = (() => {
   function base(stage, o, ballAt){
     if (!SR){ SR = {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)}; }
     if (SR.cur){ SR.cur.stop(); SR.cur = null; }   // one scene at a time: the last one stops
-    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = skyFor(); scene.environment = envFor(r);
+    const day = typeof LV_DAY!=="undefined" && !!LV_DAY;   // an afternoon kick-off (moments.js), or under the floodlights
+    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = day ? skyDay() : skyFor(); scene.environment = day ? envDay(r) : envFor(r); scene.userData.day = day;
     if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
-    lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize});
-    pitch(scene, !o.noLines); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542");
+    lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize, day});
+    pitch(scene, !o.noLines); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542", day);
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner

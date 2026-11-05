@@ -44,7 +44,11 @@ function lvAbbr(n){
   if (!w.length) return String(n).slice(0,3).toUpperCase();
   return (w.length>1 && w[0]==="Manchester" ? w[0][0] + w[1].slice(0,2) : w[0].slice(0,3)).toUpperCase();
 }
+/* day or night, for 3D: most league games kick off in the afternoon sun, some in the evening; cups, Europe and the big
+   games are under the floodlights; training's in daylight (drills.js). The lab's an evening under the lights */
+let LV_DAY = false;
 function lvOpen(label = "Match"){
+  LV_DAY = false;
   lvEl = document.createElement("div"); lvEl.className = "lv"; lvEl.setAttribute("role", "dialog"); lvEl.setAttribute("aria-modal", "true"); lvEl.setAttribute("aria-label", label);
   document.body.appendChild(lvEl); document.documentElement.classList.add("lv-open");
 }
@@ -106,6 +110,7 @@ const lvPos = st => st.lab ? st.lab.pos : S.player.pos;
 /* the commentator: a line as each of your moments in a match begins, shown low on the picture like a TV caption */
 let lvLine = null;
 function lvCall(st, m){
+  const fx = st.f || {}; LV_DAY = fx.code==="league" && !fx.big && hashStr(String(fx.opp) + "|" + (fx.week ?? fx.w ?? "")) % 4 !== 0;
   const me = String(S.player.name || "He").split(" ").slice(-1)[0], opp = st.f.opp || "They", k = m.g + (m.v ? ":" + m.v : ""), r = a => a[Math.floor(Math.random()*a.length)];
   const L = {"shot:pen":[`${me} places the ball on the spot…`, `Penalty! ${me} steps up…`], "shot:freekick":[`${me} stands over the free kick…`, `Free kick in range. ${me} fancies this…`],
     "shot:long":[`${me} lines one up from distance…`, `Space for ${me} to shoot from range…`], "shot:oneonone":[`${me} is clean through!`, `Just the keeper to beat for ${me}…`],
