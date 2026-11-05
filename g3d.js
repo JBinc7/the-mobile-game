@@ -335,6 +335,16 @@ const G3 = (() => {
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 #ifdef USE_NORMALMAP_TANGENTSPACE
   diffuseColor.rgb *= mix(1.0, clamp((mapN.z - 0.55)/0.45, 0.0, 1.0), 0.32);
+#if !defined( PLAYER_HEAD ) && defined( USE_ROUGHNESSMAP )
+  {
+    // the shirt's knit: a fine dimpled weave, seen close up, faded out before it can shimmer
+    vec2 kq = vNormalMapUv*vec2(330.0, 300.0); kq.x += 0.5*floor(kq.y);
+    float kw = texelRoughness.b*(1.0 - smoothstep(0.18, 0.45, max(fwidth(kq.x), fwidth(kq.y))));
+    vec2 kc = fract(kq) - 0.5, kd = vec2(cos(kc.x*6.2832)*(1.0 - 2.0*abs(kc.y)), cos(kc.y*6.2832)*(1.0 - 2.0*abs(kc.x)));
+    normal = normalize(tbn*vec3(mapN.xy - kc*kd*0.9*kw, mapN.z));
+    diffuseColor.rgb *= 1.0 - 0.05*kw*dot(kc, kc)*4.0;
+  }
+#endif
 #endif`);
   }
   const skinned = (m, head) => { m.onBeforeCompile = playerShader; if (head) m.defines = {PLAYER_HEAD:""}; m.customProgramCacheKey = () => "player"; return m; };
@@ -350,7 +360,7 @@ const G3 = (() => {
     const F = FACES[face] ? {key:"f" + face, head:faceImg[face], skin:FACES[face].skin} : M;
     const model = SkeletonUtils.clone(M.scene), root = grp(); root.add(model);
     const body = kitTex(M, look), head = headTex(F, look);
-    model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = true;
+    model.traverse(o=>{ if (!o.isMesh) return; o.frustumCulled = false; o.castShadow = true; o.receiveShadow = !lite;   // (shadowed by himself and the others: an arm across the body, under the shorts)
       const ms = [].concat(o.material).map(m => m.name==="hair" ? matFor("hair|" + M.key, ()=>new THREE.MeshStandardMaterial({map:M.hairT, alphaTest:.42, side:THREE.DoubleSide, roughness:.85}))
         : m.name==="head" ? matFor("head|" + head.uuid, ()=>lite ? new THREE.MeshStandardMaterial({map:head, normalMap:F!==M ? null : M.headN, roughness:.62})
           // the face: its own relief, glossy eyes and lips, skin with a soft sheen and the light wrapping round it
@@ -540,14 +550,19 @@ const G3 = (() => {
   // the grass: fine blades and patchy wear over the mown stripes (a texture that tiles every 4 m)
   let grassTex = null;
   function grassFor(){ if (grassTex) return grassTex;
-    const N = 512, c = document.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d");
+    const N = lite ? 512 : 1024, k = N/512, c = document.createElement("canvas"); c.width = c.height = N; const x = c.getContext("2d");
     x.fillStyle = "#C9C9C9"; x.fillRect(0, 0, N, N);
     const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(7);
-    for (let i = 0; i < 220; i++){ const px = R()*N, py = R()*N, rr = 14 + R()*40, g2 = x.createRadialGradient(px, py, 0, px, py, rr), v = R() < .5 ? "255,255,255" : "40,40,40";
+    for (let i = 0; i < 220; i++){ const px = R()*N, py = R()*N, rr = (14 + R()*40)*k, g2 = x.createRadialGradient(px, py, 0, px, py, rr), v = R() < .5 ? "255,255,255" : "40,40,40";
       g2.addColorStop(0, `rgba(${v},${(.02 + R()*.035).toFixed(3)})`); g2.addColorStop(1, `rgba(${v},0)`); x.fillStyle = g2;
       for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]){ x.save(); x.translate(ox, oy); x.fillRect(px - rr, py - rr, rr*2, rr*2); x.restore(); } }
-    for (let i = 0; i < 26000; i++){ const px = R()*N, py = R()*N, l = 2 + R()*5, sh = R(); x.strokeStyle = sh < .55 ? `rgba(255,255,255,${(.06 + R()*.14).toFixed(2)})` : `rgba(20,40,10,${(.05 + R()*.12).toFixed(2)})`;
-      x.lineWidth = .8 + R()*.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - .5)*1.6, py - l); x.stroke(); }
+    /* the blades, in batches of one shade each (one stroke per batch, so it's quick): most catching the light, some in
+       shadow, a few yellowing or a bluer green, so the grass isn't one flat colour close up */
+    const shades = ["255,255,255", "255,255,255", "255,255,240", "20,40,10", "20,40,10", "255,236,170", "150,205,190", "60,70,20"];
+    for (let bi = 0; bi < 64; bi++){ const sh = shades[bi % shades.length], a = (sh==="20,40,10" || sh==="60,70,20" ? .05 + R()*.12 : .06 + R()*.14)*(sh==="255,236,170" || sh==="150,205,190" ? .8 : 1);
+      x.strokeStyle = `rgba(${sh},${a.toFixed(3)})`; x.lineWidth = (.8 + R()*.6)*Math.sqrt(k); x.lineCap = "round"; x.beginPath();
+      for (let i = 0, n = 26000*k*k/64; i < n; i++){ const px = R()*N, py = R()*N, l = (2 + R()*5)*k; x.moveTo(px, py); x.lineTo(px + (R() - .5)*1.6*k, py - l); }
+      x.stroke(); }
     grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 16; return grassTex; }
   /* ---------- the picture: a broadcast look over the render ----------
      The scene's drawn into a high-range buffer (with its own antialiasing), then: bloom (the floodlights, the roof
@@ -725,26 +740,32 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
   vec4 nz = texture2D(uNoise, pp/90.0), nm = texture2D(uNoise, pp/7.0 + 0.5);
   // the stripes: 5 m bands across the pitch, the edges soft and wandering
   float sz = (pp.y + (nm.g - 0.5)*0.45)/5.0, sw = max(fwidth(sz)*3.14159, 0.1);
-  vec3 grass = mix(uC1, uC2, smoothstep(-sw, sw, sin(sz*3.14159)));
+  float graze = 1.0 - normalize(cameraPosition - vPitch).y;   // (0 looking straight down, 1 along the ground)
+  vec3 mid = mix(uC1, uC2, 0.5), grass = mix(mid, mix(uC1, uC2, smoothstep(-sw, sw, sin(sz*3.14159))), 0.7 + 0.45*graze*graze);
   grass *= 0.88 + 0.24*nz.r;                                                          // broad patches
   grass = mix(grass, grass*vec3(1.08, 1.03, 0.86), smoothstep(0.55, 0.85, nz.g)*0.6);   // a little yellower here and there
   vec3 col = grass*gt;
   // wear: thinned, yellowing grass going to bare earth where the play is
-  float zone = max(max(1.0 - length((pp - vec2(0.0, 2.6))/vec2(5.4, 3.0)), 1.0 - length((pp - vec2(0.0, 0.8))/vec2(2.7, 1.0))), 1.0 - length(pp - vec2(0.0, 11.0))/1.1);
-  float w = clamp(zone*(0.35 + 1.1*nm.g), 0.0, 1.0);
-  col = mix(col, col*vec3(1.18, 1.04, 0.6) + vec3(0.01, 0.008, 0.0), smoothstep(0.15, 0.5, w));
+  float zone = max(max(1.0 - length((pp - vec2(0.0, 2.6))/vec2(5.4, 3.0)), 1.0 - length((pp - vec2(0.0, 0.8))/vec2(2.7, 1.0))), 0.8 - length(pp - vec2(0.0, 11.0))/1.0);
+  float w = clamp(zone*(0.25 + 1.2*nm.g*nm.b*1.6), 0.0, 1.0);
+  col = mix(col, col*vec3(1.12, 1.03, 0.72) + vec3(0.006, 0.005, 0.0), smoothstep(0.2, 0.55, w)*0.8);
   col = mix(col, vec3(0.15, 0.11, 0.07)*(0.65 + 0.8*gt.g), smoothstep(0.55, 0.95, w)*0.85);
   // the paint, the blades showing through, a little worn where the grass is
   if (uLines > 0.5){ float ld = pLines(pp), aa = max(fwidth(ld)*1.2, 0.002), lm = 1.0 - smoothstep(0.06 - aa, 0.06 + aa, ld);
     col = mix(col, vec3(0.8, 0.81, 0.78)*(0.72 + 0.5*dot(gt, vec3(0.333))), lm*(1.0 - 0.5*smoothstep(0.55, 0.95, w))); }
   col *= 1.0 - 0.18*uWet;
   diffuseColor.rgb *= col;`;
+  /* light through the grass: looking towards a floodlight (or the sun), the blades glow a warm yellow-green where it
+     shines through them, as real grass does against the light */
+  const GRASS_LIGHT = `vec3 irradiance = dotNL * directLight.color;
+	{ float bl = saturate(-dot(directLight.direction, geometryViewDir)); reflectedLight.directDiffuse += bl*bl*bl*saturate(dotNL + 0.35)*0.42*vec3(1.05, 1.2, 0.55)*directLight.color*BRDF_Lambert(material.diffuseColor); }`;
   function pitchShader(sh){
     const u = this.userData.pitch;
     Object.assign(sh.uniforms, {uGrass:{value:u.grass}, uNoise:{value:u.noise}, uLines:{value:u.lines}, uWet:{value:u.wet}, uC1:{value:col("#22693A")}, uC2:{value:col("#358F4E")}});
     sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vPitch;")
       .replace("#include <worldpos_vertex>", "#include <worldpos_vertex>\n  vPitch = (modelMatrix*vec4(transformed, 1.0)).xyz;");
     sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\n" + PITCH_GLSL)
+      .replace("#include <lights_physical_pars_fragment>", THREE.ShaderChunk.lights_physical_pars_fragment.replace("vec3 irradiance = dotNL * directLight.color;", GRASS_LIGHT))
       .replace("#include <map_fragment>", PITCH_COLOUR)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
 #ifndef PITCH_LITE
@@ -761,6 +782,56 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
   }
   function pitch(scene, lines = true, wet = false){
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), pitchMat(lines, wet)); ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+    return lite ? null : grassShells(scene);
+  }
+  /* the blades standing up: near the camera the grass has depth, 3 cm of it, drawn as layers just above the pitch (each
+     a slice through the blades, tapering to their tips, leaning the way the mower laid them and stirring in the air).
+     Each slice doesn't paint the grass, it lightens or darkens the lit pitch under it (darker down among the blades,
+     lighter at their tips), so the floodlights, the shadows and the paint all still show. They follow the camera,
+     fade out with distance (the texture's enough there) and aren't drawn on older phones */
+  const SHELLS = 7, SHELL_H = .03;
+  function grassShells(scene){
+    const k = "grassShells";
+    if (!mats.has(k)) mats.set(k, new THREE.ShaderMaterial({uniforms:{uH:{value:SHELL_H}, uT:{value:0}}, transparent:true, depthWrite:false, toneMapped:false,
+      blending:THREE.CustomBlending, blendEquation:THREE.AddEquation, blendSrc:THREE.DstColorFactor, blendDst:THREE.SrcColorFactor, blendSrcAlpha:THREE.ZeroFactor, blendDstAlpha:THREE.OneFactor,
+      vertexShader:`varying vec3 vW; void main(){ vec4 p = vec4(position, 1.0);
+#ifdef USE_INSTANCING
+  p = instanceMatrix*p;
+#endif
+  p = modelMatrix*p; vW = p.xyz; gl_Position = projectionMatrix*viewMatrix*p; }`,
+      fragmentShader:`uniform float uH; uniform float uT; varying vec3 vW;
+float hs(vec2 p){ vec3 q = fract(vec3(p.xyx)*0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y)*q.z); }
+void main(){
+  float dist = length(cameraPosition - vW), base = vW.y < uH*0.06 ? 1.0 : 0.0;
+  if (dist > 15.0) discard;
+  float lay = clamp(vW.y/uH, 0.0, 1.0), sz = vW.z/5.0, lean = sin(sz*3.14159) > 0.0 ? 1.0 : -1.0;
+  vec2 p = vW.xz + vec2(lean*0.009 + 0.002*sin(uT*1.7 + vW.x*3.1 + vW.z*2.3), 0.003)*lay*lay;
+  vec2 q = p*240.0, c = floor(q), f = fract(q) - 0.5;
+  float r1 = hs(c), r2 = hs(c + 17.31), r3 = hs(c + 41.7);
+  f -= (vec2(r1, r3) - 0.5)*0.45;
+  float tall = 0.45 + 0.55*r2, fade = (1.0 - smoothstep(0.3, 0.75, max(fwidth(q.x), fwidth(q.y))))*(1.0 - smoothstep(9.0, 15.0, dist));
+  if (fade < 0.01) discard;
+  float m;
+  if (base > 0.5) m = 0.74;   // the soil and the shade down among the blades
+  else {
+    if (lay > tall || length(f) > 0.46*(1.0 - 0.8*lay/tall)) discard;
+    m = mix(1.0, 1.13, lay)*(0.97 + 0.06*r1);   // a blade: lighter towards its tip
+  }
+  vec3 tint = base > 0.5 ? vec3(1.0) : mix(vec3(1.0), vec3(1.04, 1.02, 0.9), step(0.82, r3));
+  gl_FragColor = vec4(mix(vec3(1.0), m*tint, fade)*0.5, 0.5);
+}`}));
+    const g = geos.get(k) || (()=>{ const pg = new THREE.PlaneGeometry(36, 36, 1, 1); pg.rotateX(-Math.PI/2); geos.set(k, pg); return pg; })();
+    const m = new THREE.InstancedMesh(g, mats.get(k), SHELLS), mx = new THREE.Matrix4();
+    for (let i = 0; i < SHELLS; i++) m.setMatrixAt(i, mx.makeTranslation(0, i ? SHELL_H*i/(SHELLS - 1) : .0008, 0));
+    m.frustumCulled = false; m.renderOrder = -1; scene.add(m); return m;
+  }
+  // keep the blades round where the camera's looking (and only when it's near the ground)
+  let shellV = null;
+  function placeShells(m, cam, now){
+    cam.getWorldDirection(shellV ||= new THREE.Vector3()); const near = cam.position.y < 7;
+    m.visible = near; if (!near) return;
+    shellV.y = 0; if (shellV.lengthSq() < 1e-6) shellV.set(0, 0, -1); shellV.normalize();
+    m.position.set(cam.position.x + shellV.x*10, 0, cam.position.z + shellV.z*10); m.material.uniforms.uT.value = now/1000;
   }
   /* the net's cord: a honeycomb mesh (12 cm across, 5 mm cord, knots where three cords meet), worked out pixel by pixel
      as an alpha map that repeats every 12 cm across and 20.8 cm up (two rows of cells), with mipmaps, so far away it
@@ -986,7 +1057,7 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
     const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = day ? (rain ? skyRain() : skyDay()) : skyFor(); scene.environment = day ? envDay(r) : envFor(r); scene.userData.day = day;
     if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
     lights(scene, {hemi:1.3, key:rain && day ? 1.1 : 2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize, day});
-    pitch(scene, !o.noLines, rain); const net = goalFrame(scene); const LC = typeof LV_CROWD!=="undefined" ? LV_CROWD : null, crowd = stands(scene, o.crowd || (LC && LC[0]) || "#F5C542", day, o.crowdAway || (LC && LC[1]));
+    const shells = pitch(scene, !o.noLines, rain); const net = goalFrame(scene); const LC = typeof LV_CROWD!=="undefined" ? LV_CROWD : null, crowd = stands(scene, o.crowd || (LC && LC[0]) || "#F5C542", day, o.crowdAway || (LC && LC[1]));
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner
@@ -1030,6 +1101,7 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
       if (W.rec){ W.rec.push({t:now, o:W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]), p:poseLog}); poseLog = null; }
       if (W.view) fit(r, W.view, host);
       if (window.__g3cam) window.__g3cam(cam, W);   // (testing: a fixed camera for comparison pictures)
+      if (shells){ if (r.capabilities.isWebGL2 && !lite) placeShells(shells, W.view || cam, now); else shells.visible = false; }
       present(r, scene, W.view || cam); raf = requestAnimationFrame(frame);
     };
     W.start = () => { try{ r.compile(scene, cam); }catch(e){} raf = requestAnimationFrame(frame); };
