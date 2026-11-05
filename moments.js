@@ -1052,9 +1052,12 @@ async function lvGamePass(st, m){
   if (!r.ok) return {ok:false, big: r.i<0 ? "Closed down" : "Intercepted", small:r.why, bonus:-.1};
   const scored = Math.random() < lvConv(st, m, .32);
   // what he did with it: a touch, a shot at goal, and the keeper going for it
-  if (r.at && lvEl){ const [x, y] = r.at, side = x < 150 ? 1 : -1, gx = scored ? 150 + side*(30 + Math.random()*20) : 150 + side*12, gy = scored ? 4 : 10;
-    await lvWait(160); lvKick(`#lvM${r.i}`);
-    await Promise.all([lvFly("#lvPb", [x, y], [gx, gy], 360, {h:6, spin:1.6}), lvTween(300, k=>{ const q = lvEaseOut(k); lvMove("#lvGk", 150 + (scored ? -side*14 : side*12)*q, 12, (scored ? -side : side)*40*q); })]);
+  if (r.at && lvEl){ const [x0, y0] = r.at, side = x0 < 150 ? 1 : -1, gx = scored ? 150 + side*(30 + Math.random()*20) : 150 + side*12, gy = scored ? 4 : 10;
+    // he takes it in his stride, a touch towards goal, then shoots
+    const x = x0 + (150 - x0)*.12, y = y0 - 16;
+    await lvTween(340, k=>{ const xx = x0 + (x - x0)*k, yy = y0 + (y - y0)*k; lvMove(`#lvRw${r.i}`, xx, yy); lvBallAt("#lvPb", xx + 2, yy - 6, 1, 0, k*300); });
+    lvKick(`#lvM${r.i}`);
+    await Promise.all([lvFly("#lvPb", [x + 2, y - 6], [gx, gy], 360, {h:6, spin:1.6}), lvTween(300, k=>{ const q = lvEaseOut(k); lvMove("#lvGk", 150 + (scored ? -side*14 : side*12)*q, 12, (scored ? -side : side)*40*q); })]);
     if (scored) await lvWait(200); }
   return scored ? {ok:true, big:"Assist!", small:"Your teammate finished it off", a:1} : {ok:true, big:"Chance created", small:"Great ball, but his shot was saved", bonus:.1};
 }
