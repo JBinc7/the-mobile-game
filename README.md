@@ -136,6 +136,15 @@ Each game has a card with how to play it, a score at the end, and *Play again*.
 
 Prefer to log a real FC career? With the Editor pen, use *Enter your stats by hand* under the match centre. A season is played in one mode throughout, so switching mid-season takes effect the next season. A save that was already entering stats by hand finishes that season that way, then goes back to the match centre unless you have the pen.
 
+### How a match looks and sounds (3D)
+
+- **Kick-off times and weather.** Most league games are afternoons in the sun; some, and the cups, Europe and the big games, are evenings under the floodlights. About one match in five is played in the rain (a wet pitch, grey skies by day). Training's in daylight. (`LV_DAY`, `LV_RAIN` in `moments.js`.)
+- **The ground.** The home fans in the home club's colours with an away end in the visitors', flags waving, stands with roofs and floodlights, a worn goalmouth. The crowd murmurs, chants, draws breath at a strike, roars for a goal, ooh's a near miss and groans a miss; the referee whistles kick-off, cards and full time (`sound.js`, with a Sound switch in Settings).
+- **Commentary.** A line as each of your moments begins, with what's happened since your last one (goals elsewhere, the score).
+- **Replays.** Goals (after the scorer's celebration: a cheer, the aeroplane or a knee slide), shots off the woodwork and flying saves play again in slow motion from another angle.
+- **The play.** Moments are on the move, not still pictures: passes are played into a runner as the attack moves up the pitch, take-ons start with you running at your man, interceptions read moving lanes. Winning a chance-making moment carries straight on into your own shot. Shots go where your flick points on the 3D goal, the shape of the flick curls it, and the ball moves under real physics when it's loose.
+- **Older phones** get a lighter version (no shadows or finishing effects, smaller textures); a phone that struggles switches to it by itself.
+
 ## Installing it on a phone
 
 The game shows these steps on its first screen and in the **Account** menu.
@@ -178,6 +187,8 @@ Players on different phones can't see each other's careers. That would need an o
 | `crests.js` | Every club's badge, drawn from its colours |
 | `targets.js` | The manager's season targets and your agent's clauses |
 | `shop.js` | The shop: boots (and their icons) and training boosts bought with gold coins, coin packs, and the Editor pen with its player editor |
+| `g3d.js` | The 3D graphics (three.js): the player on the home screen, the 3D scenes for shots, saves, headers, volleys, tackles and crosses, and a 3D version of every other mini-game drawn from its 2D picture; the stadium, light and weather, replays and celebrations, and the broadcast finish over the picture |
+| `sound.js` | The sound, all made in the browser (no recordings): the crowd, its chants and reactions, the ball, the net, the whistle and the rain |
 | `sw.js` | Offline support: keeps a copy of the game on the phone |
 | `manifest.webmanifest`, `icons/` | App name, colours and home-screen icons |
 | `fonts/` | The game's fonts (Big Shoulders Display, Barlow, Barlow Condensed), served from here under the SIL Open Font License |
