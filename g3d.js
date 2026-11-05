@@ -763,7 +763,15 @@ const G3 = (() => {
       const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 4, .35, 13), roofM); roof.position.set(0, 21.6, -d - 2.4); roof.rotation.x = -.08; g.add(roof);
       const strip = new THREE.Mesh(new THREE.BoxGeometry(w*.92, .28, .28), lightM); strip.position.set(0, 21.05, -d + 4); g.add(strip);
       const b = new THREE.Mesh(new THREE.PlaneGeometry(w*.6, .9), bm); b.position.set(0, .45, 0); g.add(b); };
+    // flags among the fans, in the clubs' colours (the away end's in theirs), waving (W animates crowd.flags)
+    const flagTex = (c1) => { const k = "flag|" + c1; if (mats.has(k)) return mats.get(k); const c = document.createElement("canvas"); c.width = 128; c.height = 80; const x = c.getContext("2d");
+      for (let i = 0; i < 4; i++){ x.fillStyle = i%2 ? "#F4F4F0" : c1; x.fillRect(i*32, 0, 32, 80); }
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const m = new THREE.MeshStandardMaterial({map:t, side:THREE.DoubleSide, roughness:.85}); mats.set(k, m); return m; };
+    crowd.flags = [];
+    const flag = (g, x, y, z, c1) => { const geo2 = new THREE.PlaneGeometry(1.7, 1.05, 10, 3), f = new THREE.Mesh(geo2, flagTex(c1)); f.position.set(x, y, z); g.add(f);
+      f.userData.base = Float32Array.from(geo2.attributes.position.array); f.userData.ph = Math.random()*6; crowd.flags.push(f); };
     bank(80, 0, -5, 0, 11);
+    { const g = crowd[0].parent; [[-30, 4.2], [-22, 6.5], [-8, 3.6], [6, 7.2], [17, 4.6], [29, 6]].forEach(([fx, fy], i)=>flag(g, fx, fy, -11 + (fy - 11.2)/Math.cos(.22)*Math.sin(.22) + .6, ka && fx < -20 ? ka : kc)); }
     [-1, 1].forEach(s=>bank(66, s*36, 27, -s*Math.PI/2, 7));
     // the touchlines
     const tl = new THREE.MeshBasicMaterial({color:0xF2F5EF}); [-1, 1].forEach(s=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(.12, 58), tl); m.rotation.x = -Math.PI/2; m.position.set(s*34, .01, 29); scene.add(m); });
@@ -907,7 +915,11 @@ const G3 = (() => {
       return W.tween(dur, ()=>{ const e = Math.min(1, (performance.now() - t1)/ms); pose(P, "idle", performance.now()/1000);
         if (e < 1 && from.length){ const s2 = e*e*(3 - 2*e); for (const [b, q] of from) b.quaternion.copy(sq.copy(q).slerp(b.quaternion, s2)); P.model.updateMatrixWorld(true); } }); };
     // the crowd on its feet: the banks bounce, fading out over ms
-    W.roar = ms => { const y0 = crowd.map(c=>c.position.y); W.tween(ms, k=>crowd.forEach((c, i)=>{ c.position.y = y0[i] + .35*(1 - k)*Math.abs(Math.sin(k*ms/1000*7.5 + i)); })); };
+    W.roar = (ms, amp = .35) => { const y0 = crowd.map(c=>c.position.y); W.tween(ms, k=>crowd.forEach((c, i)=>{ c.position.y = y0[i] + amp*(1 - k)*Math.abs(Math.sin(k*ms/1000*7.5 + i)); })); };
+    // the flags in the crowd, waving: a ripple running along each, bigger away from the pole
+    if (crowd.flags && crowd.flags.length) anims.add(now => { const t = now/1000; crowd.flags.forEach(f=>{ const P = f.geometry.attributes.position, b = f.userData.base;
+      for (let i = 0; i < P.count; i++){ const x = b[i*3], u = (x + .85)/1.7; P.setZ(i, Math.sin(x*3.2 - t*5.5 + f.userData.ph)*.16*u + Math.sin(t*2.1 + f.userData.ph)*.05*u); }
+      P.needsUpdate = true; }); });
     W.goalShow = async (P, runTo, camAt, lookAt) => {
       const frames = W.takeRec(); if (stopped) return;
       W.roar(4200);
@@ -929,7 +941,7 @@ const G3 = (() => {
     // the last moments recorded (W.rec), up to 2.6 s
     W.takeRec = () => { const all = W.rec || [], end = all.length ? all[all.length - 1].t : 0; W.rec = null; return all.filter(f=>f.t >= end - 2600); };
     // a near miss (off the woodwork, a great save): after a breath, the replay, then back to the live picture
-    W.nearMiss = async (camAt, lookAt) => { const frames = W.takeRec(); await W.tween(500, ()=>{}); if (stopped || frames.length < 4) return; await W.replay(frames, camAt, lookAt); };
+    W.nearMiss = async (camAt, lookAt) => { const frames = W.takeRec(); W.roar(1400, .14); await W.tween(500, ()=>{}); if (stopped || frames.length < 4) return; await W.replay(frames, camAt, lookAt); };
     // the replay: everything put back as it was, frame by frame, at half speed, from camAt; then back as it is now
     W.replay = async (frames, camAt, lookAt) => {
       const host0 = host, live = W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]), mode0 = W.mode;
