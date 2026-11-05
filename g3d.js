@@ -206,6 +206,8 @@ const G3 = (() => {
     // brought down: arms out to break the fall
     fall(r, k){ r.arm[-1].rotation.x = r.arm[1].rotation.x = -1.6*k; r.arm[-1].rotation.z = -.4; r.arm[1].rotation.z = .4; r.leg[1].rotation.x = .5*k; r.knee[1].rotation.x = .8*k; r.chest.rotation.x = .2*k; },
     wall(r, t){ POSE.idle(r, t); r.arm[-1].rotation.x = r.arm[1].rotation.x = -.6; r.arm[-1].rotation.z = .35; r.arm[1].rotation.z = -.35; },
+    plane(r, t){ POSE.run(r, t, 1); r.arm[-1].rotation.z = 1.4; r.arm[1].rotation.z = -1.4; },
+    knees(r, k){ POSE.cheer(r, 0); },
     cheer(r, t){ r.arm[-1].rotation.z = -2.6; r.arm[1].rotation.z = 2.6; r.arm[-1].rotation.x = r.arm[1].rotation.x = Math.sin(t*9)*.15; r.elbow[-1].rotation.x = r.elbow[1].rotation.x = -.15;
       r.chest.rotation.x = -.1; r.hips.position.y = .94 + Math.abs(Math.sin(t*9))*.05; r.leg[1].rotation.x = r.leg[-1].rotation.x = 0; r.knee[1].rotation.x = r.knee[-1].rotation.x = .05; }
   };
@@ -408,7 +410,12 @@ const G3 = (() => {
     // brought down: arms out to break the fall
     fall(P, k){ clip(P, "breathe", 0); fwd(P, "L_UpperArm", 1.6*k); fwd(P, "R_UpperArm", 1.6*k); fwd(P, "R_Thigh", -.5*k); fwd(P, "R_Calf", -.8*k); lean(P, "Spine1", .2*k); },
     // in the wall: hands in front, braced
-    wall(P, t){ clip(P, "idle", t); ["L", "R"].forEach(s=>{ fwd(P, s + "_UpperArm", .35); raise(P, s, -.18); fwd(P, s + "_Forearm", 1.25); }); }
+    wall(P, t){ clip(P, "idle", t); ["L", "R"].forEach(s=>{ fwd(P, s + "_UpperArm", .35); raise(P, s, -.18); fwd(P, s + "_Forearm", 1.25); }); },
+    // celebrating: the aeroplane (running, arms out wide, banking) and the knee slide (on his knees, arms up, leaning back)
+    plane(P, t){ clip(P, "run", t); raise(P, "L", 1.45); raise(P, "R", 1.45); lean(P, "Spine1", .12); rotW(P, P.bones.Spine1, ZA(), Math.sin(t*2.2)*.22); P.model.updateMatrixWorld(true); },
+    knees(P, k){ clip(P, "breathe", .5); P.model.position.y = -.42*k;
+      ["L", "R"].forEach(s=>{ fwd(P, s + "_Thigh", .25*k); fwd(P, s + "_Calf", -1.75*k); fwd(P, s + "_Foot", .5*k); raise(P, s, 2.3*k); });
+      lean(P, "Spine1", -.32*k); lean(P, "Head", -.25*k); P.model.updateMatrixWorld(true); }
   };
   // pose any player, real or drawn
   let poseLog = null;
@@ -888,11 +895,17 @@ const G3 = (() => {
       const host0 = host, from = P.at ? P.at.position.clone() : P.root.position.clone(), obj = P.at || P.root;
       const yaw = Math.atan2(runTo.x - from.x, runTo.z - from.z), t1 = performance.now();
       const face = Math.atan2(cam.position.x - runTo.x, cam.position.z - runTo.z), turn = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a))*k;
-      const run = W.tween(1300, k=>{ const e = k*k*(3 - 2*k); obj.position.lerpVectors(from, runTo, e); obj.rotation.y = turn(yaw, face, Math.max(0, (k - .6)/.4)); if (k < .75) track(P, obj); else pose(P, "cheer", (performance.now() - t1)/1000); });
+      // how he celebrates: off to the crowd and a cheer, the aeroplane, or a knee slide
+      const how = ["cheer", "plane", "slide"][Math.floor(Math.random()*3)];
+      const run = W.tween(1300, k=>{ const e = how==="slide" ? Math.min(1, k*1.25)*(2 - Math.min(1, k*1.25)) : k*k*(3 - 2*k); obj.position.lerpVectors(from, runTo, e); obj.rotation.y = turn(yaw, face, Math.max(0, (k - .6)/.4));
+        const t = (performance.now() - t1)/1000;
+        if (how==="slide"){ if (k < .45) track(P, obj); else pose(P, "knees", Math.min(1, (k - .45)/.2)); }
+        else if (how==="plane"){ if (k < .85) pose(P, "plane", t*1.6); else pose(P, "cheer", t); }
+        else if (k < .75) track(P, obj); else pose(P, "cheer", t); });
       await run; if (stopped || frames.length < 4) return;
       await W.replay(frames, camAt, lookAt); if (stopped) return;
       W.mode = "goal";
-      const t2 = performance.now(); W.tween(2600, ()=>pose(P, "cheer", (performance.now() - t2)/1000));
+      const t2 = performance.now(); W.tween(2600, ()=>{ if (how==="slide") pose(P, "knees", 1); else pose(P, "cheer", (performance.now() - t2)/1000); });
     };
     // the last moments recorded (W.rec), up to 2.6 s
     W.takeRec = () => { const all = W.rec || [], end = all.length ? all[all.length - 1].t : 0; W.rec = null; return all.filter(f=>f.t >= end - 2600); };
