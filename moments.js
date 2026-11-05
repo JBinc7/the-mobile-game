@@ -46,9 +46,9 @@ function lvAbbr(n){
 }
 /* day or night, for 3D: most league games kick off in the afternoon sun, some in the evening; cups, Europe and the big
    games are under the floodlights; training's in daylight (drills.js). The lab's an evening under the lights */
-let LV_DAY = false, LV_RAIN = false;   // (and about one match in five, it rains)
+let LV_DAY = false, LV_RAIN = false, LV_CROWD = null;   // (and about one match in five, it rains; LV_CROWD: [home fans' colour, away fans'])
 function lvOpen(label = "Match"){
-  LV_DAY = false; LV_RAIN = false;
+  LV_DAY = false; LV_RAIN = false; LV_CROWD = null;
   lvEl = document.createElement("div"); lvEl.className = "lv"; lvEl.setAttribute("role", "dialog"); lvEl.setAttribute("aria-modal", "true"); lvEl.setAttribute("aria-label", label);
   document.body.appendChild(lvEl); document.documentElement.classList.add("lv-open");
 }
@@ -112,6 +112,7 @@ let lvLine = null;
 function lvCall(st, m){
   const fx = st.f || {}, fh = hashStr(String(fx.opp) + "|" + (fx.week ?? fx.w ?? "")); LV_DAY = fx.code==="league" && !fx.big && fh % 4 !== 0; LV_RAIN = (fh >>> 3) % 5 === 0;
   if (typeof SND!=="undefined" && SND.rain) SND.rain(LV_RAIN);
+  const kk = lvKits(st), home = fx.home || fx.neutral; LV_CROWD = home ? [kk.us, kk.them] : [kk.them, kk.us];   // the home fans, and the away end
   const me = String(S.player.name || "He").split(" ").slice(-1)[0], opp = st.f.opp || "They", k = m.g + (m.v ? ":" + m.v : ""), r = a => a[Math.floor(Math.random()*a.length)];
   const L = {"shot:pen":[`${me} places the ball on the spot…`, `Penalty! ${me} steps up…`], "shot:freekick":[`${me} stands over the free kick…`, `Free kick in range. ${me} fancies this…`],
     "shot:long":[`${me} lines one up from distance…`, `Space for ${me} to shoot from range…`], "shot:oneonone":[`${me} is clean through!`, `Just the keeper to beat for ${me}…`],
@@ -769,7 +770,7 @@ function lv3dLooks(st, kit, v){
   const R = seeded(hashStr(String(st.f && st.f.opp || "x")));
   const them = n => ({skin:LV_SKIN[Math.floor(R()*LV_SKIN.length)], hair:["short","buzz","curly","none"][Math.floor(R()*4)], hairCol:LV_HAIR[Math.floor(R()*LV_HAIR.length)], c1:kit.them, c2:tr(kit.them), num:n, name:""});
   const gkMe = ["#65A30D", "#F97316", "#7C3AED", "#111827"].find(c=>!lvNear(c, kit.them) && !lvNear(c, kit.us) && c!==gk) || "#F97316";
-  return {v, crowd:kit.us,
+  return {v, crowd:LV_CROWD ? LV_CROWD[0] : kit.us, crowdAway:LV_CROWD ? LV_CROWD[1] : null,
     // you in goal (saves), and the striker who takes it
     gk:G3.lookOf(you || {skin:1, hair:"short", hairColour:"Black", number:1, name:"You"}, gkMe, lvLight(gkMe) ? "#111827" : "#F4F4F5", {gk:true, gloves:"#C8F04A", num:1, shorts:"#111827", socks:gkMe}),
     taker:{...them(9)}, foe:them(4),

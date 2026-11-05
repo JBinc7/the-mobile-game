@@ -584,7 +584,7 @@ const G3 = (() => {
   function clear(scene){
     const keepG = new Set(geos.values()), keepM = new Set(mats.values());
     scene.traverse(o=>{ if (o.geometry && !keepG.has(o.geometry)) o.geometry.dispose();
-      if (o.material && !keepM.has(o.material)){ if (o.material.map && o.material.map !== crowdTex && o.material.map !== boardTex && o.material.map !== ballTex && o.material.map !== blobTex) o.material.map.dispose(); if (o.material.bumpMap === ballBump) o.material.bumpMap = null; o.material.dispose(); } });
+      if (o.material && !keepM.has(o.material)){ if (o.material.map && ![...crowdTexes.values()].includes(o.material.map) && o.material.map !== boardTex && o.material.map !== ballTex && o.material.map !== blobTex) o.material.map.dispose(); if (o.material.bumpMap === ballBump) o.material.bumpMap = null; o.material.dispose(); } });
     while (scene.children.length) scene.remove(scene.children[0]);
   }
 
@@ -728,23 +728,25 @@ const G3 = (() => {
         g.attributes.position.needsUpdate = true; g.attributes.color.needsUpdate = true;
       }};
   }
-  let crowdTex = null, boardTex = null;
-  function stands(scene, kc, day){
+  let crowdTex = null, boardTex = null; const crowdTexes = new Map();   // (one crowd per pair of clubs' colours)
+  function stands(scene, kc, day, ka){
     // the crowd: rows of fans on the steps, faces of every skin tone, shirts in the home colours, white, and everyday darks,
     // the odd scarf held up; the rows under the roof in its shadow
+    const ck = kc + "|" + (ka || ""); crowdTex = crowdTexes.get(ck) || null;
     if (!crowdTex){ const c = document.createElement("canvas"); c.width = 2048; c.height = 512; const x = c.getContext("2d"); x.fillStyle = "#0A120E"; x.fillRect(0, 0, 2048, 512);
       const R = (a => () => (a = (a*16807) % 2147483647)/2147483647)(11), sk = ["#F1C9A5","#D9A37A","#B57D52","#8A5A3B","#5C3A24"], dk = ["#2B3440","#3A3F46","#1F2A33","#4B5563","#343434","#5B4636"];
       for (let row = 0; row < 16; row++){ const cy = 22 + row*30;
         x.fillStyle = "rgba(255,255,255,.035)"; x.fillRect(0, cy + 17, 2048, 4);   // the step
         for (let i = 0; i < 120; i++){ if (R() < .06) continue;   // an empty seat
-          const cx = i*17.1 + (row%2)*8.5 + R()*4, r = R(), shirt = r < .34 ? kc : r < .5 ? "#E8E8E4" : dk[Math.floor(R()*dk.length)];
+          const away = ka && i < 30, team = away ? ka : kc;   // the away end: a block in their colours
+          const cx = i*17.1 + (row%2)*8.5 + R()*4, r = R(), shirt = r < (away ? .5 : .34) ? team : r < .5 ? "#E8E8E4" : dk[Math.floor(R()*dk.length)];
           x.fillStyle = shirt; x.beginPath(); x.ellipse(cx, cy + 15, 7.5, 9, 0, Math.PI, 0); x.fill(); x.fillRect(cx - 7.5, cy + 14, 15, 9);
           x.fillStyle = sk[Math.floor(R()*sk.length)]; x.beginPath(); x.arc(cx, cy + 3, 5.2, 0, 7); x.fill();
           if (R() < .5){ x.fillStyle = R() < .7 ? "#17120E" : "#6B4A2B"; x.beginPath(); x.arc(cx, cy + 1.2, 5.3, Math.PI, 0); x.fill(); }   // hair
-          if (R() < .07){ x.fillStyle = kc; x.fillRect(cx - 9, cy - 9, 18, 4.5); x.fillStyle = "#F4F4F0"; x.fillRect(cx - 9, cy - 9, 4, 4.5); x.fillRect(cx + 1, cy - 9, 4, 4.5); }   // a scarf held up
+          if (R() < .07){ x.fillStyle = team; x.fillRect(cx - 9, cy - 9, 18, 4.5); x.fillStyle = "#F4F4F0"; x.fillRect(cx - 9, cy - 9, 4, 4.5); x.fillRect(cx + 1, cy - 9, 4, 4.5); }   // a scarf held up
         } }
       const sh = x.createLinearGradient(0, 0, 0, 512); sh.addColorStop(0, "rgba(0,0,0,.55)"); sh.addColorStop(.3, "rgba(0,0,0,.12)"); sh.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = sh; x.fillRect(0, 0, 2048, 512);
-      crowdTex = new THREE.CanvasTexture(c); crowdTex.colorSpace = THREE.SRGBColorSpace; crowdTex.anisotropy = 4; }
+      crowdTex = new THREE.CanvasTexture(c); crowdTex.colorSpace = THREE.SRGBColorSpace; crowdTex.anisotropy = 4; crowdTexes.set(ck, crowdTex); }
     if (!boardTex){ const c = document.createElement("canvas"); c.width = 1024; c.height = 64; const x = c.getContext("2d"); x.fillStyle = "#0B1A12"; x.fillRect(0, 0, 1024, 64);
       x.font = "900 40px Big Shoulders Display, Impact, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
       for (let i = 0; i < 6; i++){ x.fillStyle = i%2 ? "#F5C542" : "#7FD7C4"; x.fillText("PYRAMID", 85 + i*171, 34); }
@@ -814,7 +816,7 @@ const G3 = (() => {
     const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = day ? (rain ? skyRain() : skyDay()) : skyFor(); scene.environment = day ? envDay(r) : envFor(r); scene.userData.day = day;
     if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
     lights(scene, {hemi:1.3, key:rain && day ? 1.1 : 2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize, day});
-    pitch(scene, !o.noLines, rain); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542", day);
+    pitch(scene, !o.noLines, rain); const net = goalFrame(scene); const LC = typeof LV_CROWD!=="undefined" ? LV_CROWD : null, crowd = stands(scene, o.crowd || (LC && LC[0]) || "#F5C542", day, o.crowdAway || (LC && LC[1]));
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner
