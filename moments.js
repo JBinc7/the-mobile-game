@@ -125,7 +125,13 @@ function lvCall(st, m){
   const cat = m.g==="lab" && typeof LV_LABM!=="undefined" ? (LV_LABM[m.v] || [])[0] : null;
   const C = {goal:[`A chance for ${me}…`, `${me} in a promising position…`], pen:[`Penalty! ${me} steps up…`], assist:[`${me} with the ball, a teammate making a run…`], chance:[`${me} looking to make something happen…`],
     keep:[`${me} keeps the ball under pressure…`], def:[`${opp} on the attack…`], save:[`${opp} bearing down on goal…`]};
-  return r(L[k] || L[m.g] || (cat && C[cat]) || [`${me} involved…`]);
+  // what's happened since your last moment: goals elsewhere on the pitch, and the score now
+  let since = "";
+  const ev = (st.ev || []).filter(e=>e.min > (st.callMin ?? 0) && e.min < m.min);
+  if (ev.length && st.callMin != null){ const [f, a] = lvScore(st, m.min), us = ev.filter(e=>e.us).length, them = ev.length - us, club = lvUs(st);
+    since = us && them ? `Goals at both ends since! It's ${f}–${a}. ` : us ? `${club} have scored since${us > 1 ? `, twice` : ""}! ${f}–${a}. ` : `${opp} have scored since${them > 1 ? `, twice` : ""}. ${f}–${a}. `; }
+  st.callMin = m.min;
+  return since + r(L[k] || L[m.g] || (cat && C[cat]) || [`${me} involved…`]);
 }
 // the side you play for: your club, or your country at a tournament (tournament.js)
 const lvUs = st => st.us || S.mc.club;
