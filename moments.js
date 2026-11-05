@@ -1268,23 +1268,35 @@ function lvGameTiming(st, m){
 function lvGameIntercept(st, m){
   const f = st.f, a = lvAttr(st), e = lvEase(st, a.def*.7 + a.pas*.3), kit = lvKits(st);
   const react = clamp(700*(1 + e), 400, 1100), wait = 700 + Math.random()*800, dummy = f.oppStr > a.def + 3 && Math.random()<.35;
-  const L = {l:[70,110], c:[150,126], r:[230,110]};
+  // nothing stands still: he carries it at you, and his three teammates weave as they run, so the lanes keep moving
+  const L0 = {l:[70,108], c:[150,124], r:[230,108]}, ph = {l:Math.random()*6, c:Math.random()*6, r:Math.random()*6};
+  const Lp = (z, t) => [L0[z][0] + Math.sin(t*.0021 + ph[z])*12 + (z==="l" ? 1 : z==="r" ? -1 : 0)*Math.min(14, t*.006), L0[z][1] + Math.sin(t*.0016 + ph[z])*5 + Math.min(12, t*.005)];
+  const Pp = t => [150 + Math.sin(t*.0014)*9, 40 + Math.min(20, t*.011)];
+  const L = {l:Lp("l", 0), c:Lp("c", 0), r:Lp("r", 0)};
   return new Promise(res=>{
     lvShow(`${lvHead(st, m.min)}<h2 class="lv-t">Cut out the pass</h2><p class="lv-s">He's passing to one of his three team-mates. When his lane lights up gold, tap it to step in. He might look one way first.</p>
-      <div class="lv-stage">${lvField("bottom", `${Object.entries(L).map(([z,[x,y]])=>`<path id="lvLn${z}" d="M150 46L${x} ${y}" stroke="rgba(255,255,255,.13)" stroke-width="14" stroke-linecap="round"/>`).join("")}${lvMan(150,40,kit.them)}${Object.values(L).map(([x,y])=>lvMan(x, y, kit.them)).join("")}<g id="lvMe">${lvMan(0,0,kit.us,{ring:"#F5C542"})}</g>
+      <div class="lv-stage">${lvField("bottom", `${Object.entries(L).map(([z,[x,y]])=>`<path id="lvLn${z}" d="M150 46L${x} ${y}" stroke="rgba(255,255,255,.13)" stroke-width="14" stroke-linecap="round"/>`).join("")}<g id="lvIp">${lvMan(0, 0, kit.them, {run:true})}</g>${Object.keys(L).map(z=>`<g id="lvIr${z}">${lvMan(0, 0, kit.them, {run:true})}</g>`).join("")}<g id="lvMe">${lvMan(0,0,kit.us,{ring:"#F5C542"})}</g>
           <path id="lvLook" d="M0 0" stroke="#F5C542" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6" opacity="0"/>${lvBallSvg("lvIb", 150, 44, 4)}`)}
         <div class="lv-thirds">${["l","c","r"].map(z=>`<button type="button" class="lv-tap" data-z="${z}" aria-label="Cut out the pass ${{l:"left",c:"through the middle",r:"right"}[z]}"></button>`).join("")}</div></div>
       <button type="button" class="btn big lv-act" disabled>Watch his eyes…</button>`);
     lvSkippable(res);
     const stage = lv$(".lv-stage"), look = lv$("#lvLook"), act = lv$(".lv-act"), lane = (z, col) => lv$("#lvLn" + z)?.setAttribute("stroke", col), t0 = performance.now(); let dir = null, at = 0, done = false, faked = !dummy, cur = [150, 44];
     lvMove("#lvMe", 150, 86);
-    const show = z => { const [x,y] = L[z]; look.setAttribute("d", `M150 46L${150 + (x-150)*.72} ${46 + (y-46)*.72}`); look.setAttribute("opacity", 1); };
+    let lookZ = null, P = Pp(0), rel = null;
+    const show = z => { lookZ = z; look.setAttribute("opacity", 1); };
+    // everyone moving: the passer, his teammates, the lanes between them, where he's looking, and the ball at his feet
+    const place = t => { P = Pp(t); lvMove("#lvIp", P[0], P[1]);
+      ["l", "c", "r"].forEach(z=>{ L[z] = Lp(z, t); lvMove(`#lvIr${z}`, L[z][0], L[z][1]); lv$("#lvLn" + z)?.setAttribute("d", `M${P[0].toFixed(1)} ${(P[1] + 6).toFixed(1)}L${L[z][0].toFixed(1)} ${L[z][1].toFixed(1)}`); });
+      if (lookZ){ const [x, y] = L[lookZ]; look.setAttribute("d", `M${P[0].toFixed(1)} ${(P[1] + 6).toFixed(1)}L${(P[0] + (x - P[0])*.72).toFixed(1)} ${(P[1] + 6 + (y - P[1] - 6)*.72).toFixed(1)}`); }
+      if (!rel) lvBallAt("#lvIb", P[0] + 2, P[1] + 6, 1, 0, t*.5); };
+    place(0);
     lvLoop(now=>{
       if (done) return false;
-      const t = now - t0;
-      if (!faked && t>=wait-450){ faked = true; show(pick(["l","c","r"])); setTimeout(()=>{ if (!dir && lvEl) look.setAttribute("opacity", 0); }, 200); }
+      const t = now - t0; place(t);
+      if (!faked && t>=wait-450){ faked = true; show(pick(["l","c","r"])); setTimeout(()=>{ if (!dir && lvEl){ look.setAttribute("opacity", 0); lookZ = null; } }, 200); }
       if (!dir && t>=wait){ dir = pick(["l","c","r"]); at = now; stage.dataset.look = dir; show(dir); lane(dir, "rgba(245,197,66,.42)"); act.textContent = "Now! Tap his lane"; act.classList.add("primary"); }
-      if (dir){ const k = clamp((now-at-react*.45)/(react*.55), 0, 1), [x,y] = L[dir]; cur = [150 + (x-150)*k, 44 + (y-44)*k]; lvBallAt("#lvIb", cur[0], cur[1], 1, 0, k*500, k>0); if (k>=1){ end(null); return false; } }
+      if (dir){ const k = clamp((now-at-react*.45)/(react*.55), 0, 1), [x,y] = L[dir]; if (k > 0 && !rel) rel = [P[0] + 2, P[1] + 6];
+        if (rel){ cur = [rel[0] + (x - rel[0])*k, rel[1] + (y - rel[1])*k]; lvBallAt("#lvIb", cur[0], cur[1], 1, 0, k*500, k>0); } if (k>=1){ end(null); return false; } }
     });
     const end = async z=>{
       if (done) return; done = true; cancelAnimationFrame(lvRaf);
