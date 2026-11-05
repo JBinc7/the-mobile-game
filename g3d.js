@@ -1458,7 +1458,11 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
     side:  {ex:[0, 0, -1], ey:[1, 0, 0],  o:[0, 0, (297 - 150)*MK]},
     none:  {ex:[0, 0, -1], ey:[1, 0, 0],  o:[0, 0, 52]},
     // side-on games (2D's grass from y 126 to 180, the action along y 166): lower down, and no goal
-    sideview:{ex:[1, 0, 0], ey:[0, 0, 1], o:[0, 0, 40], elev:20, track:166}
+    sideview:{ex:[1, 0, 0], ey:[0, 0, 1], o:[0, 0, 40], elev:20, track:166},
+    /* an attack (passing): 2D's top-down picture laid on a real pitch, life size (2D's goal line, y 5, on the goal line;
+       2D's y 60, where the runs end, 21 m out, just outside the box; you start 62 m out), filmed by a camera that
+       follows the ball */
+    attack:{real:true, sx:.22}
   };
   /* the goal view (2D's front-on goal: posts at x 30 and 270, the bar at y 20, the ball's spot at y 166) mirrored
      with a shot camera framed the same way, so each 2D point is found in 3D by casting through it: the keeper onto his
@@ -1581,6 +1585,88 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
     const stop0 = W.stop; W.stop = () => { stop0(); LV_MAP = null; svg.style.transform = svg.style.transformOrigin = "";
       stage.querySelectorAll('[style*="--lx"]').forEach(el=>{ el.style.left = (+el.style.getPropertyValue("--lx")/3).toFixed(2) + "%"; el.style.top = (+el.style.getPropertyValue("--ly")/1.8).toFixed(2) + "%"; }); };
   }
+  /* ---------- an attack, life size ----------
+     The passing game's 2D picture (top-down, their goal at the top) on a real pitch: the real goal and lines, players
+     their real size, sprinting at real speeds, and a broadcast camera behind and above the ball, following it (into the
+     runner's feet, then on to goal). The 2D layer is hidden; what it shows (the runner who's got free and where he'll be,
+     the line of your pass, your marker) is drawn on the grass. Taps go through the camera to the 2D picture (LV_MAP) */
+  function mirrorAttack(stage, svg, V){
+    // across: life size; up the pitch: the box as it is (2D's goal line to y 60, where the runs end, is 0 to 19 m: just
+    // outside the box), midfield a little shortened, so the passes are 15 to 30 m and the players read well
+    const SX = V.sx, ZA = 19/55, ZB = .26, zOf = y => y <= 60 ? (y - 5)*ZA : 19 + (y - 60)*ZB, yOf = z => z <= 19 ? z/ZA + 5 : 60 + (z - 19)/ZB;
+    const G = (x, y, h = 0, out = new THREE.Vector3()) => out.set((x - 150)*SX, h, zOf(y)), back = (wx, wz) => [wx/SX + 150, yOf(wz)];
+    SR ||= {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)};
+    const cam = SR.att ||= new THREE.PerspectiveCamera(52, 300/180, .1, 300);
+    const W = base(stage, {cam, focus:new THREE.Vector3(0, 0, 26), shadowSize:26}, G(150, 160, .11)), {scene} = W; W.looks = MLOOKS;
+    W.B.scale.setScalar(1.1); W.bs.scale.setScalar(1.1); ghost(W.B); W.B.renderOrder = 6;
+    stage.classList.add("g3-attack");
+    // the camera: behind and above the ball, looking up the pitch, eased after it
+    const tgt = new THREE.Vector3(0, 0, 50), look = new THREE.Vector3(), cp = new THREE.Vector3();
+    const bz = new THREE.Vector3();
+    // (it stops outside the box, lower and further back, so the shot's in view with the man who hit it)
+    const aim = (b, k) => { tgt.lerp(bz.copy(b).setZ(Math.max(b.z, 13)), k); const f = Math.min(1, Math.max(0, (tgt.z - 13)/15));
+      cp.set(tgt.x*.45, 9 + 6*f, tgt.z + 13 - 2.5*f); look.set(tgt.x*.32, 0, tgt.z - 6 - 2*f);
+      cam.position.copy(cp); cam.lookAt(look); cam.updateMatrixWorld(); };
+    // taps and the things laid over the picture, through the camera as it is now
+    const rc = new THREE.Raycaster(), gp = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(), pv = new THREE.Vector3();
+    LV_MAP = {fwd:(x, y)=>{ G(x, y, 0, pv).project(cam); return [(pv.x + 1)*150, (1 - pv.y)*90]; },
+      inv:(x, y)=>{ rc.setFromCamera(new THREE.Vector2(x/150 - 1, 1 - y/90), cam); return rc.ray.direction.y < -1e-4 && rc.ray.intersectPlane(gp, hit) ? back(hit.x, hit.z) : [x, -400]; }};
+    const st0 = W.stop; W.stop = () => { st0(); if (LV_MAP && LV_MAP.inv && W.ownMap) LV_MAP = null; stage.classList.remove("g3-attack"); }; W.ownMap = true;
+    // what 2D shows, on the grass: a free runner's run (a gold line to a ring where he'll be), your pass, your marker
+    const gold = mats.get("hint") || (()=>{ const m = new THREE.MeshBasicMaterial({color:0xF5C542, transparent:true, opacity:.85, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-4}); mats.set("hint", m); return m; })();
+    const flat = g => { const m = new THREE.Mesh(g, gold); m.rotation.x = -Math.PI/2; m.renderOrder = 4; m.visible = false; scene.add(m); return m; };
+    const strip = () => flat(new THREE.PlaneGeometry(1, 1)), ring = (r0, r1) => flat(new THREE.RingGeometry(r0, r1, 40));
+    const lay = (m, a, b, w) => { const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz); m.position.set((a.x + b.x)/2, .02, (a.z + b.z)/2); m.rotation.set(-Math.PI/2, 0, Math.atan2(-dz, dx)); m.scale.set(L, w, 1); m.visible = L > .05; };
+    const runs = [0, 1, 2].map(()=>({line:strip(), ring:ring(.75, .98)})), pass = {line:strip(), ring:ring(.45, .66)}, mine = ring(.55, .7);
+    const A = new THREE.Vector3(), Bv = new THREE.Vector3();
+    const nums = d => (d || "").match(/-?[\d.]+/g)?.map(Number) || [];
+    // the players and the ball, from 2D, as in the other views but life size
+    const men = new Map(), T = () => performance.now()/1000;
+    const lookFor = el => { const k = el.dataset.k || "#1D4ED8", you = el.classList.contains("lv-you");
+      const L = you && W.looks.me ? {...W.looks.me, c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || W.looks.me.c2} : {...W.looks.anyone(el), c1:k, c2:(typeof LV_TRIM!=="undefined" && LV_TRIM[k]) || (lum(k) > .5 ? "#1F2937" : "#FFFFFF"), num:el.dataset.n || ""};
+      if (el.closest("#lvGk")) L.gk = true; return L; };
+    let first = true;
+    W.idle = () => {
+      const now = performance.now(), sv = svg.getScreenCTM(); if (!sv) return; const inv = sv.inverse(), seen = new Set();
+      const bb = svg.querySelector("g[id] > .lv-bb");
+      if (bb){ const g = bb.parentNode, m = inv.multiply(g.getScreenCTM()), tz = /translate\(\s*[-\d.]+[ ,]+([-\d.]+)/.exec(bb.getAttribute("transform") || ""), z = tz ? -(+tz[1])*Math.hypot(m.a, m.b) : 0;
+        G(m.e, m.f, .121 + Math.max(0, z)*.12, W.B.position); W.B.rotation.x -= .09; W.bs.position.set(W.B.position.x, .006, W.B.position.z);
+        // into the net
+        if (W.B.position.z < -.2 && Math.abs(W.B.position.x) < 3.6 && W.B.position.y < 2.4 && !W.inGoal){ W.inGoal = true; W.net.touch(W.B.position); } }
+      aim(W.B.position, first ? 1 : .06); first = false;
+      let you = null;
+      svg.querySelectorAll(".lv-man").forEach(el=>{
+        if (!el.getClientRects().length) return; seen.add(el);
+        let M = men.get(el);
+        if (!M){ M = W.add(lookFor(el), 0, 0, 0); M.last = null; M.v = 0; M.yaw = null; M.ph = Math.random(); men.set(el, M); }
+        const dt = M.last ? Math.min(.1, Math.max(0, (now - M.lt)/1000)) : 0, m = inv.multiply(el.getScreenCTM()), at = M.at, p = G(m.e, m.f);
+        if (el.classList.contains("lv-you")) you = p;
+        const moved = M.last ? Math.hypot(p.x - M.last.x, p.z - M.last.z) : 0, yaw0 = at.rotation.y;
+        if (M.last && dt > 0){ const sp = moved/dt; M.v += (Math.min(9, sp) - M.v)*(1 - Math.exp(-dt*7)); if (moved > 1e-3) M.yaw = Math.atan2(p.x - M.last.x, p.z - M.last.z); }
+        if (M.v < .8) M.yaw = Math.atan2(W.B.position.x - p.x, W.B.position.z - p.z);   // standing: facing the ball
+        M.last = p.clone(); M.lt = now; at.position.copy(p); if (M.yaw!=null) at.rotation.y += Math.atan2(Math.sin(M.yaw - at.rotation.y), Math.cos(M.yaw - at.rotation.y))*(1 - Math.exp(-dt*9));
+        const rot = Math.atan2(m.b, m.a), cls = el.classList;
+        const flag = (k, on) => { if (on){ M[k] ||= now; return (now - M[k])/1000; } M[k] = 0; return -1; };
+        const kick = flag("kickAt", cls.contains("kick")), cheer = flag("cheerAt", cls.contains("cheer") || el.closest(".cheer") != null);
+        M.root.rotation.z = 0;
+        if (kick >= 0) pose(M, "kick", Math.min(1, kick/.33));
+        else if (cheer >= 0) pose(M, "cheer", cheer);
+        else if (Math.abs(rot) > .35){ pose(M, "dive", Math.min(1, Math.abs(rot)/1.1)); M.root.rotation.z = -rot; }   // the keeper
+        else { M.ph += strideBy(moved, M.v); pose(M, "move", M.ph, M.v);
+          const turn = dt > 0 ? Math.atan2(Math.sin(at.rotation.y - yaw0), Math.cos(at.rotation.y - yaw0))/dt : 0;
+          M.lean = (M.lean || 0) + (Math.max(-.18, Math.min(.18, -turn*M.v*.03)) - (M.lean || 0))*(1 - Math.exp(-dt*6)); M.root.rotation.z = M.lean; }
+      });
+      men.forEach((M, el)=>{ M.at.visible = seen.has(el); if (!el.isConnected){ scene.remove(M.at); men.delete(el); } });
+      // the hints, on the grass
+      runs.forEach((R, i)=>{ const el = svg.querySelector("#lvRun" + i), on = el && +el.getAttribute("opacity") > .5, n = on ? nums(el.getAttribute("d")) : [];
+        if (on && n.length >= 4){ G(n[0], n[1], 0, A); G(n[2], n[3], 0, Bv); lay(R.line, A, Bv, .22); R.ring.position.set(Bv.x, .025, Bv.z); R.ring.visible = true;
+          const pulse = 1 + .12*Math.sin(now/120); R.ring.scale.set(pulse, pulse, 1); } else R.line.visible = R.ring.visible = false; });
+      const dl = svg.querySelector(".lv-dragline"), dn = dl ? nums(dl.getAttribute("d")) : [];
+      if (dn.length >= 4){ G(dn[0], dn[1], 0, A); G(dn[2], dn[3], 0, Bv); lay(pass.line, A, Bv, .16); pass.ring.position.set(Bv.x, .03, Bv.z); pass.ring.visible = true; } else pass.line.visible = pass.ring.visible = false;
+      if (you){ mine.position.set(you.x, .02, you.z); mine.visible = true; } else mine.visible = false;
+    };
+    W.start(); return W;
+  }
   const BSZ = 1.25;
   // the ball seen through a player in front of it (from behind, he'd hide it at his feet): a faint ghost drawn over everything
   const ghost = B => { const g = new THREE.Mesh(B.geometry, new THREE.MeshBasicMaterial({color:0xFFFFFF, transparent:true, opacity:.5, depthTest:false, depthWrite:false})); g.renderOrder = 5; B.add(g); B.material.transparent = true; B.renderOrder = 6; return B; };   // (the ball itself drawn after it, over it when it's in view)   // the ball in the from-above games: a touch big, to follow, but in proportion to the players (1.3)
@@ -1590,6 +1676,7 @@ vec3 pBump(vec3 sp, vec3 sn, vec2 dh){ vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = c
     const vk = svg.dataset.view, V = VIEWS[vk];
     if (vk==="goal") return mirrorGoal(stage, svg);
     if (!V) return null;
+    if (V.real) return mirrorAttack(stage, svg, V);
     const EL = (V.elev || 50)*Math.PI/180, SE = Math.sin(EL), CE = Math.cos(EL);
     const ex = new THREE.Vector3(...V.ex), ey = new THREE.Vector3(...V.ey), O = new THREE.Vector3(...V.o);
     const G = (x, y, h = 0, out = new THREE.Vector3()) => out.copy(O).addScaledVector(ex, (x - 150)*MK).addScaledVector(ey, (y - 90)*MK/SE).setY(h);

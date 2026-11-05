@@ -985,6 +985,7 @@ function lvPassCore(st, head, title, sub, extra=0){
       <button type="button" class="btn big lv-act" disabled>Wait for the run</button>`);
     lvSkippable(res);
     lvMove("#lvGk", 150, 12);
+    lv$(".lv-stage svg").dataset.view = "attack";   // (in 3D: a life-size attack with a camera following the ball, g3d.js)
     const bar = lv$(".lv-timer span"), act = lv$(".lv-act"), t0 = performance.now() + 250;
     const D = R.map((r, i)=>{ const p = run(r, 0); return {x:p[0] + (i - 1)*3, y:p[1] - 9, lostAt:null, back:0}; });   // goal-side of their men
     let done = false, k = 0, flying = null, freeNow = [false, false, false], ball = [150, 160], me = me0.slice();
@@ -1009,14 +1010,15 @@ function lvPassCore(st, head, title, sub, extra=0){
         const ah = runAt(i, k + .12); lv$(`#lvRun${i}`)?.setAttribute("d", `M${x.toFixed(1)} ${y.toFixed(1)}L${ah[0].toFixed(1)} ${ah[1].toFixed(1)}m-6 0a6 6 0 1 0 12 0a6 6 0 1 0-12 0`); lv$(`#lvRun${i}`)?.setAttribute("opacity", free ? .95 : 0);
         freeNow[i] = free; });
       // you, carrying it forward; their midfielder coming to close you down
-      me = meAt(Math.min(1, k)); ball = [me[0] + 2, me[1] - 7]; lvMove("#lvMeR", me[0], me[1]);
+      me = meAt(Math.min(1, k)); ball = [me[0] + 1.5, me[1] - 3.5]; lvMove("#lvMeR", me[0], me[1]);
       const pk = clamp((k - .15)/.85, 0, 1); lvMove("#lvPr", me[0] + 30*(1 - pk) - 4, me[1] - 60*(1 - pk) - 8);
       if (!flying){ lvBallAt("#lvPb", ball[0], ball[1], 1, 0, now*.6); drag.from[0] = ball[0]; drag.from[1] = ball[1]; }
       bar.style.width = Math.max(0, 100 - k*100) + "%";
       act.textContent = freeNow.some(Boolean) ? "Now! Play him in" : "Wait for the run"; act.classList.toggle("primary", freeNow.some(Boolean));
     };
     let last = performance.now();
-    lvLoop(now=>{ if (done) return false; const dt = Math.min(50, now - last); last = now; if (now < t0) return; step(now, dt);
+    // (the defenders keep up however slow the frames: the runs go by the clock)
+    lvLoop(now=>{ if (done) return false; const dt = Math.min(2000, now - last); last = now; if (now < t0) return; step(now, dt);
       if (!flying && k >= 1){ finish(-1, "You held it too long: closed down"); return false; } });
     const finish = (i, why, at) => { if (done) return; done = true; cancelAnimationFrame(lvRaf); res({ok:i>=0 && !why, i:i>=0 ? i : -1, at, why:why || ""}); };
     // the pass: from your feet to where you let go, at the pace of the drag's length
@@ -1052,7 +1054,7 @@ async function lvGamePass(st, m){
   if (!r.ok) return {ok:false, big: r.i<0 ? "Closed down" : "Intercepted", small:r.why, bonus:-.1};
   const scored = Math.random() < lvConv(st, m, .32);
   // what he did with it: a touch, a shot at goal, and the keeper going for it
-  if (r.at && lvEl){ const [x0, y0] = r.at, side = x0 < 150 ? 1 : -1, gx = scored ? 150 + side*(30 + Math.random()*20) : 150 + side*12, gy = scored ? 4 : 10;
+  if (r.at && lvEl){ const [x0, y0] = r.at, side = x0 < 150 ? 1 : -1, gx = scored ? 150 + side*(5 + Math.random()*7) : 150 + side*3, gy = scored ? -.5 : 10;   // (in: inside the post, to the back of the net; saved: at the keeper)
     // he takes it in his stride, a touch towards goal, then shoots
     const x = x0 + (150 - x0)*.12, y = y0 - 16;
     await lvTween(340, k=>{ const xx = x0 + (x - x0)*k, yy = y0 + (y - y0)*k; lvMove(`#lvRw${r.i}`, xx, yy); lvBallAt("#lvPb", xx + 2, yy - 6, 1, 0, k*300); });
