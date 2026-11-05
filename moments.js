@@ -1067,7 +1067,16 @@ async function lvGameTakeon(st, m){
     const s = await lvShotCore(st, m, "oneonone", lvHead(st, m.min), "You're through!"); if (s==="skip") return s;
     return s.goal ? {ok:true, big:"Goal!", small:"Beat his man and finished it", g:1} : {ok:false, big:s.big, small:s.small, bonus:.02};
   }
-  return Math.random() < lvConv(st, m, .34) ? {ok:true, big:"Assist!", small:"Beat your man and cut it back", a:1} : {ok:true, big:"Beat your man", small:"The cut-back was cleared", bonus:.12};
+  const scored = Math.random() < lvConv(st, m, .34);
+  // the cut-back, played out: a teammate arrives in the box, you pull it back to him, and he shoots
+  const svg = lvEl && lv$(".lv-stage svg");
+  if (svg){ const at = id => (/translate\(\s*([-\d.]+)[ ,]+([-\d.]+)/.exec(lv$(id)?.getAttribute("transform") || "") || [0, 150, 136]).slice(1).map(Number), b0 = at("#lvTb");
+    svg.insertAdjacentHTML("beforeend", `<g id="lvMate">${lvMan(0, 0, lvKits(st).us, {num:9, run:true})}</g>`); lvMove("#lvMate", 96, 52);
+    await lvTween(420, k=>lvMove("#lvMate", 96 + 40*k, 52 + 18*k));
+    lvKick(); await lvFly("#lvTb", b0, [138, 74], 300, {h:2, spin:1});
+    lvKick("#lvMate .lv-man"); await lvFly("#lvTb", [138, 74], scored ? [150 + (Math.random() < .5 ? -1 : 1)*(26 + Math.random()*14), 4] : [150 + (Math.random() - .5)*16, 13], 340, {h:5, spin:1.6});
+    if (scored) await lvWait(180); }
+  return scored ? {ok:true, big:"Assist!", small:"Beat your man and cut it back", a:1} : {ok:true, big:"Beat your man", small:"The cut-back was cleared", bonus:.12};
 }
 
 /* ---------- the attacking move: pass, take-on, then shoot or square it ---------- */
