@@ -488,7 +488,7 @@ const G3 = (() => {
     for (let i = 0; i < 220; i++){ const px = R()*N, py = R()*N, rr = 14 + R()*40, g2 = x.createRadialGradient(px, py, 0, px, py, rr), v = R() < .5 ? "255,255,255" : "40,40,40";
       g2.addColorStop(0, `rgba(${v},${(.02 + R()*.035).toFixed(3)})`); g2.addColorStop(1, `rgba(${v},0)`); x.fillStyle = g2;
       for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]){ x.save(); x.translate(ox, oy); x.fillRect(px - rr, py - rr, rr*2, rr*2); x.restore(); } }
-    for (let i = 0; i < 26000; i++){ const px = R()*N, py = R()*N, l = 2 + R()*5, sh = R(); x.strokeStyle = sh < .5 ? `rgba(255,255,255,${(.1 + R()*.2).toFixed(2)})` : `rgba(0,0,0,${(.1 + R()*.22).toFixed(2)})`;
+    for (let i = 0; i < 26000; i++){ const px = R()*N, py = R()*N, l = 2 + R()*5, sh = R(); x.strokeStyle = sh < .55 ? `rgba(255,255,255,${(.06 + R()*.14).toFixed(2)})` : `rgba(20,40,10,${(.05 + R()*.12).toFixed(2)})`;
       x.lineWidth = .8 + R()*.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - .5)*1.6, py - l); x.stroke(); }
     grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 16; return grassTex; }
   const grassMat = c2 => { const k = "grass|" + c2; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({color:col(c2), map:grassFor(), roughness:.92, envMapIntensity:.55})); return mats.get(k); };
@@ -572,7 +572,7 @@ const G3 = (() => {
   function clear(scene){
     const keepG = new Set(geos.values()), keepM = new Set(mats.values());
     scene.traverse(o=>{ if (o.geometry && !keepG.has(o.geometry)) o.geometry.dispose();
-      if (o.material && !keepM.has(o.material)){ if (o.material.map && o.material.map !== crowdTex && o.material.map !== boardTex && o.material.map !== ballTex && o.material.map !== blobTex) o.material.map.dispose(); o.material.dispose(); } });
+      if (o.material && !keepM.has(o.material)){ if (o.material.map && o.material.map !== crowdTex && o.material.map !== boardTex && o.material.map !== ballTex && o.material.map !== blobTex) o.material.map.dispose(); if (o.material.bumpMap === ballBump) o.material.bumpMap = null; o.material.dispose(); } });
     while (scene.children.length) scene.remove(scene.children[0]);
   }
 
@@ -764,12 +764,30 @@ const G3 = (() => {
     scene.fog = day ? new THREE.Fog(0xB4C6D6, 45, 150) : new THREE.Fog(0x0C1620, 34, 92);   // a haze over the far stands, for depth
     return crowd;
   }
-  let ballTex = null;
+  /* the ball: a modern six-panel match ball. Each panel's the face of a cube blown up into a sphere, so the seams are the
+     curves where two faces meet; the panels are white with a sweep of gold or teal and a dark edge, and a bump map
+     sinks the seams so they catch the light. Drawn once, in high resolution (lite: half) */
+  let ballTex = null, ballBump = null;
   function ball(){
-    if (!ballTex){ const c = document.createElement("canvas"); c.width = 256; c.height = 128; const x = c.getContext("2d"); x.fillStyle = "#F7F7F5"; x.fillRect(0, 0, 256, 128);
-      x.fillStyle = "#1B1D21"; for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++){ const cx = i*44 + (j%2)*22 + 10, cy = 22 + j*42; x.beginPath(); for (let k = 0; k < 5; k++){ const a = k/5*Math.PI*2 - Math.PI/2; x.lineTo(cx + Math.cos(a)*11, cy + Math.sin(a)*11); } x.fill(); }
-      ballTex = new THREE.CanvasTexture(c); ballTex.colorSpace = THREE.SRGBColorSpace; }
-    const b = new THREE.Mesh(new THREE.SphereGeometry(.11, 24, 16), new THREE.MeshStandardMaterial({map:ballTex, roughness:.38})); b.castShadow = true;
+    if (!ballTex){
+      const W2 = lite ? 512 : 1024, H2 = W2/2, c = document.createElement("canvas"), cb = document.createElement("canvas"); c.width = cb.width = W2; c.height = cb.height = H2;
+      const x = c.getContext("2d"), xb = cb.getContext("2d"), im = x.createImageData(W2, H2), ib = xb.createImageData(W2, H2), d = im.data, db = ib.data;
+      const acc = [[245, 197, 66], [36, 160, 150], [24, 38, 74], [245, 197, 66], [36, 160, 150], [24, 38, 74]];   // gold, teal and navy sweeps
+      for (let j = 0; j < H2; j++){ const th = j/H2*Math.PI, st = Math.sin(th), ct = Math.cos(th);
+        for (let i = 0; i < W2; i++){ const ph = i/W2*Math.PI*2, v = [-Math.cos(ph)*st, ct, Math.sin(ph)*st], a = v.map(Math.abs);
+          const ax = a[0] > a[1] ? (a[0] > a[2] ? 0 : 2) : (a[1] > a[2] ? 1 : 2), face = ax*2 + (v[ax] > 0 ? 0 : 1);
+          const o = [a[(ax + 1)%3], a[(ax + 2)%3]], m = a[ax], seam = m - Math.max(...o);   // how far from the nearest seam
+          const u1 = v[(ax + 1)%3]/m, u2 = v[(ax + 2)%3]/m;   // where on the panel (-1 to 1 each way)
+          let r = 247, g = 247, b = 244;
+          const sw = Math.abs(u1*.7 + u2*.7 - .25*Math.sin(u2*3)), sweep = sw < .2 + .12*(1 - Math.abs(u1));   // a curved sweep across the panel
+          if (sweep){ [r, g, b] = acc[face]; if (sw > .17 + .12*(1 - Math.abs(u1))){ r *= .55; g *= .55; b *= .55; } }   // (edged darker)
+          if (seam < .035){ const k = seam/.035; r = r*(.35 + .65*k); g = g*(.35 + .65*k); b = b*(.38 + .62*k); }   // the seam, dark
+          else if (seam < .06){ r *= .94; g *= .94; b *= .95; }
+          const n = (Math.random() - .5)*6, p = (j*W2 + i)*4; d[p] = r + n; d[p + 1] = g + n; d[p + 2] = b + n; d[p + 3] = 255;
+          const h = seam < .04 ? 255*(seam/.04)*.6 : 160 + (Math.random() - .5)*14; db[p] = db[p + 1] = db[p + 2] = h; db[p + 3] = 255; } }
+      x.putImageData(im, 0, 0); xb.putImageData(ib, 0, 0);
+      ballTex = new THREE.CanvasTexture(c); ballTex.colorSpace = THREE.SRGBColorSpace; ballTex.anisotropy = 8; ballBump = new THREE.CanvasTexture(cb); }
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.11, 40, 28), new THREE.MeshStandardMaterial({map:ballTex, bumpMap:ballBump, bumpScale:.0025, roughness:.34, envMapIntensity:1.2})); b.castShadow = true;
     return b;
   }
   /* the stadium for a shot or a save: the goal, the ball on its spot, the man taking it and the man in goal.
@@ -823,7 +841,7 @@ const G3 = (() => {
     W.tween = (ms, f) => new Promise(res=>{ const a = performance.now(); const g = now=>{ const k = Math.min(1, Math.max(0, now - a)/ms); f(k); if (k>=1){ anims.delete(g); res(); } }; anims.add(g); if (stopped) res(); });
     // the ball into the net: it hits the back of the net, which stretches round it and throws it back out, and it drops
     W.inNet = async (spinAxis, speed) => { const p0 = B.position.clone(), back = -net.D + .11;
-      net.touch(B.position);
+      net.touch(B.position); W.shake(.025, 260);
       const t1 = speed ? Math.max(60, Math.abs(back - p0.z)/speed) : Math.max(90, Math.abs(back - p0.z)*90);
       await W.tween(t1, k=>{ B.position.set(p0.x*(1 - .06*k), Math.max(.11, p0.y - .12*k*k), p0.z + (back - p0.z)*k); trailPush(); B.rotateOnAxis(spinAxis, -.25); });
       W.fadeTrail();
@@ -837,6 +855,8 @@ const G3 = (() => {
     W.add = (look, x, z, face = 0) => { const P = makePlayer(look), h = grp(x, 0, z); h.rotation.y = face; h.add(P.root); scene.add(h); P.at = h; W.dyn.push(h, P.root); return P; };
     /* a goal: the scorer wheels away to celebrate, then a slow-motion replay of the recording from a second camera
        (from behind the goal, through the net), then back to him celebrating. It runs on behind the result card */
+    // a jolt of the camera (the strike, the net bulging), dying away over ms
+    W.shake = (amp, ms) => { const p0 = cam.position.clone(); return W.tween(ms, k=>{ const a = amp*(1 - k)*(1 - k); cam.position.set(p0.x + (Math.random() - .5)*a, p0.y + (Math.random() - .5)*a, p0.z); if (k >= 1) cam.position.copy(p0); }); };
     /* the ball loose (off the post, parried, past the post, off the wall): it moves under gravity from velocity v (m/s),
        bouncing and losing pace on the grass, rolling to a stop, spinning as it goes, and coming back off the boards */
     W.loose = (v, ms = 1300) => { const p = B.position, vel = v.clone(), ax = new THREE.Vector3(); let last = performance.now();
@@ -972,6 +992,7 @@ const G3 = (() => {
       // the harder the strike, the quicker the leg comes through
       const sw = clamp(300 - (q.power ?? .7)*120, 170, 300);
       await W.tween(sw, k=>{ pose(taker, "kick", k*.55); pose(K, "ready", (performance.now() - W.t0)/1000); });
+      W.shake(.03 + (q.power ?? .7)*.02, 170);   // contact
       const tgt = new THREE.Vector3(gx(q.wx), Math.max(.11, gy(q.ty)), 0);
       if (q.wall) tgt.set(gx(q.wx), 1.2, D - 9.15 + .35);
       if (q.saved) tgt.z = kz + .3;   // saved: it meets his hands in front of the line, not the goal behind him
