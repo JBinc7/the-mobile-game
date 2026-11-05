@@ -463,6 +463,11 @@ const G3 = (() => {
     const c = document.createElement("canvas"); c.width = 4; c.height = 256; const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 0, 256);
     g.addColorStop(0, "#2F6DB8"); g.addColorStop(.55, "#7FAEDB"); g.addColorStop(.85, "#C8D9E6"); g.addColorStop(1, "#A9BBA3"); x.fillStyle = g; x.fillRect(0, 0, 4, 256);
     skyDayTex = new THREE.CanvasTexture(c); skyDayTex.colorSpace = THREE.SRGBColorSpace; return skyDayTex; }
+  let skyRainTex = null;
+  function skyRain(){ if (skyRainTex) return skyRainTex;
+    const c = document.createElement("canvas"); c.width = 4; c.height = 256; const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, "#4B535C"); g.addColorStop(.6, "#78828C"); g.addColorStop(1, "#8E979D"); x.fillStyle = g; x.fillRect(0, 0, 4, 256);
+    skyRainTex = new THREE.CanvasTexture(c); skyRainTex.colorSpace = THREE.SRGBColorSpace; return skyRainTex; }
   function envFor(r){
     if (envs.has(r)) return envs.get(r);
     const sc = new THREE.Scene(), g = new THREE.SphereGeometry(60, 48, 24), P = g.attributes.position, cl = [], c = new THREE.Color();
@@ -498,7 +503,7 @@ const G3 = (() => {
     for (let i = 0; i < 26000; i++){ const px = R()*N, py = R()*N, l = 2 + R()*5, sh = R(); x.strokeStyle = sh < .55 ? `rgba(255,255,255,${(.06 + R()*.14).toFixed(2)})` : `rgba(20,40,10,${(.05 + R()*.12).toFixed(2)})`;
       x.lineWidth = .8 + R()*.6; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (R() - .5)*1.6, py - l); x.stroke(); }
     grassTex = new THREE.CanvasTexture(c); grassTex.colorSpace = THREE.SRGBColorSpace; grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping; grassTex.anisotropy = 16; return grassTex; }
-  const grassMat = c2 => { const k = "grass|" + c2; if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({color:col(c2), map:grassFor(), roughness:.92, envMapIntensity:.55})); return mats.get(k); };
+  const grassMat = (c2, wet) => { const k = "grass|" + c2 + (wet ? "|wet" : ""); if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({color:col(c2).multiplyScalar(wet ? .82 : 1), map:grassFor(), roughness:wet ? .72 : .92, envMapIntensity:wet ? .62 : .55})); return mats.get(k); };   // (wet: darker, with a sheen)
   const tileUV = (g, u, v) => { const a = g.attributes.uv; for (let i = 0; i < a.count; i++) a.setXY(i, a.getX(i)*u, a.getY(i)*v); return g; };
   /* ---------- the picture: a broadcast look over the render ----------
      The scene's drawn into a high-range buffer (with its own antialiasing), then: bloom (the floodlights, the roof
@@ -626,9 +631,9 @@ const G3 = (() => {
   const DIST = {pen:11, box:13.5, oneonone:8.5, long:24, freekick:22, chip:9, volley:12};
   const gx = x => (x - 150)/120*3.66, gy = y => (124 - y)/104*2.44;
   let SR = null;
-  function pitch(scene, lines = true){
+  function pitch(scene, lines = true, wet = false){
     // mown stripes across the pitch, then the lines as thin strips
-    const g1 = grassMat("#25703E"), g2 = grassMat("#34914F"), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
+    const g1 = grassMat("#25703E", wet), g2 = grassMat("#34914F", wet), line = new THREE.MeshBasicMaterial({color:0xF2F5EF});
     const ground = new THREE.Mesh(tileUV(new THREE.PlaneGeometry(400, 400), 100, 100), g1); ground.rotation.x = -Math.PI/2; ground.position.set(0, -.01, 0); ground.receiveShadow = true; scene.add(ground);   // grass to the horizon
     const sg = geo("stripe", ()=>tileUV(new THREE.PlaneGeometry(120, 4), 30, 1));
     for (let i = -2; i < 20; i++){ const s = new THREE.Mesh(sg, i%2 ? g1 : g2); s.rotation.x = -Math.PI/2; s.position.set(0, 0, i*4 + 2); s.receiveShadow = true; scene.add(s); }
@@ -805,10 +810,11 @@ const G3 = (() => {
     if (!SR){ SR = {r:makeRenderer(), scene:new THREE.Scene(), cam:new THREE.PerspectiveCamera(40, 300/180, .1, 160)}; }
     if (SR.cur){ SR.cur.stop(); SR.cur = null; }   // one scene at a time: the last one stops
     const day = typeof LV_DAY!=="undefined" && !!LV_DAY;   // an afternoon kick-off (moments.js), or under the floodlights
-    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = day ? skyDay() : skyFor(); scene.environment = day ? envDay(r) : envFor(r); scene.userData.day = day;
+    const rain = typeof LV_RAIN!=="undefined" && !!LV_RAIN;   // and a wet one
+    const {r, scene} = SR, cam = o.cam || SR.cam; clear(scene); scene.fog = null; scene.background = day ? (rain ? skyRain() : skyDay()) : skyFor(); scene.environment = day ? envDay(r) : envFor(r); scene.userData.day = day;
     if (cam.isPerspectiveCamera){ cam.far = 160; cam.aspect = 300/180; cam.clearViewOffset(); }
-    lights(scene, {hemi:1.3, key:2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize, day});
-    pitch(scene, !o.noLines); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542", day);
+    lights(scene, {hemi:1.3, key:rain && day ? 1.1 : 2.3, keyZ:8, rim:.9, fill:1.1, at:o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), size:o.shadowSize, day});
+    pitch(scene, !o.noLines, rain); const net = goalFrame(scene); const crowd = stands(scene, o.crowd || "#F5C542", day);
     const B = ball(); B.position.copy(ballAt); scene.add(B);
     const bs = blob(.36, .36); bs.position.set(ballAt.x, .006, ballAt.z); scene.add(bs);
     // a faint trail behind the ball, so you can follow it into the far corner
@@ -819,6 +825,17 @@ const G3 = (() => {
     const host = stage; host.classList.add("g3"); host.prepend(r.domElement); r._w = 0;
     const anims = new Set(); let t0 = performance.now(), raf = 0, stopped = false;
     const W = {r, scene, cam, B, bs, trail, trailPush, net, mode:"idle", t0, idle:null, dyn:[B, bs], rec:null, view:null, crowd}; SR.cur = W;
+    // the rain: streaks falling past the camera, blown a little, around where the play is
+    if (rain){ const RN = lite ? 450 : 1200, rp = new Float32Array(RN*6), rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.BufferAttribute(rp, 3));
+      const rl = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({color:0xC9D8E8, transparent:true, opacity:day ? .38 : .3, depthWrite:false})); rl.frustumCulled = false; scene.add(rl);
+      const fc = o.focus || new THREE.Vector3(ballAt.x*.5, 0, ballAt.z*.5), drops = [];
+      const seed = d => { d.x = fc.x + (Math.random() - .5)*30; d.z = fc.z + (Math.random() - .3)*34; return d; };
+      for (let i = 0; i < RN; i++) drops.push(Object.assign(seed({}), {y:Math.random()*12, v:10 + Math.random()*3}));
+      let rlast = performance.now();
+      anims.add(now => { const dt = Math.min(.05, (now - rlast)/1000); rlast = now;
+        drops.forEach((d, i)=>{ d.y -= d.v*dt; d.x += 1.4*dt; if (d.y < 0){ seed(d); d.y += 12; }
+          rp[i*6] = d.x; rp[i*6 + 1] = d.y; rp[i*6 + 2] = d.z; rp[i*6 + 3] = d.x - .07; rp[i*6 + 4] = d.y + .55; rp[i*6 + 5] = d.z; });
+        rg.attributes.position.needsUpdate = true; }); }
     // the ball's shadow follows it, smaller as it rises
     W.ballTo = (x, y, z) => { B.position.set(x, y, z); bs.position.set(x, .006, z); bs.scale.setScalar(Math.max(.3, 1 - y*.25)); };
     W.fadeTrail = () => W.tween(300, k=>{ trail.material.opacity = .5*(1 - k); }).then(()=>{ trail.visible = false; trail.material.opacity = .5; });

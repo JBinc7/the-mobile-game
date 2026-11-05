@@ -66,6 +66,15 @@ const SND = (() => {
       o.type = "sine"; o.frequency.value = 3050; fm.frequency.value = 34; fg.gain.value = 170; fm.connect(fg); fg.connect(o.frequency);
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.15, t + .02); g.gain.setValueAtTime(.15, t + len - .05); g.gain.linearRampToValueAtTime(0, t + len);
       o.connect(g); g.connect(master); o.start(t); fm.start(t); o.stop(t + len + .02); fm.stop(t + len + .02); } }
+  // rain: a soft hiss over everything, on or off
+  let rainG = null;
+  function rain(v){
+    if (!v){ if (rainG && ac) rainG.gain.setTargetAtTime(0, ac.currentTime, .6); return; }
+    if (!ctx()) return;
+    if (!rainG){ rainG = ac.createGain(); rainG.gain.value = 0; const s = src(), hp = ac.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 2400; const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 9000;
+      s.connect(hp); hp.connect(lp); lp.connect(rainG); rainG.connect(master); s.start(); }
+    rainG.gain.setTargetAtTime(.09, ac.currentTime, .8);
+  }
   // the crowd's verdict on a moment (what lvOutcome shows)
   function verdict(R){
     if (!R) return;
@@ -78,5 +87,5 @@ const SND = (() => {
   // wake on the first tap (phones won't play before one)
   document.addEventListener("pointerdown", ()=>{ if (on) ctx(); }, {passive:true});
   return {on:()=>on, set(v){ on = !!v; try{ localStorage.setItem(KEY, on ? "1" : "0"); }catch(e){} if (!on){ ambient(false); ac?.suspend?.(); } else { ctx(); } },
-    ambient, swell, kick, net, whistle, roar, ooh, groan, applause, verdict};
+    ambient, swell, kick, net, whistle, roar, ooh, groan, applause, verdict, rain};
 })();
