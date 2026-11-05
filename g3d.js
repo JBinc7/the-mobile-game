@@ -824,26 +824,34 @@ const G3 = (() => {
     // the crowd on its feet: the banks bounce, fading out over ms
     W.roar = ms => { const y0 = crowd.map(c=>c.position.y); W.tween(ms, k=>crowd.forEach((c, i)=>{ c.position.y = y0[i] + .35*(1 - k)*Math.abs(Math.sin(k*ms/1000*7.5 + i)); })); };
     W.goalShow = async (P, runTo, camAt, lookAt) => {
-      const all = W.rec || [], end = all.length ? all[all.length - 1].t : 0, frames = all.filter(f=>f.t >= end - 2600); W.rec = null; if (stopped) return;
+      const frames = W.takeRec(); if (stopped) return;
       W.roar(4200);
       const host0 = host, from = P.at ? P.at.position.clone() : P.root.position.clone(), obj = P.at || P.root;
       const yaw = Math.atan2(runTo.x - from.x, runTo.z - from.z), t1 = performance.now();
       const face = Math.atan2(cam.position.x - runTo.x, cam.position.z - runTo.z), turn = (a, b, k) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a))*k;
       const run = W.tween(1300, k=>{ const e = k*k*(3 - 2*k); obj.position.lerpVectors(from, runTo, e); obj.rotation.y = turn(yaw, face, Math.max(0, (k - .6)/.4)); if (k < .75) track(P, obj); else pose(P, "cheer", (performance.now() - t1)/1000); });
       await run; if (stopped || frames.length < 4) return;
-      // the replay: everything put back as it was, frame by frame, at half speed
-      const live = W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]);
+      await W.replay(frames, camAt, lookAt); if (stopped) return;
+      W.mode = "goal";
+      const t2 = performance.now(); W.tween(2600, ()=>pose(P, "cheer", (performance.now() - t2)/1000));
+    };
+    // the last moments recorded (W.rec), up to 2.6 s
+    W.takeRec = () => { const all = W.rec || [], end = all.length ? all[all.length - 1].t : 0; W.rec = null; return all.filter(f=>f.t >= end - 2600); };
+    // a near miss (off the woodwork, a great save): after a breath, the replay, then back to the live picture
+    W.nearMiss = async (camAt, lookAt) => { const frames = W.takeRec(); await W.tween(500, ()=>{}); if (stopped || frames.length < 4) return; await W.replay(frames, camAt, lookAt); };
+    // the replay: everything put back as it was, frame by frame, at half speed, from camAt; then back as it is now
+    W.replay = async (frames, camAt, lookAt) => {
+      const host0 = host, live = W.dyn.map(o=>[o.position.clone(), o.quaternion.clone(), o.visible]), mode0 = W.mode;
       const rc = new THREE.PerspectiveCamera(40, 300/180, .1, 160); rc.position.copy(camAt); rc.lookAt(lookAt); W.view = rc; const tr = new THREE.Vector3(); W.mode = "replay";
-      host0.insertAdjacentHTML("beforeend", `<span class="g3-replay" aria-hidden="true">Replay</span>`); const badge = host0.lastElementChild;
+      host0.insertAdjacentHTML("beforeend", `<span class="g3-replay" aria-hidden="true">Replay</span>`); const badge = host0.lastElementChild; host0.classList.add("g3-replaying");
       const t0r = frames[0].t, span = frames[frames.length - 1].t - t0r; net.touch(B.position);
       await W.tween(span*2, k=>{ const tt = t0r + span*k; let i = 0; while (i < frames.length - 1 && frames[i + 1].t <= tt) i++; const F = frames[i];
         F.o.forEach(([p, q, v], j)=>{ const o = W.dyn[j]; if (!o) return; o.position.copy(p); o.quaternion.copy(q); o.visible = v; });
         (F.p || []).forEach(([Q, n, a, b])=>{ if (Q.real) REAL[n](Q, a, b); else POSE[n](Q.rig, a, b); });
         rc.lookAt(tr.copy(lookAt).lerp(B.position, .45)); });   // the camera follows the ball
-      net.touch(null); badge.remove(); if (stopped) return;
+      net.touch(null); badge.remove(); host0.classList.remove("g3-replaying"); if (stopped) return;
       live.forEach(([p, q, v], j)=>{ const o = W.dyn[j]; o.position.copy(p); o.quaternion.copy(q); o.visible = v; });
-      W.view = null; W.mode = "goal";
-      const t2 = performance.now(); W.tween(2600, ()=>pose(P, "cheer", (performance.now() - t2)/1000));
+      W.view = null; W.mode = mode0;
     };
     return W;
   }
@@ -949,6 +957,7 @@ const G3 = (() => {
         await W.tween(360, k=>{ B.position.set(p0.x + (q.wide ? Math.sign(p0.x)*1.5*k : 0), p0.y + (q.over ? .6*k : -.1*k), p0.z - 6*k); });
       } else if (q.wood){ fade();
         await W.tween(420, k=>{ B.position.set(p0.x - Math.sign(p0.x)*.8*k, Math.max(.11, p0.y - 1.2*k*k + .2*k), p0.z + 4*ease(k)); });
+        W.nearMiss(new THREE.Vector3(-7, 3.4, D + (D > 16 ? 6 : 8)), new THREE.Vector3(0, .9, D*.3));   // so close: see it again
       } else if (q.wall){ fade();
         await W.tween(420, k=>{ B.position.set(p0.x + .6*k, Math.max(.11, p0.y + .3*k - 1.2*k*k), p0.z + 3.5*ease(k)); });
       } else if (q.held){ fade();   // held: into his chest, and he keeps it
@@ -956,6 +965,7 @@ const G3 = (() => {
         await W.land(K, kp, B);
       } else { fade(); W.land(K, kp);   // parried: pushed away, out and wide
         await W.tween(480, k=>{ B.position.set(p0.x + Math.sign(p0.x || 1)*1.8*ease(k), Math.max(.11, p0.y + .3*k - 1.3*k*k), p0.z + 2.6*ease(k)); bs.position.set(B.position.x, .006, B.position.z); });
+        if (Math.abs(p0.x) > 1.6) W.nearMiss(new THREE.Vector3(Math.sign(p0.x)*6, 2.2, -2.6), new THREE.Vector3(p0.x*.3, 1, D*.35));   // a flying save: see it again, from beside the goal
       }
     }
     /* 2D's goal view mapped onto this one, for a game that takes taps or swipes on it (bend it): 2D's goal (x 30-270 post

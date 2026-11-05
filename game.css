@@ -1357,3 +1357,11 @@ small.boot{display:inline-flex;align-items:center}
 .g3-ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}
 /* the interception's three passing lanes stay on in 3D, faint, so you can see where he might pass */
 .lv-stage.g3>svg [id^="lvLn"]{visibility:visible}
+/* a replay of a near miss: the result card sits low, so the replay shows above it */
+.lv-stage.g3.g3-replaying>.lv-res{inset:auto 0 0 0;padding:28px 12px 10px;gap:2px;background:linear-gradient(rgba(3,8,6,0),rgba(3,8,6,.8) 55%)}
+.lv-stage.g3.g3-replaying>.lv-res .lv-ico{display:none}
+.lv-stage.g3.g3-replaying>.lv-res span{font-size:clamp(30px,9vw,44px)}
+/* the commentator's line: a TV caption low on the picture as the moment begins */
+.lv-comm{position:absolute;left:10px;bottom:10px;z-index:4;max-width:78%;padding:5px 10px 5px 12px;border-left:3px solid #F5C542;border-radius:4px;background:rgba(4,10,8,.78);color:#F2F5F3;font:600 12.5px/1.3 var(--f-ui,system-ui);pointer-events:none;animation:lvcomm 4.2s ease both}
+@keyframes lvcomm{0%{opacity:0;transform:translateX(-10px)}8%,80%{opacity:1;transform:none}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.lv-comm{animation:none;opacity:.9}}

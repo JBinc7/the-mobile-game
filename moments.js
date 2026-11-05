@@ -55,6 +55,7 @@ function lvShow(html){
   const box = lvEl.firstElementChild; setTimeout(()=>box.classList.remove("enter"), 450);
   if (lvCountNext && box.querySelector(".lv-stage")){ lvCountNext = false; lvCountdown(); }
   if (typeof SND!=="undefined" && box.querySelector(".lv-stage")) SND.ambient(true);   // the crowd
+  if (lvLine){ const stg = box.querySelector(".lv-stage"); if (stg){ stg.insertAdjacentHTML("beforeend", `<div class="lv-comm" aria-live="polite">${esc(lvLine)}</div>`); lvLine = null; } }
   // in 3D: any mini-game without its own 3D scene is mirrored into one (g3d.js), once this one's had the chance to make its own
   if (typeof G3!=="undefined" && G3.ready()) setTimeout(()=>{ const stg = box.querySelector(".lv-stage"); if (stg && stg.isConnected && !stg.classList.contains("g3")) G3.mirror(stg, lv3dMirrorLooks()); }, 0);
   (lvEl.querySelector("[data-lv-focus]") || lvEl.querySelector("button:not([data-lv-skip]):not(.lv-tap)"))?.focus({preventScroll:true});   // never "Sim the rest" or a tap zone: an outline there looks like a hint
@@ -102,6 +103,23 @@ const lvEaseOut = k => 1 - Math.pow(1-k, 2.2), lvEaseInOut = k => k<.5 ? 2*k*k :
    nothing it does reaches the career: no coins, no stats, no saves. */
 const lvAttr = st => st.lab ? st.lab.a : mcA();
 const lvPos = st => st.lab ? st.lab.pos : S.player.pos;
+/* the commentator: a line as each of your moments in a match begins, shown low on the picture like a TV caption */
+let lvLine = null;
+function lvCall(st, m){
+  const me = String(S.player.name || "He").split(" ").slice(-1)[0], opp = st.f.opp || "They", k = m.g + (m.v ? ":" + m.v : ""), r = a => a[Math.floor(Math.random()*a.length)];
+  const L = {"shot:pen":[`${me} places the ball on the spot…`, `Penalty! ${me} steps up…`], "shot:freekick":[`${me} stands over the free kick…`, `Free kick in range. ${me} fancies this…`],
+    "shot:long":[`${me} lines one up from distance…`, `Space for ${me} to shoot from range…`], "shot:oneonone":[`${me} is clean through!`, `Just the keeper to beat for ${me}…`],
+    "shot:box":[`${me} has a sight of goal…`, `It falls to ${me} in the box…`], header:[`The cross is coming in for ${me}…`, `${me} attacks the ball in the air…`],
+    pass:[`${me} looks for a teammate…`, `${me} on the ball, picking a pass…`], cross:[`${me} out wide, looking to cross…`, `${me} gets to the byline…`],
+    move:[`${me} drives forward…`, `${me} runs at them…`], takeon:[`${me} takes on his man…`, `One against one: ${me} and the full-back…`],
+    intercept:[`${opp} knock it around at the back…`, `${opp} try to play through…`], tackle:[`${opp} break, and ${me}'s the last man…`, `${opp} on the counter…`],
+    block:[`A shot's coming! ${me} has to get in the way…`], "header:def":[`Danger: a cross into the box…`], save:[`${opp} are through on goal…`, `${opp} shape to shoot…`],
+    "save:pen":[`Penalty to ${opp}. ${me} on the line…`], claim:[`A high ball into the box…`], rush:[`${opp} are in behind…`]};
+  const cat = m.g==="lab" && typeof LV_LABM!=="undefined" ? (LV_LABM[m.v] || [])[0] : null;
+  const C = {goal:[`A chance for ${me}…`, `${me} in a promising position…`], pen:[`Penalty! ${me} steps up…`], assist:[`${me} with the ball, a teammate making a run…`], chance:[`${me} looking to make something happen…`],
+    keep:[`${me} keeps the ball under pressure…`], def:[`${opp} on the attack…`], save:[`${opp} bearing down on goal…`]};
+  return r(L[k] || L[m.g] || (cat && C[cat]) || [`${me} involved…`]);
+}
 // the side you play for: your club, or your country at a tournament (tournament.js)
 const lvUs = st => st.us || S.mc.club;
 const lvCols = st => { if (st.lab) return st.lab.cols; const k = meta(lvUs(st)); return [k.c1, k.c2 || "#FFFFFF", "#F5C542", "#FFFFFF"]; };
@@ -589,7 +607,7 @@ async function lvPlayMatch(f, w){
         let R = null;
         if (!auto){
           if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true);
-          lvCountNext = true; R = await LV_GAMES[m.g](st, m);
+          lvCountNext = true; lvLine = lvCall(st, m); R = await LV_GAMES[m.g](st, m); lvLine = null;
           if (R==="skip") auto = true;
         }
         if (auto){ lvApply(st, m, lvAuto(st, m)); st.left--; continue; }
@@ -626,7 +644,7 @@ async function lvDecider(st, level){
   st.left = 1;
   if (go==="play"){
     if (!lvSeen()[lvHelpKey(m)]) await lvHelp([lvHelpKey(m)], true);
-    lvCountNext = true; const R = await LV_GAMES[m.g](st, m);
+    lvCountNext = true; lvLine = lvCall(st, m); const R = await LV_GAMES[m.g](st, m); lvLine = null;
     if (R==="skip") lvApply(st, m, lvAuto(st, m)); else { lvApply(st, m, R); await lvOutcome(st, R); }
   } else lvApply(st, m, lvAuto(st, m));
   if (!level(st)) return {et:true};
