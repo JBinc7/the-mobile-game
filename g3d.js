@@ -1457,7 +1457,8 @@ const G3 = (() => {
     // the 2D pitch's own markings (its boxes, arcs and centre circle), traced onto the grass
     const mk = svg.querySelector('g[fill="none"]');
     if (mk){ const pts = [];
-      mk.querySelectorAll("rect, path, circle, line").forEach(el=>{ if (!el.getTotalLength) return; const L = el.getTotalLength(), n = Math.max(2, Math.ceil(L/4)); let prev = null;
+      mk.querySelectorAll("rect, path, circle, line").forEach(el=>{ if (!el.getTotalLength) return;
+        /* (2D's border round the picture isn't a line on a real pitch: in 3D it looked like a huge box) */ if (el.tagName==="rect" && +el.getAttribute("width") >= 280) return; const L = el.getTotalLength(), n = Math.max(2, Math.ceil(L/4)); let prev = null;
         for (let i = 0; i <= n; i++){ const q = el.getPointAtLength(L*i/n), v = G(q.x, q.y, .02); if (prev) pts.push(prev.x, prev.y, prev.z, v.x, v.y, v.z); prev = v; } });
       const lg = new THREE.BufferGeometry(); lg.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
       scene.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({color:0xF2F5EF, transparent:true, opacity:.85}))); }

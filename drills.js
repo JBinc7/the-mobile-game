@@ -227,7 +227,7 @@ async function drRep(st, k){
   const m = {min:0, q:1, g, v, side:["tackle","block","save","intercept"].includes(g) || v==="def" ? "def" : "att"};
   if (D.ramp) st.f.oppStr = st.base + st.i*3;
   if (g==="shot"){ const r = await lvShotCore(st, m, v || "box", drHead(st), D.t); if (r==="skip") return r; return {s:r.goal ? 1 : 0, big:r.big, small:r.small}; }
-  if (g==="pass"){ const r = await lvPassCore(st, drHead(st), D.t, "Drag the ball to the teammate who's free. The bibs keep moving.", 700); if (r==="skip") return r;
+  if (g==="pass"){ const r = await lvPassCore(st, drHead(st), D.t, "Carry it forward; when a run lights up gold, drag it into the space ahead of him.", 700); if (r==="skip") return r;
     return {s:r.ok ? 1 : 0, big:r.ok ? "Found him" : "Cut out", small:r.why}; }
   const R = await LV_GAMES[g](st, m); if (R==="skip") return R;
   const good = R.ok || R.a || R.g;
