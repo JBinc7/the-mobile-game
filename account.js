@@ -6,7 +6,7 @@
    calls Account.boot(start) once it has loaded, and this file calls back into the game (render, exportBackup…)
    only after that. */
 const Account = (() => {
-  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "1.94";
+  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "2.0";
   const OLD = {career:"efp-career-v1", hall:"efp-hall-v1"};   // where saves lived before accounts existed
   const $id = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -97,7 +97,7 @@ const Account = (() => {
   }
   function signOut(){ try{ localStorage.removeItem(SESSION); }catch(e){} location.reload(); }
   function wipe(acc){
-    for (const kind of [...Object.keys(OLD), "tips", "coins", "locker"]){ try{ localStorage.removeItem(keyFor(acc, kind)); }catch(e){} }
+    for (const kind of [...Object.keys(OLD), "tips", "coins", "locker", "career-2", "career-3", "mgr-1", "mgr-2", "mgr-3", "mhall", "last"]){ try{ localStorage.removeItem(keyFor(acc, kind)); }catch(e){} }
     put(LIST, accounts().filter(a=>a.id!==acc.id));
   }
 
@@ -150,7 +150,7 @@ const Account = (() => {
     <div class="intro">
       <div class="eyebrow">Free · plays offline · no email needed</div>
       <h2 class="intro-h">${create ? "Your career starts here" : "Welcome back"}</h2>
-      <p class="intro-p">${create ? "Make an account on this phone to keep your player, your seasons and your Legacy. Then build your player and play from the National League to the Champions League." : "Sign in to pick up your career where you left it."}</p>
+      <p class="intro-p">${create ? "Make an account on this phone to keep your saves and your Legacy. Then play a Player Career from the National League to the Champions League, or take charge of a club in Manager Career." : "Sign in to pick up your career where you left it."}</p>
     </div>
     ${storageOK() ? "" : `<p class="ref bad" role="alert" style="margin:0 0 18px">This browser is blocking storage, so nothing can be saved. Turn off private browsing, or open the link in your normal browser.</p>`}
     ${gateNote ? `<p class="ref" role="status" style="margin:0 0 18px">${esc(gateNote)}</p>` : ""}
@@ -195,10 +195,10 @@ const Account = (() => {
         <div style="min-width:0"><h2 id="acctDlgTitle">${esc(me.name)}</h2><p class="hint">Account on this phone · since ${esc(since)} · ${coins().toLocaleString()} gold coins</p></div>
         <button type="button" class="dlg-x" data-acct="close" aria-label="Close">×</button></div>
       <section><h3>Your saves</h3>
-        <p class="hint">Your career and Legacy save on this phone as you play. Download a backup to keep them safe, or to carry on playing on another phone.</p>
+        <p class="hint">Your player and manager saves and your Legacy save on this phone as you play. A backup carries all of them: download one to keep them safe, or to carry on playing on another phone.</p>
         <div class="row"><button type="button" class="btn small" data-acct="backup">Download backup</button>
           <label class="btn small" for="acctBackupFile" style="display:inline-flex;align-items:center">Load backup</label><input id="acctBackupFile" type="file" accept="application/json,.json" hidden></div>
-        ${S ? `<label class="chk"><input type="checkbox" id="acctReplace"> Loading a backup also replaces my current career</label>` : ""}
+        <label class="chk"><input type="checkbox" id="acctReplace"> Loading a backup overwrites my saves in the same slots</label>
       </section>
       ${devOn() ? `<section><h3>Development</h3><p class="hint">Only on this phone: try every mini-game in one place, at any difficulty. Nothing you play there affects your career or your coins.</p>
         <div class="row"><button type="button" class="btn small primary" data-acct="lab">Open the mini-game lab</button><button type="button" class="btn small" data-acct="dev-off">Hide this section</button></div></section>` : ""}
@@ -270,7 +270,7 @@ const Account = (() => {
     try{
       if (f.id==="acctForm"){
         nameVal = v("name"); btn.textContent = mode==="create" ? "Creating…" : "Signing in…";
-        if (mode==="create"){ const acc = await create(v("name"), v("pw"), v("pw2")); begin(acc, `Welcome, ${acc.name}! Your account is ready. Now build your player.`); }
+        if (mode==="create"){ const acc = await create(v("name"), v("pw"), v("pw2")); begin(acc, `Welcome, ${acc.name}! Your account is ready. Pick Player Career or Manager Career to begin.`); }
         else begin(await signIn(v("name"), v("pw")));
       }
       else if (f.id==="forgotForm"){

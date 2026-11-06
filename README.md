@@ -1,7 +1,7 @@
 # the-mobile-game
 making the game accessible and downloadable on phones via just a link.
 
-**English Footballing Pyramid** is a football career mode: build your player, then play from the National League to the Champions League. It started as a Claude artifact. This repo is a standalone version that runs on its own, with no Claude account needed.
+**English Footballing Pyramid** is a football career game with two modes: a **Player Career** (build your player, then play from the National League to the Champions League) and a **Manager Career** (take charge of any club and run it: tactics, transfers, the academy and a board to keep happy). It started as a Claude artifact. This repo is a standalone version that runs on its own, with no Claude account needed.
 
 - **One link to share.** Open it on any phone and you can play straight away in the browser.
 - **Installs like an app.** Add it to the home screen. It opens full screen, has its own icon and works without signal.
@@ -20,6 +20,36 @@ making the game accessible and downloadable on phones via just a link.
 That's the link to share. Every later push to `main` updates it, and players pick up the new version the next time they open the game with signal.
 
 To try it before merging, pick this work's branch in step 3 instead of `main`, then switch back to `main` after merging.
+
+## The main menu and your saves
+
+After signing in you land on the main menu: pick **Player Career** or **Manager Career**. Each mode has **three save slots** on your account, so one account can keep three players and three managers going at once. The last save you played is a tap away at the top (*Continue*), and *Menu* in the header brings you back here from either mode.
+
+- A slot shows who's in it (name, club, season, key numbers) with *Continue* and *Delete* (tap twice). An empty slot starts a new career.
+- Your first player career (from before slots existed) is in Player Career slot 1.
+- *Player Legacy* ranks every player you've had; the *Managers' hall of fame* ranks every manager by trophies and wins.
+- Backups (Account menu) carry every slot of both modes. Loading one puts its saves back in their own slots if they're free, or in the first free slot; tick *overwrite* to replace the saves in the same slots.
+
+## Manager Career
+
+Inspired by Football Manager and the career modes of FIFA 17 and EA FC 26.
+
+- **Your manager and your club.** Name, nationality, age and playing background (Sunday league to former international), then any club in the game's twelve leagues: England's top five divisions, La Liga, the Bundesliga, Serie A, Ligue 1, the Primeira Liga, the Eredivisie and the Scottish Premiership. Clubs show their star rating and team rating.
+- **Continue.** The season runs day by day from July to June. *Continue* moves on to the next thing that needs you: your next match, an offer to answer, a board meeting, the end of the season.
+- **The squad.** Every player has a position (and others he can play), six FIFA-style attributes (pace, shooting, passing, dribbling, defending, physical; diving, handling, kicking, reflexes, speed and positioning for keepers), an overall, a potential, age, nationality, foot, contract, wage, value, morale, fitness, form, squad role and season stats. Tap anyone for his card.
+- **Tactics.** Eight formations, your XI on a pitch (tap to swap players; tokens go green, amber or red for how well each fits his place), nine on the bench, *Auto-pick best XI*, captain, mentality (ultra defensive to ultra attacking), tempo, pressing, width, passing and the defensive line, with presets (tiki-taka, gegenpress, counter, wing play, park the bus, route one). A new formation takes a few weeks of training to learn.
+- **Match day.** A pre-match screen (both line-ups, attack, midfield and defence compared, the opposition's key man, sometimes a press conference), then *Play the match* or *Quick sim*. The match screen shows a 2D pitch where the chances play out, a TV scoreboard, live commentary, stats (possession, shots, expected goals and more) and player ratings, at 1× to 8×. From the touchline: change mentality and instructions, make up to five substitutions, shout (encourage, demand more, focus, push forward, tighten up) and give a half-time team talk. Fatigue, cards, injuries, extra time and penalty shootouts are all played.
+- **Competitions.** Your league in full detail (every match with scorers and ratings) and the other eleven leagues played alongside, with promotion, relegation and the EFL play-offs; the FA Cup and League Cup (or the cup of the country you're in); and the Champions League, Europa League and Conference League with a 36-club league phase and two-legged knockouts. Tables, fixtures, top scorers, assists, ratings and clean sheets, and every league's table.
+- **Transfers.** Two windows (summer and January). Search every club and the free agents by position, age, overall, value, league and name. Players outside your league are known only roughly until your scouts watch them. Bid for a player (his club accepts, counters or refuses; Spanish clubs have release clauses), then agree his wage, contract length and squad role. A player may refuse a smaller club or a lower division. Other clubs bid for your players (accept, reject or counter); you can transfer-list or loan-list players, release them, and the rest of your league does its own business.
+- **Money.** A transfer budget and a wage budget (move money between them), match-day income, TV and prize money, sponsors and wages, season by season.
+- **The board.** Objectives each season (league, cup, Europe, wages, youth), a confidence meter that moves with every result, and a season review graded A+ to F. Lose their confidence, or get relegated out of the game's leagues, and you're sacked; then pick a new job from the clubs with vacancies. Do well and bigger clubs offer you jobs.
+- **The academy.** A youth intake every March, a youth scout you can send abroad, promotion to the first team (or release at 19).
+- **Training and growth.** A weekly team focus and intensity, and individual training for up to five players. Young players grow towards their potential, faster when they play; players over 30 decline; morale follows playing time, results and how you handle them.
+- **Unexpected events** (sponsor challenges, a star's head turned, dressing-room unrest, takeovers, wonderkids, injury crises), **awards** (Manager of the Month, the league's Golden Boot, Player of the Season, Manager of the Season and more), retirements, contracts that run out, and a career record of every season.
+
+## How the game looks
+
+A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
 
 ## How a season plays
 
@@ -172,6 +202,12 @@ Players on different phones can't see each other's careers. That would need an o
 | File | What it is |
 | --- | --- |
 | `index.html` | The page: header, game area, app and phone settings |
+| `hub.js` | The main menu: Player Career or Manager Career, three save slots for each, and backups of every slot |
+| `manager.js` | Manager Career's world and season: clubs and squads, the calendar, every league, cup and European competition, transfers, finances, the board, the academy, training, events and the job market |
+| `mgmatch.js` | Manager Career's matches: the engine every detailed match is played on, and the match screen (2D pitch, commentary, stats, ratings, substitutions, shouts and team talks) |
+| `mgui.js` | Manager Career's screens: making your manager and picking a club, Home, Squad, Tactics, Transfers, Competitions, Club, Inbox and the player card |
+| `manager.css` | The main menu's and Manager Career's styles |
+| `theme.css` | The game's look: colours, panels, buttons, tabs and fields for every screen |
 | `game.js` / `game.css` | The game itself, taken from the artifact. Saving now goes to the signed-in account instead of Claude |
 | `account.js` | Accounts, the sign-in screen, the Account menu and the install instructions |
 | `matchcentre.js` | The match centre: fixtures, training, attributes, form, selection and match simulation |

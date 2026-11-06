@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>English Footballing Pyramid</title>
-<meta name="description" content="Football career mode: build your player and play from the National League to the Champions League. Free, works offline, installs on your phone.">
+<meta name="description" content="Football career game: play a Player Career from the National League to the Champions League, or take charge of a club in Manager Career. Free, works offline, installs on your phone.">
 <meta name="theme-color" content="#070D0C">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/favicon-64.png" type="image/png" sizes="64x64">
@@ -16,13 +16,15 @@
 <meta name="apple-mobile-web-app-title" content="Pyramid">
 <link rel="stylesheet" href="fonts/fonts.css">
 <link rel="stylesheet" href="game.css">
+<link rel="stylesheet" href="manager.css">
+<link rel="stylesheet" href="theme.css">
 </head>
 <body>
 <header class="band">
   <div class="band-in">
     <div>
       <h1>English Footballing Pyramid</h1>
-      <div class="sub">Career mode · from the National League to the Champions League</div>
+      <div class="sub">Player career · Manager career</div>
       <div class="acct-line" id="acctLine" hidden></div>
     </div>
     <div class="band-right" id="bandRight"></div>
@@ -35,6 +37,7 @@
 <dialog class="acct-dlg" id="penDlg" aria-labelledby="penDlgTitle"></dialog>
 <noscript><p style="padding:16px">This game needs JavaScript turned on.</p></noscript>
 <script src="account.js"></script>
+<script src="hub.js"></script>
 <script src="matchcentre.js"></script>
 <script src="sound.js"></script>
 <script src="moments.js"></script>
@@ -51,6 +54,9 @@
 <script src="lab.js"></script>
 <script src="crests.js"></script>
 <script src="g3d.js"></script>
+<script src="manager.js"></script>
+<script src="mgmatch.js"></script>
+<script src="mgui.js"></script>
 <script src="game.js"></script>
 </body>
 </html>

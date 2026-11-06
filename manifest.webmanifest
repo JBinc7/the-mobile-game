@@ -1,7 +1,7 @@
 {
   "name": "English Footballing Pyramid",
   "short_name": "Pyramid",
-  "description": "Football career mode: build your player and play from the National League to the Champions League.",
+  "description": "Football career game: play your way from the National League to the Champions League as a player, or take charge of a club as its manager.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

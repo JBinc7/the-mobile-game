@@ -585,7 +585,12 @@ function save(){
    Saves live on this device under the signed-in account (account.js). A backup file carries the current career
    and every Legacy career to another phone, and also loads backups downloaded from the Claude version of the game. */
 async function exportBackup(){
-  const data = {game:"English Footballing Pyramid", saved:new Date().toISOString(), career:S||null, legacy:loadHall(), coins:Account.coins(), locker:Account.locker()};
+  if (S && APP==="player") save();
+  if (APP==="manager" && typeof Mgr!=="undefined") Mgr.saveNow();
+  const slots = Hub.all();
+  // "career" is slot 1's player career, as backups always had; "slots" has every player and manager save
+  const data = {game:"English Footballing Pyramid", saved:new Date().toISOString(), career:slots["player-1"]||null, slots, legacy:loadHall(),
+    mhall:(typeof Mgr!=="undefined" ? Mgr.hall() : []), coins:Account.coins(), locker:Account.locker()};
   const json = JSON.stringify(data), filename = `pyramid-backup-${Account.fileTag()}-${new Date().toISOString().slice(0,10)}.json`;
   // on phones, hand the file to the share sheet (Save to Files, AirDrop, email…) where the browser allows it
   try{
@@ -611,9 +616,13 @@ function importBackup(file){
       saveHall([...map.values()]);
       if (d.coins) Account.mergeCoins(d.coins);
       Account.mergeLocker(d.locker);   // the bigger balance wins, so a backup can't be loaded twice for double coins
-      if (d.career && (!S || confirmImport)){ S = d.career; normalize(); save(); }
+      if (typeof Mgr!=="undefined" && d.mhall) Mgr.mergeHall(d.mhall);
+      // older backups have one career; newer ones have every slot of both modes
+      const all = d.slots || (d.career ? {"player-1":d.career} : {});
+      const got = Hub.restore(all, confirmImport);
+      if (APP==="player" && Hub.playerSlot()){ S = null; load(); normalize(); }
       confirmImport = false;
-      flash = `Backup loaded: ${(d.legacy||[]).length} Legacy career${(d.legacy||[]).length===1?"":"s"}${d.career?" and your saved career":""}.`;
+      flash = `Backup loaded: ${(d.legacy||[]).length} Legacy career${(d.legacy||[]).length===1?"":"s"}${got.n?`, ${got.n} save${got.n===1?"":"s"}`:""}${got.skipped?` (${got.skipped} skipped: no free slot; tick “replace” to overwrite)`:""}.`;
       showBoard = false; profileId = null; render();
     }catch(e){ flash = "That file isn't a backup from this game."; render(); }
   };
@@ -629,7 +638,7 @@ function backupPanel(){
       <label class="btn small" for="backupFile" style="display:inline-flex;align-items:center">Load backup</label>
       <input id="backupFile" type="file" accept="application/json,.json" hidden>
     </div>
-    ${S?`<p class="hint" style="margin-top:6px">Loading a backup adds its Legacy careers. To also replace your current career with the one in the file, tick this first: <label><input type="checkbox" id="confirmImport" ${confirmImport?"checked":""} style="width:auto"> replace current career</label></p>`:""}
+    <p class="hint" style="margin-top:6px">Loading a backup adds its Legacy careers, and its player and manager saves go into free slots. To overwrite the saves in the same slots instead, tick this first: <label><input type="checkbox" id="confirmImport" ${confirmImport?"checked":""} style="width:auto"> replace my saves</label></p>
   </section>`;
 }
 
@@ -1236,7 +1245,7 @@ function pitchPicker(sel){
 function swatchBtns(k, list, sel, cls=""){ return `<div class="swatches">${list.map(([v,label,col])=>`<button type="button" class="sw ${cls}" data-act="dset" data-k="${k}" data-v="${v}" aria-pressed="${String(v)===String(sel)}" aria-label="${esc(label)}" title="${esc(label)}" style="--sw:${col}">${cls?"":`<span>${esc(label)}</span>`}</button>`).join("")}</div>`; }
 function renderCreate(){
   const d = draft || (draft = defaultDraft()), dc = draftClub(d), sv = startValueFor(d, dc);
-  $("#bandRight").innerHTML = `<button class="btn ghost" data-act="board-open">Legacy</button>` + (S && !S.newing ? "" : S ? `<button class="btn ghost" data-act="cancel-new">Back to career</button>` : "");
+  $("#bandRight").innerHTML = `<button class="btn ghost" data-act="board-open">Legacy</button>` + (S && !S.newing ? "" : S ? `<button class="btn ghost" data-act="cancel-new">Back to career</button>` : "") + Hub.menuBtn();
   const nClubs = LEAGUES.reduce((n,t)=>n+TIER_LISTS[t].length,0);
   $("#app").innerHTML = `
   ${migratedNote?`<p class="ref" role="status" style="margin:0 0 18px">${esc(migratedNote)}</p>`:""}
@@ -2900,7 +2909,7 @@ function clubBody(t){
 function renderCareer(){
   const club = meta(S.club), t = tierOf(S.club), pl = S.player;
   const last = S.history[S.history.length-1], diff = last ? last.after - last.before : 0;
-  $("#bandRight").innerHTML = `<span class="season-tag">${seasonLabel(S.season)}</span><button class="btn ghost" data-act="new">New career</button>`;
+  $("#bandRight").innerHTML = `<span class="season-tag">${seasonLabel(S.season)}</span><button class="btn ghost" data-act="new">New career</button>${Hub.menuBtn()}`;
   if (S.phase==="stats") rollInjuries();   // decide injuries before building the stats form, so its limits match
   const action = (S.phase==="preview"||S.phase==="stats")?statsPanel():S.phase==="winter"?winterPanel():S.phase==="tournament"?tournamentPanel():S.phase==="window"?windowPanel():retiredPanel();
   S.notes ||= []; S.notesSeen ??= 0;
@@ -2966,13 +2975,14 @@ const TAB_IC = (()=>{ const w = d => `<svg viewBox="0 0 24 24" fill="none" strok
 })();
 let showBoard = false;
 function render(){
+  if (APP==="hub" || APP==="manager"){ document.documentElement.dataset.window = ""; if (APP==="hub") Hub.render(); else Mgr.render(); return; }
   renderInner(); flash = "";
   if (typeof G3!=="undefined" && G3.ready()) G3.cardNow();
   document.documentElement.dataset.window = (!showBoard && S && !S.newing) ? (S.phase==="winter" ? "winter" : S.phase==="tournament" ? "tourney" : S.phase==="window" ? "summer" : "") : "";
 }
 function renderInner(){
   if (showBoard){
-    $("#bandRight").innerHTML = `<button class="btn ghost" data-act="board-close">${S && !S.newing ? "Back to career" : "Back"}</button>`;
+    $("#bandRight").innerHTML = `<button class="btn ghost" data-act="board-close">${S && !S.newing ? "Back to career" : "Back"}</button>${Hub.menuBtn()}`;
     $("#app").innerHTML = `<div style="max-width:820px;margin:0 auto" class="col">${boardPanel()}</div>`; return;
   }
   if (!S || S.newing) renderCreate(); else renderCareer();
@@ -3032,7 +3042,7 @@ document.addEventListener("click", e=>{
   else if (a==="my-profile"){ tab = "legacy"; profileId = S.id; render(); window.scrollTo({top:0}); }
   else if (a==="card-more"){ cardOpen = !cardOpen; render(); if (!cardOpen) document.querySelector(".board .card")?.scrollIntoView({block:"nearest"}); }
   else if (a==="board-open"){ showBoard = true; render(); window.scrollTo({top:0}); }
-  else if (a==="board-close"){ showBoard = false; render(); }
+  else if (a==="board-close"){ showBoard = false; if (!Hub.playerSlot()){ Hub.home(); return; } render(); }
   else if (a==="board"){ boardKey = b.dataset.k; render(); }
   else if (a==="profile"){ profileId = b.dataset.k; render(); document.querySelector("#app")?.scrollIntoView({block:"start"}); }
   else if (a==="profile-close"){ profileId = null; render(); }
@@ -3074,10 +3084,9 @@ function normalize(){
   if (S && S.player && S.phase!=="retired" && !(S.notes||[]).some(n=>n.ask && n.ask.id===`fr-${seasonLabel(S.season)}`)) scheduleIntl();
 }
 function start(){
+  // the main menu (hub.js) comes first; it points KEY at a player career's slot when you open one
   KEY = Account.storageKey("career"); HALL_KEY = Account.storageKey("hall");
-  load();
-  normalize();
-  render();
+  Hub.boot();
 }
 // account.js shows the sign-in screen first, then starts the game for that account
 Account.boot(start);
