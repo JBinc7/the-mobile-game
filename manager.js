@@ -355,7 +355,7 @@ function mgNewFinances(club, first){
   const bill = mgMine().reduce((s, p)=>s + p.wage, 0);
   return {bal:Math.round(tb*1.4 + bill*30), tb, wb:mgRoundWage(bill*(1.04 + r*.1)), inc:{}, exp:{}, hist:[], start:tb};
 }
-const mgBill = () => mgMine().reduce((s, p)=>s + (p.loan ? 0 : p.lin ? p.wage*p.lin.pay : p.wage), 0);
+const mgBill = () => mgMine().reduce((s, p)=>s + (p.loan ? p.wage*(1 - (p.loan.pay ?? 1)) : p.lin ? p.wage*p.lin.pay : p.wage), 0);
 function mgFinAdd(kind, k, v){ const F = M.fin; (F[kind])[k] = (F[kind][k]||0) + v; F.bal += kind==="inc" ? v : -v; }
 
 /* ---------- the board ---------- */
@@ -709,6 +709,8 @@ function mgFinishUserMatch(f, r){
       p.mor = clamp(p.mor + (res==="W" ? 1.5 : res==="L" ? -1.5 : 0)*(mins ? 1 : .5) + (s ? clamp((s.r - 6.6)*1.2, -1.5, 1.5) : 0), 5, 100); });
     // gate money for a home game
     if (mine && !f.neutral){ const g = mgGate(); mgFinAdd("inc", "gate", g); }
+    // appearance bonuses
+    const bon = r.ps.reduce((t, x)=>{ const q = M.P[x.id]; return t + (q && q.club===M.club && q.bon && x.mins>0 ? q.bon : 0); }, 0); if (bon) mgFinAdd("exp", "fees", bon);
     mgPrize(f, res, decW);
     if (M.chal) mgChallengeTick(f, res, gf);
   }
@@ -870,6 +872,9 @@ function mgSeasonEnd(){
   rev.up = promoted!=null ? TIERS[promoted].name : null; rev.down = relegatedTo!=null ? TIERS[relegatedTo].name : null;
   M.tiers = nextT; M._tier = null;
   rev.loans = mgLoanees().map(p=>p.n); mgLoanees().forEach(p=>mgLoanBack(p, true));
+  // players out on loan with an option: does the loan club take it?
+  mgMine().filter(p=>p.loan && p.loan.opt).forEach(p=>{ if (Math.random()<.3 + p.loan.play*.45){ const o = p.loan; p.loan = null; mgSell(p, o.club, {fee:o.opt}); } });
+  mgDues("end");
   mgAgeWorld();
   rev.retired = M._retired || []; M._retired = [];
   M.review = rev;
@@ -974,6 +979,7 @@ function mgNewSeason(){
   const F = M.fin, t = mgLeagueOf(), r = mgRep(M.club), perf = M.review ? ({"A+":1, A:.85, B:.7, C:.5, D:.35, F:.2}[M.review.grade] ?? .5) : .5;
   const base = (MG_TB[t] || 1e5)*Math.pow(clamp(r, .5, 1.06), 4);
   F.tb = mgRoundFee(Math.max(0, F.tb)*.5 + base*(.6 + perf*.6));
+  M._dues = 1;
   F.wb = mgRoundWage(Math.max(F.wb, mgBill()*(1.02 + perf*.08)));
   F.start = F.tb;
   mgStartSeason();
@@ -982,6 +988,7 @@ function mgNewSeason(){
   mgMine().forEach(p=>{ M.kn[p.id] = 100; });
   mgMendXI(true);
   M.review = null;
+  if (M._dues){ M._dues = 0; mgDues("start"); }
   mgMail("board", `${seasonLabel(M.season)}: the new season`, `Pre-season starts today and the transfer window is open until 1 September.\n\nYour transfer budget: ${mgMoney(F.tb)}. Wage budget: ${mgWageTxt(F.wb)}.\n\nThe board expects:\n${M.board.obj.map(o=>`• ${o.t} (${o.imp})`).join("\n")}`, {stop:1});
 }
 
@@ -1051,61 +1058,175 @@ function mgRoleOk(p, role){ const lv = mgLevel(M.club), o = mgOvr(p); if (o>=lv 
 const mgBidOf = id => (M.bids ||= []).find(b=>b.id===id && b.s===M.season && b.win===mgWindowKey());
 const mgWindowKey = () => mgDate(M.day).getUTCMonth()===0 ? "jan" : "sum";
 // your offer for a player: accepted, a counter-offer, or a no
-function mgBid(p, fee){
+/* ---------- the small print ----------
+   A transfer is more than a fee. When buying: pay up front or over two or three seasons, add-ons (paid if he plays 20
+   league games in his first season), a sell-on percentage of his next fee for his old club, and a player of yours in
+   part-exchange. When selling: the same, plus a buy-back clause. Contracts have a signing-on fee, an appearance bonus
+   and a release clause (players like them, but a bigger club can pay the clause and take him). A club values money
+   later and add-ons for less than money now. */
+const MG_INST = ["All up front", "Over 2 seasons", "Over 3 seasons"];
+const mgSellOnWorth = (p, pct) => (pct || 0)/100*mgValue(p)*(p.age<=21 ? 1.3 : p.age<=24 ? 1 : p.age<=28 ? .55 : .2);
+const mgBuyBackCost = (p, bb) => bb ? mgValue(p)*(bb<=mgValue(p)*1.5 ? .3 : bb<=mgValue(p)*2.5 ? .15 : .05) : 0;
+const mgDealWorth = (p, t) => (t.fee || 0)*(1 - .045*(t.inst || 0)) + (t.addon || 0)*.55 + mgSellOnWorth(p, t.sell);
+function mgDealTxt(t, p){
+  const out = [mgMoney(t.fee)];
+  if (t.inst) out[0] += ` (${mgMoney(t.fee/(t.inst + 1))} now, the rest over ${t.inst===1 ? "the next season" : "the next two seasons"})`;
+  if (t.addon) out.push(`${mgMoney(t.addon)} in add-ons`);
+  if (t.sell) out.push(`a ${t.sell}% sell-on clause`);
+  if (t.bb) out.push(`a ${mgMoney(t.bb)} buy-back clause`);
+  if (t.swap && M.P[t.swap]) out.push(`${M.P[t.swap].n} in part-exchange`);
+  return out.join(" + ");
+}
+const mgClauseOf = p => p.rc || mgClause(p);
+// your offer for a player: accepted, a counter-offer, or a no
+function mgBid(p, t){
+  if (typeof t==="number") t = {fee:t};
+  t = {fee:Math.round(t.fee || 0), inst:t.inst || 0, addon:Math.round(t.addon || 0), sell:t.sell || 0, swap:t.swap || null};
   if (!mgInWindow()) return {txt:"The transfer window is closed."};
-  if (fee>M.fin.tb) return {txt:`That's more than your transfer budget (${mgMoney(M.fin.tb)}).`};
+  const now = Math.round(t.fee/(t.inst + 1));
+  if (now>M.fin.tb) return {txt:`The first payment (${mgMoney(now)}) is more than your transfer budget (${mgMoney(M.fin.tb)}).`};
   let B = mgBidOf(p.id); if (!B){ B = {id:p.id, n:p.n, club:p.club, s:M.season, win:mgWindowKey(), tries:0, st:"fee"}; M.bids.push(B); }
   if (B.st==="off") return {txt:`${p.club} won't talk to you about ${p.n} again this window.`};
   if (B.st==="contract" || B.st==="done") return {txt:"The fee's already agreed.", ok:true};
+  // a player of yours in the deal: they have to want him
+  let swapV = 0;
+  if (t.swap){ const q = M.P[t.swap]; if (!q || q.club!==M.club || q.lin || q.loan) return {txt:"That player can't be part of the deal."};
+    if (mgOvr(q)<mgLevel(p.club) - 7 || q.age>32) return {txt:`${p.club} aren't interested in ${q.n}.`};
+    swapV = mgValue(q)*.85; }
   B.tries++;
-  const ask = mgAsk(p), cl = mgClause(p);
-  if ((cl && fee>=cl) || fee>=ask){ B.st = "contract"; B.fee = fee; return {ok:true, txt:cl && fee>=cl ? `You've met his release clause: ${mgMoney(fee)}.` : `${p.club} accept your offer of ${mgMoney(fee)}.`}; }
+  const ask = mgAsk(p), cl = mgClauseOf(p), worth = mgDealWorth(p, t) + swapV;
+  const done = txt => { B.st = "contract"; B.fee = t.fee; B.terms = {...t}; return {ok:true, txt}; };
+  if (cl && t.fee>=cl && !t.inst && !t.swap) return done(`You've met his release clause: ${mgMoney(cl)}.`);
+  if (worth>=ask) return done(`${p.club} accept: ${mgDealTxt(t)}.`);
   if (B.tries>=3){ B.st = "off"; return {txt:`${p.club} have broken off talks: three offers well short of their valuation.`}; }
-  if (fee>=ask*.8){ B.counter = mgRoundFee(ask*(1 - (B.tries - 1)*.03)); return {counter:B.counter, txt:`${p.club} want ${mgMoney(B.counter)}.`}; }
+  if (worth>=ask*.8){ const rest = worth - t.fee*(1 - .045*t.inst), need = (ask - rest)/(1 - .045*t.inst);
+    B.counter = mgRoundFee(need*(1 - (B.tries - 1)*.03)); const extra = t.inst || t.addon || t.sell || t.swap;
+    return {counter:B.counter, txt:`${p.club} want ${mgMoney(B.counter)}${extra ? ", with the rest of your offer as it is" : ""}.`}; }
   return {txt:`${p.club} reject it out of hand: it's nowhere near their valuation. (${3 - B.tries} offer${3 - B.tries===1 ? "" : "s"} left.)`};
 }
-// your contract offer: he signs, asks for more, or walks away
-function mgOffer(p, wage, yrs, role, renew){
+// your contract offer: he signs, asks for more, or walks away. c: {wage, yrs, role, sign (signing-on fee), app (bonus a game), rc (release clause)}
+function mgOffer(p, c, yrs, role, renew){
+  if (typeof c==="number") c = {wage:c, yrs, role};
+  c = {wage:Math.round(c.wage || 0), yrs:c.yrs || 3, role:c.role ?? 2, sign:Math.round(c.sign || 0), app:Math.round(c.app || 0), rc:Math.round(c.rc || 0)};
   const B = renew ? (p._renew ||= {tries:0}) : mgBidOf(p.id) || (p.club ? null : (()=>{ const b = {id:p.id, n:p.n, club:null, s:M.season, win:mgWindowKey(), tries:0, st:"contract", fee:0}; M.bids.push(b); return b; })());
   if (!renew && (!B || B.st!=="contract")) return {txt:"Agree a fee with his club first."};
-  const dem = mgDemand(p, role, renew), room = M.fin.wb - (mgBill() - (renew ? p.wage : 0));
-  if (wage>room) return {txt:`That's over your wage budget: you've ${mgWageTxt(Math.max(0, room))} of room.`};
-  if (!mgRoleOk(p, role)) return {txt:`He won't accept being a ${MG_ROLES[role].toLowerCase()} player.`};
-  if (yrs>(p.age>=33 ? 1 : p.age>=31 ? 2 : 5)) return {txt:`At ${p.age} he only wants a ${p.age>=33 ? "one" : "two"}-year deal.`};
+  const room = M.fin.wb - (mgBill() - (renew ? p.wage : 0));
+  if (c.wage>room) return {txt:`That's over your wage budget: you've ${mgWageTxt(Math.max(0, room))} of room.`};
+  if (c.sign>M.fin.tb) return {txt:`You can't afford a ${mgMoney(c.sign)} signing-on fee (transfer budget ${mgMoney(M.fin.tb)}).`};
+  if (!mgRoleOk(p, c.role)) return {txt:`He won't accept being a ${MG_ROLES[c.role].toLowerCase()} player.`};
+  if (c.yrs>(p.age>=33 ? 1 : p.age>=31 ? 2 : 5)) return {txt:`At ${p.age} he only wants a ${p.age>=33 ? "one" : "two"}-year deal.`};
   if (renew && p.req) return {txt:`${p.n} wants to leave and won't sign a new deal.`};
+  const v = mgValue(p), rcF = c.rc ? (c.rc<=v*1.6 ? .92 : c.rc<=v*3 ? .96 : .985) : 1;
+  const dem = mgDemand(p, c.role, renew)*rcF;
+  // what the package is worth to him a week: the wage, the signing-on fee spread over the deal, his likely bonuses
+  const extra = c.sign/(52*c.yrs)*.9 + c.app*MG_ROLE_SHARE[c.role]*.8, worth = c.wage + extra;
   B.ctries = (B.ctries || 0) + 1;
-  if (wage>=dem*.97) return {ok:true, txt:`${p.n} agrees!`};
-  if (B.ctries>=3){ if (!renew) B.st = "off"; return {txt:`${p.n} has ended talks. He wanted around ${mgWageTxt(dem)}.`}; }
-  if (wage>=dem*.85) return {counter:dem, txt:`He wants ${mgWageTxt(dem)}.`};
+  if (worth>=dem*.97) return {ok:true, txt:`${p.n} agrees!`, c};
+  const wantW = mgRoundWage(Math.max(0, dem - extra));
+  if (B.ctries>=3){ if (!renew) B.st = "off"; return {txt:`${p.n} has ended talks. He wanted around ${mgWageTxt(wantW)} with the rest as offered.`}; }
+  if (worth>=dem*.85) return {counter:wantW, txt:`He wants ${mgWageTxt(wantW)} a week with the rest as offered.`};
   return {txt:`He laughs it off: he wants a lot more than that.`};
 }
-function mgSign(p, wage, yrs, role){
-  const B = mgBidOf(p.id), fee = B ? B.fee || 0 : 0;
+function mgSign(p, c, yrs, role){
+  if (typeof c==="number") c = {wage:c, yrs, role};
+  const B = mgBidOf(p.id), T = (B && B.terms) || {fee:B ? B.fee || 0 : 0}, fee = T.fee || 0, from = p.club || "free agency";
   let q = p;
   if (p.virt || !M.P[p.id]){ q = {...p, id:"p" + (M.nid++), st:mgStat(), lg:mgStat(), car:{ap:0, g:0, a:0}}; delete q.virt; M.gone[p.id] = 1; M.P[q.id] = q; mgVCache.clear(); }
   if (p.club && M.cl[p.club]) M.cl[p.club].sq = M.cl[p.club].sq.filter(id=>id!==p.id);
   M.fa = (M.fa || []).filter(id=>id!==p.id);
-  const from = p.club || "free agency";
-  Object.assign(q, {club:M.club, wage, con:M.season + yrs - 1, role, mor:Math.max(q.mor, 76), joined:M.season, from, fee, tl:0, ll:0, req:0, num:0, form:[], _renew:null});
+  Object.assign(q, {club:M.club, wage:c.wage, con:M.season + c.yrs - 1, role:c.role, mor:Math.max(q.mor, 76), joined:M.season, from, fee, tl:0, ll:0, req:0, num:0, form:[], _renew:null,
+    rc:c.rc || 0, bon:c.app || 0, sellOn:T.sell ? {club:from, pct:T.sell} : null});
   M.cl[M.club].sq.push(q.id); mgNumbers(mgMine());
   M.kn[q.id] = 100; M.short = M.short.filter(id=>id!==p.id);
-  if (fee){ M.fin.tb -= fee; mgFinAdd("exp", "buys", fee); }
+  // the money: now, later, and only if he plays
+  const lines = [];
+  if (fee){ const now = Math.round(fee/((T.inst || 0) + 1)); M.fin.tb -= now; mgFinAdd("exp", "buys", now);
+    for (let k = 1; k<=(T.inst || 0); k++) (M.pay ||= []).push({why:"inst", club:from, n:q.n, amt:now, s:M.season + k});
+    if (T.inst) lines.push(`${mgMoney(now)} paid now, ${mgMoney(now)} at the start of each of the next ${T.inst===1 ? "season" : "two seasons"}.`); }
+  if (T.addon){ (M.pay ||= []).push({why:"addon", club:from, n:q.n, pid:q.id, amt:T.addon, s:M.season, need:mgDate(M.day).getUTCMonth()<6 ? 10 : 20}); lines.push(`${mgMoney(T.addon)} more if he plays ${mgDate(M.day).getUTCMonth()<6 ? 10 : 20} league games this season.`); }
+  if (T.sell) lines.push(`${from} get ${T.sell}% of any fee when you sell him.`);
+  if (T.swap){ const x = M.P[T.swap]; if (x){ mgPartEx(x, from); lines.push(`${x.n} has gone the other way.`); } }
+  if (c.sign){ M.fin.tb -= c.sign; mgFinAdd("exp", "fees", c.sign); lines.push(`Signing-on fee: ${mgMoney(c.sign)}.`); }
+  if (c.app) lines.push(`Appearance bonus: ${mgMoney(c.app)} a game.`);
+  if (c.rc) lines.push(`Release clause: ${mgMoney(c.rc)}.`);
   if (B) B.st = "done";
   if (M.tac.bench.length<9) M.tac.bench.push(q.id);
-  mgMail("transfer", `${q.n} signs!`, `${q.n} (${q.pos}, ${q.age}) joins from ${from}${fee ? ` for ${mgMoney(fee)}` : ""} on ${mgWageTxt(wage)} until ${M.season + yrs}. Squad role: ${MG_ROLES[role]}.`);
+  const xi = q._in = mgAssistIn(q);
+  mgMail("transfer", `${q.n} signs!`, `${q.n} (${q.pos}, ${q.age}) joins from ${from}${fee ? ` for ${mgDealTxt(T)}` : ""} on ${mgWageTxt(c.wage)} until ${M.season + c.yrs}. Squad role: ${MG_ROLES[c.role]}.${lines.length ? "\n\n" + lines.join("\n") : ""}${xi ? `\n\nYour assistant has put him straight into the XI at ${xi.pos}${xi.out ? `, in place of ${xi.out}` : ""}.` : "\n\nYour assistant has kept your XI as it is: he starts on the bench."}`);
   mgSave(); return q;
 }
-function mgRenew(p, wage, yrs, role){ p.wage = wage; p.con = M.season + yrs - (M.day>=MGD(M.season + 1, 3, 1) ? 0 : 1); p.role = role; p.mor = clamp(p.mor + 10, 0, 100); p._renew = null; mgMail("contract", `${p.n} signs a new deal`, `${p.n} has signed a new contract until ${p.con + 1} on ${mgWageTxt(wage)}.`); mgSave(); }
-function mgSell(p, to, fee, loan){
+// a player of yours going the other way in a deal
+function mgPartEx(x, to){
+  M.cl[M.club].sq = M.cl[M.club].sq.filter(id=>id!==x.id);
+  M.tac.xi = M.tac.xi.map(id=>id===x.id ? null : id); M.tac.bench = M.tac.bench.filter(id=>id!==x.id); if (M.tac.cap===x.id) M.tac.cap = null;
+  M.train.ind = M.train.ind.filter(y=>y.id!==x.id);
+  if (to && M.cl[to]){ M.cl[to].sq.push(x.id); Object.assign(x, {club:to, tl:0, ll:0, req:0, num:0, joined:M.season, from:M.club, wage:mgWageAt(x, mgTierOf(to) ?? 1), con:M.season + 3, rc:0, bon:0, sellOn:null}); mgNumbers(mgSquad(to)); }
+  else { M.tl.push({n:x.n, from:M.club, to, fee:0, s:seasonLabel(M.season), pe:true}); delete M.P[x.id]; }
+  mgMendXI(true);
+}
+function mgRenew(p, c, yrs, role){
+  if (typeof c==="number") c = {wage:c, yrs, role};
+  p.wage = c.wage; p.con = M.season + c.yrs - (M.day>=MGD(M.season + 1, 3, 1) ? 0 : 1); p.role = c.role; p.mor = clamp(p.mor + 10, 0, 100); p._renew = null;
+  p.rc = c.rc || 0; p.bon = c.app || 0;
+  if (c.sign){ M.fin.tb -= c.sign; mgFinAdd("exp", "fees", c.sign); }
+  mgMail("contract", `${p.n} signs a new deal`, `${p.n} has signed a new contract until ${p.con + 1} on ${mgWageTxt(c.wage)}${c.sign ? `, with a ${mgMoney(c.sign)} signing-on fee` : ""}${c.app ? `, ${mgMoney(c.app)} a game in bonuses` : ""}${c.rc ? `, and a ${mgMoney(c.rc)} release clause` : ""}.`); mgSave(); }
+// selling: t is the deal ({fee, inst, addon, sell, bb}) or just a fee
+function mgSell(p, to, t, why){
+  if (typeof t==="number") t = {fee:t};
+  const fee = t.fee || 0, now = Math.round(fee/((t.inst || 0) + 1)), lines = [];
   M.cl[M.club].sq = M.cl[M.club].sq.filter(id=>id!==p.id);
   M.tac.xi = M.tac.xi.map(id=>id===p.id ? null : id); M.tac.bench = M.tac.bench.filter(id=>id!==p.id);
   if (M.tac.cap===p.id) M.tac.cap = null;
-  M.fin.tb += fee; mgFinAdd("inc", "sales", fee);
-  if (to && M.cl[to]){ M.cl[to].sq.push(p.id); Object.assign(p, {club:to, tl:0, ll:0, req:0, num:0, joined:M.season, from:M.club, fee, wage:mgWageAt(p, mgTierOf(to) ?? 1), con:M.season + 3}); mgNumbers(mgSquad(to)); }
+  M.train.ind = M.train.ind.filter(x=>x.id!==p.id);
+  M.fin.tb += now; mgFinAdd("inc", "sales", now);
+  // what you owe his old club, and what's still to come to you
+  if (p.sellOn && p.sellOn.pct && fee){ const cut = mgRoundFee(fee*p.sellOn.pct/100); M.fin.tb -= cut; mgFinAdd("exp", "fees", cut); lines.push(`${p.sellOn.club} take ${p.sellOn.pct}% (${mgMoney(cut)}) under their sell-on clause.`); }
+  const R = (M.recv ||= []);
+  for (let k = 1; k<=(t.inst || 0); k++) R.push({why:"inst", club:to, n:p.n, amt:now, s:M.season + k});
+  if (t.inst) lines.push(`${mgMoney(now)} now, ${mgMoney(now)} at the start of each of the next ${t.inst===1 ? "season" : "two seasons"}.`);
+  if (t.addon){ R.push({why:"addon", club:to, n:p.n, amt:t.addon, s:M.season, ch:+clamp(.35 + (mgOvr(p) - mgLevel(to))/15, .1, .85).toFixed(2)}); lines.push(`${mgMoney(t.addon)} more in add-ons if he plays regularly for them.`); }
+  if (t.sell){ R.push({why:"sellon", club:to, n:p.n, pct:t.sell, val:mgValue(p), age:p.age, s:M.season, until:M.season + 4}); lines.push(`You get ${t.sell}% of his next fee.`); }
+  if (t.bb){ (M.bb ||= []).push({n:p.n, club:to, fee:t.bb, until:M.season + 2, s:M.season, snap:mgPack({...p, st:mgStat(), lg:mgStat(), tl:0, ll:0, req:0, rc:0, bon:0, sellOn:null, loan:null})}); lines.push(`You can buy him back for ${mgMoney(t.bb)} until the summer of ${M.season + 3}.`); }
+  if (to && M.cl[to]){ M.cl[to].sq.push(p.id); Object.assign(p, {club:to, tl:0, ll:0, req:0, num:0, joined:M.season, from:M.club, fee, wage:mgWageAt(p, mgTierOf(to) ?? 1), con:M.season + 3, rc:0, bon:0, sellOn:null, loan:null}); mgNumbers(mgSquad(to)); }
   else { M.tl.push({n:p.n, from:M.club, to, fee, s:seasonLabel(M.season)}); delete M.P[p.id]; }
   mgMendXI(true);
-  mgMail("transfer", `${p.n} sold to ${to}`, `${p.n} has joined ${to} for ${mgMoney(fee)}. The fee goes into your transfer budget (now ${mgMoney(M.fin.tb)}).`);
+  mgMail("transfer", why==="clause" ? `${to} trigger ${p.n}'s release clause` : `${p.n} sold to ${to}`, `${why==="clause" ? `${to} have paid ${p.n}'s ${mgMoney(fee)} release clause, and he has gone.` : `${p.n} has joined ${to} for ${mgDealTxt(t)}.`} Your transfer budget is now ${mgMoney(M.fin.tb)}.${lines.length ? "\n\n" + lines.join("\n") : ""}`, why==="clause" ? {stop:1} : {});
   mgSave();
+}
+// money due: instalments at the start of a season; add-ons, sell-ons and expiring buy-backs at the end of one
+function mgDues(when){
+  const out = [];
+  M.pay = (M.pay || []).filter(x=>{
+    if (x.s>M.season) return true;
+    if (x.why==="inst" && when==="start"){ M.fin.tb -= x.amt; mgFinAdd("exp", "buys", x.amt); out.push(`You paid ${x.club} ${mgMoney(x.amt)} (an instalment for ${x.n}).`); return false; }
+    if (x.why==="addon" && when==="end"){ const q = M.P[x.pid]; if (q && q.club===M.club && q.lg.ap>=x.need){ M.fin.tb -= x.amt; mgFinAdd("exp", "buys", x.amt); out.push(`${x.n} played ${q.lg.ap} league games: ${x.club} get their ${mgMoney(x.amt)} add-on.`); } else out.push(`${x.n}'s add-on to ${x.club} wasn't triggered.`); return false; }
+    return true; });
+  M.recv = (M.recv || []).filter(x=>{
+    if (x.why==="inst" && when==="start" && x.s<=M.season){ M.fin.tb += x.amt; mgFinAdd("inc", "sales", x.amt); out.push(`${x.club} paid you ${mgMoney(x.amt)} (an instalment for ${x.n}).`); return false; }
+    if (x.why==="addon" && when==="end" && x.s<=M.season){ if (Math.random()<x.ch){ M.fin.tb += x.amt; mgFinAdd("inc", "sales", x.amt); out.push(`${x.n} played enough for ${x.club}: you get a ${mgMoney(x.amt)} add-on.`); } else out.push(`${x.n}'s add-on from ${x.club} wasn't triggered.`); return false; }
+    if (x.why==="sellon" && when==="end" && x.s<M.season){
+      if (M.season>=x.until) return false;
+      const age = x.age + (M.season - x.s);
+      if (Math.random()<(age<=27 ? .22 : .1)){ const nf = mgRoundFee(x.val*(.8 + Math.random()*1.1)*(age<=26 ? 1.2 : .8)), cut = mgRoundFee(nf*x.pct/100); M.fin.tb += cut; mgFinAdd("inc", "sales", cut);
+        out.push(`${x.n} has been sold on by ${x.club} for ${mgMoney(nf)}: your ${x.pct}% sell-on brings in ${mgMoney(cut)}.`); return false; } }
+    return true; });
+  if (when==="end") M.bb = (M.bb || []).filter(x=>{ if (M.season + 1>x.until){ out.push(`Your buy-back clause for ${x.n} has run out.`); return false; } return true; });
+  if (out.length) mgMail("transfer", when==="start" ? "Transfer payments" : "Transfer clauses settled", out.join("\n"));
+}
+// buying back a player you sold with a buy-back clause
+function mgBuyBack(i){
+  const x = (M.bb || [])[i]; if (!x) return "That clause has gone.";
+  if (!mgInWindow()) return "Buy-backs go through when a window's open.";
+  if (M.fin.tb<x.fee) return `You need ${mgMoney(x.fee)} in your transfer budget.`;
+  const q = mgUnpack(x.snap); q.id = "p" + (M.nid++); q.age += M.season - x.s;
+  Object.assign(q, {club:M.club, wage:mgRoundWage(q.wage*1.1), con:M.season + 2, joined:M.season, from:x.club, fee:x.fee, mor:75, num:0, form:[], inj:null, ban:0});
+  M.P[q.id] = q; M.cl[M.club].sq.push(q.id); mgNumbers(mgMine()); M.kn[q.id] = 100;
+  M.fin.tb -= x.fee; mgFinAdd("exp", "buys", x.fee); M.bb.splice(i, 1);
+  M.recv = (M.recv || []).filter(r=>!(r.n===x.n && r.club===x.club));   // anything they still owed you for him is off
+  if (M.tac.bench.length<9) M.tac.bench.push(q.id);
+  const xi = mgAssistIn(q);
+  mgMail("transfer", `${q.n} is back!`, `You've used your buy-back clause: ${q.n} returns from ${x.club} for ${mgMoney(x.fee)}.${xi ? ` Your assistant has put him straight into the XI at ${xi.pos}.` : ""}`);
+  mgSave(); return "";
 }
 function mgRelease(p){
   const left = Math.max(0, p.con - M.season + 1), cost = mgRoundFee(p.wage*52*left*.5);
@@ -1241,19 +1362,28 @@ function mgWindowWeek(){
     const ch = p.tl ? .3 : p.req ? .2 : (o>=lv + 2 ? .02 : .006) + (f>7.3 ? .015 : 0);
     if (Math.random()>ch) continue;
     const club = mgBuyerFor(p); if (!club) continue;
-    const fee = mgRoundFee(mgValue(p)*(p.tl ? .7 + Math.random()*.3 : .9 + Math.random()*.4));
+    const fee = mgRoundFee(mgValue(p)*(p.tl ? .7 + Math.random()*.3 : .9 + Math.random()*.4)), r = Math.random();
+    const t = {fee, inst:r<.6 ? 0 : r<.9 ? 1 : 2, addon:Math.random()<.35 ? mgRoundFee(fee*(.08 + Math.random()*.17)) : 0, sell:0, bb:0};
     const id = (M.ofid = (M.ofid || 0) + 1);
-    M.offers.push({id, pid:p.id, club, fee, exp:M.day + 5, st:"open"});
-    mgMail("transfer", `Offer for ${p.n}: ${mgMoney(fee)}`, `${club} have bid ${mgMoney(fee)} for ${p.n} (value ${mgMoney(mgValue(p))}). The offer stands for 5 days.`, {act:{type:"offer", offer:id}, stop:1});
+    M.offers.push({id, pid:p.id, club, ...t, exp:M.day + 5, st:"open"});
+    mgMail("transfer", `Offer for ${p.n}: ${mgMoney(fee)}`, `${club} have bid ${mgDealTxt(t)} for ${p.n} (value ${mgMoney(mgValue(p))}). The offer stands for 5 days. Accept it, turn it down, or counter: ask for more, payment up front, a sell-on clause or a buy-back clause.`, {act:{type:"offer", offer:id}, stop:1});
     n++;
   }
+  // a release clause someone's willing to pay
+  mine.filter(p=>p.rc && !p.loan && !p.lin).forEach(p=>{
+    const v = mgValue(p), ch = p.rc<=v*1.2 ? .14 : p.rc<=v*1.6 ? .06 : p.rc<=v*2.5 ? .015 : .003;
+    if (Math.random()>=ch) return;
+    const fits = MG_PLAYABLE.flatMap(t=>M.tiers[t]).filter(c=>c!==M.club && mgRep(c)>=mgRep(M.club) && mgLevel(c)>=mgOvr(p) - 3), club = fits.length ? mgPick(Math.random, fits) : null;
+    if (club) mgSell(p, club, {fee:p.rc}, "clause");
+  });
   // loan offers for players you've made available
   mine.filter(p=>p.ll && !p.loan && !M.offers.some(o=>o.pid===p.id && o.st==="open")).forEach(p=>{
     if (Math.random()>.5) return;
     const club = mgLoanClub(p); if (!club) return;
     const id = (M.ofid = (M.ofid || 0) + 1), play = clamp(.5 + (mgOvr(p) - mgLevel(club))/12, .15, .95);
-    M.offers.push({id, pid:p.id, club, fee:0, loan:true, play:+play.toFixed(2), exp:M.day + 5, st:"open"});
-    mgMail("transfer", `Loan offer for ${p.n}`, `${club} want ${p.n} on loan until the end of the season. They expect him to ${play>.7 ? "start most games" : play>.4 ? "play regularly" : "be a squad player"}.`, {act:{type:"offer", offer:id}, stop:1});
+    const pay = mgPick(Math.random, [.5, .75, 1, 1]), opt = Math.random()<.4 ? mgRoundFee(mgValue(p)*(1.1 + Math.random()*.3)) : 0;
+    M.offers.push({id, pid:p.id, club, fee:0, loan:true, play:+play.toFixed(2), pay, opt, exp:M.day + 5, st:"open"});
+    mgMail("transfer", `Loan offer for ${p.n}`, `${club} want ${p.n} on loan until the end of the season. They'd pay ${Math.round(pay*100)}% of his wages and expect him to ${play>.7 ? "start most games" : play>.4 ? "play regularly" : "be a squad player"}.${opt ? ` They want an option to buy him for ${mgMoney(opt)} at the end of the loan.` : ""}`, {act:{type:"offer", offer:id}, stop:1});
   });
   // the rest of your league does its business
   const deals = [];
@@ -1291,20 +1421,28 @@ function mgAiPoach(club){
   C.sq = C.sq.filter(id=>id!==star.id); delete M.P[star.id]; mgAiRebuild(club);
   return `${star.n} leaves ${club} for ${to} in a ${mgMoney(fee)} deal`;
 }
-function mgAnswerOffer(o, how, ask){
+function mgAnswerOffer(o, how, t){
   const p = M.P[o.pid]; if (!p || o.st!=="open") return "That offer has gone.";
   const m = M.inbox.find(x=>x.act && x.act.offer===o.id);
   if (how==="no"){ o.st = "rejected"; if (m) m.act.done = "Rejected"; if (p.req) p.mor = clamp(p.mor - 8, 0, 100); mgSave(); return `You turned down ${o.club}.`; }
   if (how==="yes"){
     o.st = "accepted"; if (m) m.act.done = o.loan ? "Loaned" : "Sold";
-    if (o.loan){ p.loan = {club:o.club, play:o.play}; p.ll = 0; M.tac.xi = M.tac.xi.map(id=>id===p.id ? null : id); M.tac.bench = M.tac.bench.filter(id=>id!==p.id); mgMendXI(true);
-      mgMail("transfer", `${p.n} goes on loan`, `${p.n} joins ${o.club} on loan until the end of the season.`); mgSave(); return `${p.n} is off to ${o.club} on loan.`; }
-    mgSell(p, o.club, o.fee); return `${p.n} sold to ${o.club} for ${mgMoney(o.fee)}.`;
+    if (o.loan){ p.loan = {club:o.club, play:o.play, pay:o.pay ?? 1, opt:o.opt || 0}; p.ll = 0; M.tac.xi = M.tac.xi.map(id=>id===p.id ? null : id); M.tac.bench = M.tac.bench.filter(id=>id!==p.id); mgMendXI(true);
+      mgMail("transfer", `${p.n} goes on loan`, `${p.n} joins ${o.club} on loan until the end of the season. They pay ${Math.round((o.pay ?? 1)*100)}% of his wages.${o.opt ? ` They can buy him for ${mgMoney(o.opt)} at the end of the loan.` : ""}`); mgSave(); return `${p.n} is off to ${o.club} on loan.`; }
+    mgSell(p, o.club, o); return `${p.n} sold to ${o.club} for ${mgDealTxt(o)}.`;
   }
-  // a counter: they'll go a little higher, not much
-  const top = o.fee*(1.1 + Math.random()*.25);
-  if (ask<=top){ o.fee = mgRoundFee(ask); o.st = "accepted"; if (m) m.act.done = "Sold"; mgSell(p, o.club, o.fee); return `${o.club} agree to ${mgMoney(o.fee)}. ${p.n} has gone.`; }
-  o.st = "rejected"; if (m) m.act.done = "They walked away"; mgSave(); return `${o.club} won't pay that and have walked away.`;
+  // a counter: their limit is set once per offer, and they'll meet you if your terms come in under it
+  t = {fee:Math.round(t.fee || o.fee), inst:t.inst || 0, addon:o.addon || 0, sell:t.sell || 0, bb:Math.round(t.bb || 0)};
+  o.max ||= mgDealWorth(p, o)*(1.1 + Math.random()*.25);
+  const cost = mgDealWorth(p, t) + mgBuyBackCost(p, t.bb);
+  if (cost<=o.max){ Object.assign(o, t); o.st = "accepted"; if (m) m.act.done = "Sold"; mgSell(p, o.club, t); return `${o.club} agree: ${mgDealTxt(t)}. ${p.n} has gone.`; }
+  if (cost<=o.max*1.15 && !o.came){
+    const fee = mgRoundFee((o.max - (t.addon*.55 + mgSellOnWorth(p, t.sell) + mgBuyBackCost(p, t.bb)))/(1 - .045*t.inst));
+    Object.assign(o, t, {fee:Math.max(o.fee, Math.min(fee, t.fee)), came:1, exp:Math.max(o.exp, M.day + 2)});
+    if (m) m.b += `\n\nThey've come back with ${mgDealTxt(o)}.`;
+    mgSave(); return `${o.club} won't go that far, but they've come back with ${mgDealTxt(o)}.`;
+  }
+  o.st = "rejected"; if (m) m.act.done = "They walked away"; mgSave(); return `${o.club} won't meet those terms and have walked away.`;
 }
 
 /* ================= THE ACADEMY ================= */
