@@ -1,0 +1,17 @@
+{
+  "name": "English Footballing Pyramid",
+  "short_name": "Pyramid",
+  "description": "Football career game: play your way from the National League to the Champions League as a player, or take charge of a club as its manager.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#05090A",
+  "theme_color": "#070D0C",
+  "categories": ["games", "sports"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
