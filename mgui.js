@@ -7,7 +7,7 @@
    Matches are on the match screen (mgmatch.js). Loaded after mgmatch.js. */
 let MG_TAB = "home", MG_FLASH = "", MG_NEW = null, MG_SEL = null, MG_PRE = null, MG_LAST = null, MG_BUSY = false;
 const MG_SUB = {transfers:"search", comps:"table", club:"overview", squad:"all"};
-let MG_Q = {pos:"any", age:40, ovr:0, max:0, lg:"all", name:""}, MG_RES = null, MG_DLG = null, MG_LGV = null, MG_EUV = null, MG_SORT = "pos";
+let MG_Q = {pos:"any", age:40, ovr:0, max:0, lg:"all", name:"", loan:"any"}, MG_RES = null, MG_DLG = null, MG_LGV = null, MG_EUV = null, MG_SORT = "pos";
 
 /* ---------- small pieces ---------- */
 const mgIc = (d, s = 18) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -32,6 +32,7 @@ function mgTags(p){
   if (p.inj) t.push(`<span class="mg-tag bad">INJ ${mgWeeks(p.inj.d)}</span>`);
   if (p.ban>0) t.push(`<span class="mg-tag bad">BAN ${p.ban}</span>`);
   if (p.loan) t.push(`<span class="mg-tag">LOAN · ${esc(p.loan.club)}</span>`);
+  if (p.lin) t.push(`<span class="mg-tag loan">ON LOAN FROM ${esc(p.lin.from || "").toUpperCase()}</span>`);
   if (p.tl) t.push(`<span class="mg-tag warn">LISTED</span>`);
   if (p.ll) t.push(`<span class="mg-tag warn">LOAN LIST</span>`);
   if (p.req) t.push(`<span class="mg-tag bad">WANTS OUT</span>`);
@@ -401,6 +402,7 @@ function mgTransfersHTML(){
       <div class="field"><label>Max value</label>${opt("max", [[0,"Any"],[25e4,"£250k"],[1e6,"£1m"],[5e6,"£5m"],[15e6,"£15m"],[40e6,"£40m"],[80e6,"£80m"]])}</div>
       <div class="field"><label>League</label>${opt("lg", [["all","All leagues"],["fa","Free agents"],...MG_PLAYABLE.map(t=>[t, TIERS[t].name])])}</div>
       <div class="field"><label>Name</label><input data-mgin="q-name" value="${esc(q.name)}" placeholder="Any" autocomplete="off"></div>
+      <div class="field"><label>Deal</label>${opt("loan", [["any","Transfer or loan"],["loan","Loan available"]])}</div>
       <button type="button" class="btn primary" data-mg="search">Search</button></div>
       ${MG_RES ? (MG_RES.length ? `<p class="hint">${MG_RES.length}${MG_RES.length>=60 ? "+" : ""} players · ranges are your scouts' estimates until a player's been scouted.</p><div class="mg-list">${MG_RES.map(mgMRow).join("")}</div>` : `<p class="hint">Nobody matches. Try widening the search.</p>`) : `<p class="hint">Search every club in the game's leagues, and the free agents. Players at clubs outside your league are known only roughly until you scout them.</p>`}`;
   } else if (sub==="short"){
@@ -413,6 +415,11 @@ function mgTransfersHTML(){
     const inc = (M.offers || []).filter(o=>o.st==="open"), mine = (M.bids || []).filter(b=>b.s===M.season && b.win===mgWindowKey() && ["fee","contract"].includes(b.st));
     body = `<h3>Offers for your players</h3>${inc.length ? `<div class="mg-list">${inc.map(o=>{ const p = M.P[o.pid]; return p ? `<div class="mg-offer">${clubBadge(o.club, 32)}<div style="min-width:0"><b>${esc(o.club)}</b><small>${o.loan ? "Loan" : mgMoney(o.fee)} for ${esc(p.n)} · value ${mgMoney(mgValue(p))} · ${o.exp - M.day} day${o.exp - M.day===1 ? "" : "s"} left</small></div>${mgOfferBtns(o)}</div>` : ""; }).join("")}</div>` : `<p class="hint">No offers on the table.</p>`}
       <h3>Your negotiations</h3>${mine.length ? `<div class="mg-list">${mine.map(b=>`<button type="button" class="mg-row" data-mg="player" data-id="${esc(b.id)}"><b>${esc(b.n)}</b><small>${esc(b.club || "Free agent")}</small><span class="pill ${b.st==="contract" ? "up" : ""}">${b.st==="contract" ? "Fee agreed: talk terms" : `Offer ${b.tries}/3`}</span></button>`).join("")}</div>` : `<p class="hint">You're not in talks with anyone.</p>`}`;
+  } else if (sub==="loans"){
+    const ins = mgLoanees(), outs = mgMine().filter(p=>p.loan);
+    body = `<p class="hint">Borrow up to ${MG_LOAN_MAX} players until the end of the season: search with <b>Deal: Loan available</b>, then ask about a loan from a player's card. His club wants him playing and some of his wages paid.</p>
+      <h3>On loan at ${esc(M.club)} (${ins.length}/${MG_LOAN_MAX})</h3>${ins.length ? `<div class="mg-list">${ins.map(p=>`<button type="button" class="mg-row" data-mg="player" data-id="${esc(p.id)}">${mgPosC(p.pos)}<b>${esc(p.n)}</b><small>from ${esc(p.lin.from)} · you pay ${Math.round(p.lin.pay*100)}% (${mgWageTxt(p.wage*p.lin.pay)})${p.lin.opt ? ` · option ${mgMoney(p.lin.opt)}` : ""}</small>${mgOvrB(mgOvr(p), "sm")}</button>`).join("")}</div>` : `<p class="hint">Nobody yet.</p>`}
+      <h3>Your players out on loan</h3>${outs.length ? `<div class="mg-list">${outs.map(p=>`<button type="button" class="mg-row" data-mg="player" data-id="${esc(p.id)}">${mgPosC(p.pos)}<b>${esc(p.n)}</b><small>at ${esc(p.loan.club)} · ${p.loan.play>.7 ? "a regular" : p.loan.play>.4 ? "plays often" : "a squad player"}</small>${mgOvrB(mgOvr(p), "sm")}</button>`).join("")}</div>` : `<p class="hint">Nobody. Loan-list a player from his card and offers will come in while a window is open.</p>`}`;
   } else if (sub==="list"){
     const L = mgMine().filter(p=>p.tl || p.ll);
     body = `<p class="hint">Players you've made available. Listed players attract offers each week while a window is open; loan-listed players get loan offers.</p>${L.length ? `<div class="mg-list">${L.map(mgPRow).join("")}</div>` : `<p class="hint">Nobody's on your list. Use a player's card to list him.</p>`}`;
@@ -421,12 +428,12 @@ function mgTransfersHTML(){
     body = `<h3>Signed</h3>${ins.length ? `<div class="mg-list">${ins.map(p=>`<button type="button" class="mg-row" data-mg="player" data-id="${esc(p.id)}">${mgPosC(p.pos)}<b>${esc(p.n)}</b><small>from ${esc(p.from)} · ${seasonLabel(p.joined)}</small><span class="mg-val">${p.fee ? mgMoney(p.fee) : "Free"}</span></button>`).join("")}</div>` : `<p class="hint">No signings yet.</p>`}
       <h3>Sold</h3>${M.tl.length ? `<div class="mg-list">${M.tl.slice().reverse().map(d=>`<div class="mg-row"><b>${esc(d.n)}</b><small>to ${esc(d.to)} · ${esc(d.s)}</small><span class="mg-val">${mgMoney(d.fee)}</span></div>`).join("")}</div>` : `<p class="hint">Nobody sold yet.</p>`}`;
   }
-  return `<section class="panel"><h2>Transfers</h2>${head}${mgSubTabs("transfers", [["search","Search"],["short",`Shortlist${M.short.length ? ` (${M.short.length})` : ""}`],["scout","Scouting"],["offers",`Offers${open ? ` (${open})` : ""}`],["list","Your list"],["done","Deals"]])}<div class="subview">${body}</div></section>`;
+  return `<section class="panel"><h2>Transfers</h2>${head}${mgSubTabs("transfers", [["search","Search"],["short",`Shortlist${M.short.length ? ` (${M.short.length})` : ""}`],["scout","Scouting"],["offers",`Offers${open ? ` (${open})` : ""}`],["loans",`Loans${mgLoanees().length ? ` (${mgLoanees().length})` : ""}`],["list","Your list"],["done","Deals"]])}<div class="subview">${body}</div></section>`;
 }
 function mgMRow(p){
   const sh = M.short.includes(p.id);
   return `<div class="mg-mrow"><button type="button" class="mg-mrow-m" data-mg="player" data-id="${esc(p.id)}">${mgEstB(p)}${mgPosC(p.pos)}
-    <span class="mg-pn"><b>${esc(p.n)}</b><small>${p.pos} · ${mgNat3(p.nat)} · ${p.age} yrs · POT ${mgPotTxt(p)}${p.club ? ` · ${esc(p.club)}` : ""}</small></span>
+    <span class="mg-pn"><b>${esc(p.n)}${mgLoanable(p) ? ` <span class="mg-tag loan">LOAN</span>` : ""}</b><small>${p.pos} · ${mgNat3(p.nat)} · ${p.age} yrs · POT ${mgPotTxt(p)}${p.club ? ` · ${esc(p.club)}` : ""}</small></span>
     <span class="mg-mclub">${p.club ? `${clubBadge(p.club, 18)}<span>${esc(p.club)}</span>` : `<span class="mg-tag">FREE AGENT</span>`}</span><span class="mg-val">${mgMoney(mgValue(p))}</span></button>
     <div class="mg-mrow-a"><button type="button" class="mg-ib ${sh ? "on" : ""}" data-mg="short" data-id="${esc(p.id)}" aria-pressed="${sh}" aria-label="${sh ? "Remove from shortlist" : "Add to shortlist"}">★</button>
       ${mgKnow(p)<100 ? `<button type="button" class="mg-ib" data-mg="scout" data-id="${esc(p.id)}" aria-label="Scout ${esc(p.n)}">🔍</button>` : ""}</div></div>`;
@@ -559,6 +566,7 @@ function mgMsgAct(m){
   if (a.type==="req") return `<div class="row">${mgBtn("req", "Transfer list him", "small", `data-id="${esc(a.id)}" data-v="list" data-m="${m.id}"`)}${mgBtn("req", "Persuade him to stay", "small", `data-id="${esc(a.id)}" data-v="stay" data-m="${m.id}"`)}</div>`;
   if (a.type==="event"){ return M.ev && M.ev.id===a.ev ? `<div class="row">${a.ch.map(([l, k])=>mgBtn("ev", esc(l), "small", `data-v="${k}"`)).join("")}</div>` : ""; }
   if (a.type==="job") return M.phase==="sacked" || M.phase==="summer" || M.phase==="season" || M.phase==="pre" ? `<div class="row">${mgBtn("jobyes", `Take the ${esc(a.club)} job`, "small primary", `data-c="${esc(a.club)}" data-m="${m.id}"`)}${mgBtn("jobno", "Decline", "small", `data-m="${m.id}"`)}</div>` : "";
+  if (a.type==="loanopt"){ const p = M.P[a.id]; return p && p.lin ? `<div class="row">${mgBtn("loanbuy", `Sign him · ${mgMoney(p.lin.opt)}`, "small primary", `data-id="${esc(p.id)}"`)}${mgBtn("loanlet", "Let him go back", "small", `data-id="${esc(p.id)}" data-m="${m.id}"`)}</div>` : ""; }
   if (a.type==="player") return `<div class="row">${mgBtn("player", "View player", "small", `data-id="${esc(a.id)}"`)}</div>`;
   if (a.type==="prospects"){ const fee = mgRoundFee(Math.max(1e4, (MG_TB[mgLeagueOf()] || 1e5)*.0015));
     return `<div class="mg-list">${a.ids.map(id=>{ const p = M.P[id]; if (!p) return ""; const got = M.yth.includes(id);
@@ -592,8 +600,22 @@ function mgDlgPaint(first){
         <div class="field"><label for="mgYrs">Years</label><select id="mgYrs">${[1,2,3,4,5].map(y=>`<option ${(D.yrs ?? 3)===y ? "selected" : ""}>${y}</option>`).join("")}</select></div>
         <div class="field"><label for="mgRole">Squad role</label><select id="mgRole">${MG_ROLES.map((r, i)=>`<option value="${i}" ${role===i ? "selected" : ""}>${r}</option>`).join("")}</select></div></div>
       <div class="row">${mgBtn("doterms", renew ? "Offer the contract" : "Offer terms", "primary")}${mgBtn("dmode", "Back", "", 'data-v="info"')}</div></div>`;
+  } else if (D.mode==="loanin"){
+    const role = D.role ?? mgRoleGuessFor(p), pay = D.pay ?? .5, val = mgValue(p);
+    act = `<div class="mg-neg"><h3>Ask ${esc(p.club)} about a loan</h3><p class="hint">Until the end of the season. His wage: ${mgWageTxt(p.wage)} · your wage room: ${mgWageTxt(M.fin.wb - mgBill())}.</p>
+      <div class="label">Share of his wages you pay</div>${mgSeg("payset", "pay", [[0,"0%"],[.25,"25%"],[.5,"50%"],[.75,"75%"],[1,"100%"]], pay)}
+      <div class="grid-form"><div class="field"><label for="mgRole">Squad role</label><select id="mgRole">${MG_ROLES.map((r, i)=>`<option value="${i}" ${role===i ? "selected" : ""}>${r}</option>`).join("")}</select></div>
+        <div class="field"><label for="mgOpt">Option to buy (£, 0 for none)</label><input id="mgOpt" type="number" min="0" step="100000" value="${D.opt ?? 0}" inputmode="numeric"></div></div>
+      <div class="row"><button type="button" class="chip" data-mg="optset" data-v="${mgRoundFee(val*1.2)}">Add an option · ${mgMoney(mgRoundFee(val*1.2))}</button><button type="button" class="chip" data-mg="optset" data-v="0">No option</button></div>
+      <div class="row">${mgBtn("doloan", "Make the loan offer", "primary")}${mgBtn("dmode", "Back", "", 'data-v="info"')}</div></div>`;
   } else if (D.mode==="train"){
     act = `<div class="mg-neg"><h3>Individual training</h3><div class="chips">${att.map((a, i)=>`<button type="button" class="chip" data-mg="indset" data-v="${i}">${MG_ATT_LONG[a]}</button>`).join("")}</div><div class="row">${mgBtn("dmode", "Back", "", 'data-v="info"')}</div></div>`;
+  } else if (mine && p.lin){
+    const ind = M.train.ind.find(x=>x.id===p.id);
+    act = `<p class="mg-int ok">On loan from ${esc(p.lin.from)} until the summer · you pay ${Math.round(p.lin.pay*100)}% of his wages</p><div class="mg-acts">
+      ${p.lin.opt ? mgBtn("loanbuy", `Make it permanent · ${mgMoney(p.lin.opt)}`, "small primary", `data-id="${esc(p.id)}"`) : ""}
+      ${mgBtn("capt", M.tac.cap===p.id ? "Captain ✓" : "Make captain", "small")}${ind ? mgBtn("indx", "Stop individual training", "small", `data-id="${esc(p.id)}"`) : mgBtn("dmode", "Individual training", "small", 'data-v="train"')}
+      ${mgBtn("loanback", D.sure ? "Tap again to send him back" : "Send him back early", "small danger")}</div>`;
   } else if (mine){
     const ind = M.train.ind.find(x=>x.id===p.id);
     act = `<div class="mg-acts">${mgBtn("dmode", "New contract", "small", 'data-v="renew"')}${mgBtn("tl", p.tl ? "Take off transfer list" : "Transfer list", "small")}${mgBtn("ll", p.ll ? "Take off loan list" : "Loan list", "small")}
@@ -605,7 +627,9 @@ function mgDlgPaint(first){
     const I = mgInterest(p), sh = M.short.includes(p.id), B = mgBidOf(p.id), free = !p.club;
     act = `<p class="mg-int ${I.ok ? "ok" : "bad"}">${esc(I.txt)}</p><div class="mg-acts">${mgBtn("short", sh ? "★ Shortlisted" : "☆ Shortlist", "small", `data-id="${esc(p.id)}"`)}${k<100 ? mgBtn("scout", "Scout him", "small", `data-id="${esc(p.id)}"`) : ""}
       ${free ? mgBtn("dmode", "Offer a contract", "small primary", `data-v="contract" ${I.ok ? "" : "disabled"}`) : B && B.st==="contract" ? mgBtn("dmode", "Agree personal terms", "small primary", 'data-v="contract"')
-        : mgBtn("dmode", mgInWindow() ? "Make an offer" : "Window closed", "small primary", `data-v="bid" ${I.ok && mgInWindow() && (!B || B.st!=="off") ? "" : "disabled"}`)}</div>`;
+        : mgBtn("dmode", mgInWindow() ? "Make an offer" : "Window closed", "small primary", `data-v="bid" ${I.ok && mgInWindow() && (!B || B.st!=="off") ? "" : "disabled"}`)}
+      ${!free && mgLoanable(p) ? mgBtn("dmode", "Ask about a loan", "small", `data-v="loanin" ${mgInWindow() && mgLoanInterest(p).ok ? "" : "disabled"}`) : ""}</div>
+      ${!free ? `<p class="hint" style="margin-top:6px">${mgLoanable(p) ? `${esc(p.club)} would consider loaning him out. ${esc(mgLoanInterest(p).txt)}.` : `${esc(p.club)} won't loan him out.`}</p>` : ""}`;
   }
   d.innerHTML = `<div class="dlg-in mg-pdlg"><div class="dlg-head"><div style="min-width:0"><h2 id="mgDlgT">${esc(p.n)}</h2><p class="hint">${esc(p.club || (yth ? "Academy" : "Free agent"))} · ${esc(MG_ATT_LONG[p.pos] || POS[p.pos]?.label || p.pos)}</p></div><button type="button" class="dlg-x" data-mg="dclose" aria-label="Close">×</button></div>
     <div class="mg-pgrid">
@@ -617,7 +641,7 @@ function mgDlgPaint(first){
       </div>
       <div class="mg-pinfo">
         <dl class="mg-dl"><dt>Age</dt><dd>${p.age}</dd><dt>Potential</dt><dd>${esc(mgPotTxt(p))}</dd><dt>Foot</dt><dd>${p.ft==="L" ? "Left" : "Right"}</dd><dt>Positions</dt><dd>${[p.pos, ...(p.alt || [])].join(", ")}</dd>
-          <dt>Value</dt><dd>${mgMoney(mgValue(p))}</dd><dt>Wage</dt><dd>${p.wage ? mgWageTxt(p.wage) : "–"}</dd><dt>Contract</dt><dd>${p.club ? `to ${p.con + 1}` : "–"}</dd>${mine ? `<dt>Role</dt><dd>${MG_ROLES[p.role ?? 2]}</dd>` : ""}
+          <dt>Value</dt><dd>${mgMoney(mgValue(p))}</dd><dt>Wage</dt><dd>${p.wage ? mgWageTxt(p.wage) : "–"}</dd><dt>Contract</dt><dd>${p.lin ? `on loan from ${esc(p.lin.from)}` : p.club ? `to ${p.con + 1}` : "–"}</dd>${mine ? `<dt>Role</dt><dd>${MG_ROLES[p.role ?? 2]}</dd>` : ""}
           <dt>Morale</dt><dd>${mgMorIc(p.mor)} ${mgMorLabel(p.mor)}</dd><dt>Fitness</dt><dd>${p.fit}%${p.inj ? ` · <span class="down-t">${esc(p.inj.n)} (${mgWeeks(p.inj.d)})</span>` : ""}</dd>
           <dt>Form</dt><dd>${p.form && p.form.length ? p.form.map(r=>`<b class="mg-rt ${mmRtCls(r)}">${r.toFixed(1)}</b>`).join(" ") : "–"}</dd></dl>
         <div class="mg-pst"><div><b>${p.st.ap}</b><span>Apps</span></div><div><b>${p.st.g}</b><span>Goals</span></div><div><b>${p.st.a}</b><span>Assists</span></div><div><b>${avg}</b><span>Avg</span></div>${p.pos==="GK" ? `<div><b>${p.st.cs}</b><span>Clean sh.</span></div>` : ""}</div>
@@ -681,6 +705,8 @@ document.addEventListener("click", e=>{
     else { const ok = Math.random()<.5; p.req = ok ? 0 : 1; p.mor = clamp(p.mor + (ok ? 15 : -8), 0, 100); if (m) m.act.done = ok ? "He's agreed to stay and fight for his place" : "He isn't convinced and still wants out"; }
     mgSave(); re(); return; }
   if (a==="ev"){ mgFlash(mgEventAnswer(b.dataset.v)); re(); return; }
+  if (a==="loanbuy"){ const p = M.P[id]; if (!p) return; const n = p.n, err = mgLoanBuy(p); mgFlash(err || `✍ ${n} is yours for good.`); if (MG_DLG) mgDlgClose(); re(); return; }
+  if (a==="loanlet"){ const m = M.inbox.find(x=>x.id===+b.dataset.m); if (m) m.act.done = "He'll go back in the summer"; mgSave(); re(); return; }
   if (a==="prosp"){ const p = M.P[id], fee = +b.dataset.fee; if (!p || M.yth.includes(id)) return; if (M.fin.tb<fee){ mgFlash("You can't afford him."); re(); return; } M.fin.tb -= fee; mgFinAdd("exp", "buys", fee); M.yth.push(id); mgSave(); mgFlash(`${p.n} joins your academy.`); re(); return; }
   // the club
   if (a==="budget"){ const step = mgBudgetStep(), cost = step*mgWeeksLeft(); if (b.dataset.v==="+big"){ if (M.fin.tb<cost){ mgFlash("Not enough transfer budget to move."); re(); return; } M.fin.tb -= cost; M.fin.wb += step; } else { if (M.fin.wb - step<mgBill()){ mgFlash("You can't cut the wage budget below your wage bill."); re(); return; } M.fin.wb -= step; M.fin.tb += cost; } mgSave(); re(); return; }
@@ -697,6 +723,14 @@ document.addEventListener("click", e=>{
   const D = MG_DLG, p = mgFind(D.id);
   if (a==="dmode"){ D.mode = b.dataset.v; D.msg = ""; D.hint = ""; dlg(); return; }
   if (a==="feeset"){ D.fee = +b.dataset.v; dlg(); return; }
+  if (a==="payset"){ D.pay = +b.dataset.v; D.role = +document.getElementById("mgRole").value; D.opt = +document.getElementById("mgOpt").value || 0; dlg(); return; }
+  if (a==="optset"){ D.opt = +b.dataset.v; D.role = +document.getElementById("mgRole").value; dlg(); return; }
+  if (a==="doloan"){
+    const pay = D.pay ?? .5, role = +document.getElementById("mgRole").value, opt = Math.round(+document.getElementById("mgOpt").value || 0); D.role = role; D.opt = opt;
+    const r = mgLoanAsk(p, pay, role, opt);
+    if (r.ok){ const q = mgLoanIn(p, pay, role, opt); mgDlgClose(); mgFlash(`✍ ${q.n} joins on loan from ${q.lin.from}!`); MG_RES = MG_RES ? MG_RES.filter(x=>x.id!==p.id) : null; re(); return; }
+    D.msg = r.txt; D.ok = false; if (r.counter!=null) D.pay = r.counter; if (r.opt) D.opt = r.opt; dlg(); return; }
+  if (a==="loanback"){ if (!D.sure){ D.sure = true; dlg(); setTimeout(()=>{ if (MG_DLG===D){ D.sure = false; dlg(); } }, 3500); return; } const n = p.n, from = p.lin.from; mgLoanBack(p); mgDlgClose(); mgFlash(`${n} has gone back to ${from}.`); re(); return; }
   if (a==="dobid"){ const fee = Math.round(+document.getElementById("mgFee").value || 0); D.fee = fee; const r = mgBid(p, fee); D.msg = r.txt; D.ok = !!r.ok;
     if (r.counter) D.fee = r.counter; if (r.ok){ D.mode = "contract"; D.role = mgRoleGuessFor(p); } mgSave(); dlg(); return; }
   if (a==="doterms"){

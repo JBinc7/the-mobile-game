@@ -95,6 +95,10 @@ function mmMinute(G){
   const p0 = logistic((G.S[0].R.mid - G.S[1].R.mid)/8 + (G.S[0].tac.pass===0 ? .18 : G.S[0].tac.pass===2 ? -.12 : 0) - (G.S[1].tac.pass===0 ? .18 : G.S[1].tac.pass===2 ? -.12 : 0) + (G.neutral ? 0 : .08));
   G.poss[0] += p0; G.poss[1] += 1 - p0; G.side = Math.random()<p0 ? 0 : 1;
   for (const s of [0, 1]) if (Math.random()<mmLam(G, s)/90/.14) live.push(mmShot(G, s));
+  // corners won in open play, and offsides
+  for (const s of [0, 1]){ const share = mmLam(G, s)/(mmLam(G, 0) + mmLam(G, 1));
+    if (Math.random()<.055*share) mmCorner(G, s, null);
+    if (Math.random()<.042*share*(G.S[1 - s].tac.line===2 ? 1.5 : G.S[1 - s].tac.line===0 ? .6 : 1)){ const f = mmPick(mmOn(G.S[s]), o=>({ST:5, LW:3, RW:3, CAM:1.5, LM:1, RM:1, CM:.4})[o.pos] || 0); if (f){ G.S[s].st.off++; mmSay(G, s, "off", `${mgShort(f.p.n)} is flagged offside.`, {p:f.p.id, n:f.p.n}); } } }
   if (Math.random()<.24) mmFoul(G, Math.random()<.5 + (G.S[0].tac.press - G.S[1].tac.press)*.06 ? 0 : 1);
   for (const s of [0, 1]) if (Math.random()<.0017*(1 + mmOn(G.S[s]).filter(o=>o.cond<55).length*.3)) mmInjure(G, s);
   for (const s of [0, 1]) if (G.user!==s || G.auto) mmAiCoach(G, s);
@@ -127,7 +131,7 @@ function mmShot(G, s){
   const pg = clamp(xg*fin, .01, .9);
   A.st.sh++; A.st.xg += xg; sh.sh++;
   const x = Math.random(), names = {p:mgShort(sh.p.n), gk:gk ? mgShort(gk.p.n) : "the keeper"};
-  let out;
+  let out, cor = false;
   if (x<pg){
     G.score[s]++; A.st.ont++; sh.ont++; sh.g++; sh.rt += 1.05;
     let as = null;
@@ -145,8 +149,8 @@ function mmShot(G, s){
     let k;
     if (kind==="pen") k = y<onT ? "save" : "miss";
     else k = y<onT ? "save" : y<onT + .04 ? "post" : y<onT + .24 ? "block" : "miss";
-    if (k==="save"){ A.st.ont++; sh.ont++; B.st.sav++; if (gk){ gk.sv++; gk.rt += kind==="big" || kind==="pen" ? .45 : .22; } sh.rt += .05; if (Math.random()<.4) A.st.cor++; }
-    else if (k==="block"){ const bl = them.filter(o=>MG_GROUP(o.pos)==="DEF"); if (bl.length){ const b = mgPick(Math.random, bl); b.tk++; b.rt += .12; } if (Math.random()<.35) A.st.cor++; }
+    if (k==="save"){ A.st.ont++; sh.ont++; B.st.sav++; if (gk){ gk.sv++; gk.rt += kind==="big" || kind==="pen" ? .45 : .22; } sh.rt += .05; if (kind!=="pen" && Math.random()<.4) cor = true; }
+    else if (k==="block"){ const bl = them.filter(o=>MG_GROUP(o.pos)==="DEF"); if (bl.length){ const b = mgPick(Math.random, bl); b.tk++; b.rt += .12; } if (Math.random()<.35) cor = true; }
     else sh.rt -= .03;
     if (kind==="big" || kind==="pen") sh.rt -= .2;
     G.mom = clamp(G.mom + (s ? -.2 : .2), -1, 1);
@@ -154,8 +158,11 @@ function mmShot(G, s){
     out = mmSay(G, s, k, (kind==="pen" ? "PENALTY! " : "") + txt, {p:sh.p.id, n:sh.p.n, kind, xg, head});
   }
   out.pos = sh.pos;
+  if (cor) mmCorner(G, s, out);
   return out;
 }
+const MM_CORNER = ["Corner to {t}.", "{t} win a corner.", "It's turned behind: corner to {t}."];
+function mmCorner(G, s, after){ G.S[s].st.cor++; mmSay(G, s, "corner", mgPick(Math.random, MM_CORNER).replace("{t}", G.S[s].club)); }
 function mmFoul(G, s){
   const S = G.S[s], on = mmOn(S); if (!on.length) return;
   const o = mmPick(on, x=>MG_FW[x.pos]*(1 + (S.tac.press===2 ? .2 : 0)));
@@ -166,6 +173,7 @@ function mmFoul(G, s){
     if (o.yc){ o.yc = 2; o.rc = 1; o.off = true; S.st.yc++; S.st.rc++; o.rt -= 1.2; mmSay(G, s, "red", `Second yellow! ${mgShort(o.p.n)} is off and his side are down to ${mmOn(S).length}.`, {p:o.p.id, n:o.p.n}); mmRate(S); }
     else { o.yc = 1; S.st.yc++; o.rt -= .2; mmSay(G, s, "yellow", `Yellow card for ${mgShort(o.p.n)}.`, {p:o.p.id, n:o.p.n}); }
   }
+  else mmSay(G, s, "foul", mgPick(Math.random, ["Foul by {p}.", "{p} brings his man down. Free kick.", "{p} is penalised for a late challenge.", "Free kick: {p} catches his man."]).replace("{p}", mgShort(o.p.n)), {p:o.p.id, n:o.p.n});
 }
 function mmInjure(G, s){
   const S = G.S[s], on = mmOn(S).filter(o=>!o.inj); if (!on.length) return;
@@ -183,7 +191,7 @@ function mmSub(G, s, off, onP){
   const m = mmMan(onP, off.pos, off.x, off.y, false); m.in = G.min;
   off.off = true; off.subbed = G.min;
   S.on.push(m); S.out.push(off);
-  mmSay(G, s, "sub", `Substitution: ${mgShort(onP.n)} replaces ${mgShort(off.p.n)}.`, {p:onP.id, n:onP.n, o:off.p.n});
+  mmSay(G, s, "sub", `Substitution: ${mgShort(onP.n)} replaces ${mgShort(off.p.n)}.`, {p:onP.id, n:onP.n, o:off.p.n, off:off.p.id});
   mmRate(S); return true;
 }
 function mmSubFor(G, s, off){
@@ -275,20 +283,22 @@ let LV = null;
 const MG_SPEEDS = [1, 2, 4, 8];
 function mgLive(f, onDone){
   const us = f.h===M.club ? 0 : 1, G = mmNew(f, us);
-  let speed = 2; try{ speed = +localStorage.getItem("efp-mg-speed") || 2; }catch(e){}
-  LV = {G, f, us, onDone, speed, paused:false, tab:"feed", feed:[], anim:null, acc:0, last:0, shown:[0, 0], modal:null, dots:{}, ball:{x:.5, y:.5, z:0, fx:.5, fy:.5, tx:.5, ty:.5, t:1, d:.3, own:null}, passT:0, trail:[], flash:null, shoutAt:-99, hl:"key", raf:0, talkDone:false};
+  let speed = 2, hl = "ext"; try{ speed = +localStorage.getItem("efp-mg-speed") || 2; hl = localStorage.getItem("efp-mg-hl") || "ext"; }catch(e){}
+  if (!MD_SHOW[hl]) hl = "ext";
+  LV = {G, f, us, onDone, speed, paused:false, tab:"feed", feed:[], acc:0, last:0, shown:[0, 0], modal:null, shoutAt:-99, hl, raf:0, talkDone:false, big:false};
   const el = document.createElement("div"); el.id = "mgLive"; el.className = "mg-live"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Match");
   document.body.appendChild(el); document.documentElement.classList.add("mg-live-on");
-  const H = meta(f.h), A = meta(f.a);
+  const [hk, ak] = mgKits(f.h, f.a);
   el.innerHTML = `<div class="mm-wrap">
     <div class="mm-top"><span class="mm-comp">${esc(mgCompName(f))}</span><button type="button" class="mm-x" data-mm="menu" aria-label="Match menu">⋯</button></div>
-    <div class="mm-board" style="--c1:${H.c1};--c2:${A.c1}">
+    <div class="mm-board" style="--c1:${hk[0]};--c2:${ak[0]}">
       <div class="mm-team h">${clubBadge(f.h, 30)}<b>${esc(crCode(f.h))}</b></div>
       <div class="mm-score"><span id="mmSc">0–0</span><span class="mm-clock" id="mmClock">0'</span></div>
       <div class="mm-team a"><b>${esc(crCode(f.a))}</b>${clubBadge(f.a, 30)}</div>
     </div>
     <div class="mm-scorers" id="mmScorers"></div>
     <div class="mm-pitchbox"><canvas id="mmCv" class="mm-cv"></canvas><div class="mm-flash" id="mmFlash" hidden></div></div>
+    <div class="mm-tick" id="mmTick" aria-live="polite"></div>
     <div class="mm-mom" aria-hidden="true"><span id="mmMom"></span></div>
     <div class="mm-ctrl">
       <button type="button" class="mm-b" data-mm="pause" id="mmPause" aria-label="Pause">❚❚</button>
@@ -296,6 +306,7 @@ function mgLive(f, onDone){
       <button type="button" class="mm-b" data-mm="tactics">Tactics</button>
       <button type="button" class="mm-b" data-mm="subs">Subs <span id="mmSubsN">0/5</span></button>
       <button type="button" class="mm-b" data-mm="shout">Shout</button>
+      <button type="button" class="mm-b" data-mm="big" id="mmBig" aria-pressed="false">Pitch ⤢</button>
       <button type="button" class="mm-b sim" data-mm="sim">Sim to end ⏭</button>
     </div>
     <div class="mm-tabs" role="tablist">${[["feed","Commentary"],["stats","Stats"],["rat","Ratings"]].map(([k, l])=>`<button type="button" role="tab" data-mm="tab" data-k="${k}" aria-selected="${k==="feed"}">${l}</button>`).join("")}</div>
@@ -305,6 +316,7 @@ function mgLive(f, onDone){
   el.addEventListener("click", mmClick);
   if (typeof SND!=="undefined"){ SND.ambient(true); SND.whistle(.5, 1); }
   mmFeed({m:0, s:-1, k:"ko", txt:`${f.h} v ${f.a} · ${mgVenue(f)}`});
+  mdInit(G, us);
   mmPaintBody(); mmBoard();
   LV.last = performance.now();
   LV.raf = requestAnimationFrame(mmFrame);
@@ -313,35 +325,32 @@ function mmClose(){
   if (!LV) return; cancelAnimationFrame(LV.raf);
   if (typeof SND!=="undefined") SND.ambient(false);
   document.getElementById("mgLive")?.remove(); document.documentElement.classList.remove("mg-live-on");
-  LV = null;
+  LV = null; MD = null;
 }
 function mmFrame(now){
   if (!LV) return;
   const dt = Math.min(.06, (now - LV.last)/1000); LV.last = now;
   const G = LV.G;
   if (!LV.paused && !LV.modal){
-    if (LV.anim) mmAnimStep(dt*LV.speed);
-    else if (!G.done){
-      LV.acc += dt*LV.speed;
-      if (LV.acc>=.6){ LV.acc = 0; mmAdvance(); }
+    const step = dt*LV.speed;
+    mdUpdate(step);
+    // the clock only runs while nothing's being acted out
+    if (!G.done && !mdBusy()){ LV.acc += step; if (LV.acc>=(MD_SHOW[LV.hl] || MD_SHOW.ext).min){ LV.acc = 0; mmAdvance(); } }
+    if (!mdBusy()){
+      if (LV.wantSub){ const o = LV.wantSub; LV.wantSub = null; LV.forced = o; mmOpen("subs"); }
+      else if (LV.wantTalk){ LV.wantTalk = false; mmOpen("talk"); }
+      else if (G.done && !LV.ended) mmOpen("ft");
     }
   }
-  mmAmbient(dt*(LV.paused || LV.modal ? 0 : LV.speed));
-  mmDraw(dt);
+  mdDraw();
   LV.raf = requestAnimationFrame(mmFrame);
 }
 function mmAdvance(){
   const G = LV.G, evs = mmStep(G);
-  let shot = null;
-  for (const e of evs){
-    if (["goal","save","post","miss","block"].includes(e.k) && !shot && (e.k==="goal" || e.xg>=.07 || LV.hl==="all")) { shot = e; continue; }
-    mmShow(e);
-  }
-  if (shot) mmHighlight(shot);
-  if (G.needSub && G.user===LV.us){ const o = G.needSub; G.needSub = null; LV.forced = o; mmOpen("subs"); }
-  const last = evs[evs.length - 1];
-  if (last && last.k==="ht" && !LV.talkDone){ mmOpen("talk"); }
-  if (G.done && !LV.anim) mmOpen("ft");
+  // each event is acted out on the pitch (and reaches the commentary when it happens there), or shown now
+  for (const e of evs) if (!mdEvent(e)) mmShow(e);
+  if (G.needSub && G.user===LV.us){ LV.wantSub = G.needSub; G.needSub = null; }
+  if (evs.some(e=>e.k==="ht") && !LV.talkDone) LV.wantTalk = true;
   mmBoard();
 }
 // an event reaches the screen: the commentary, the score, a sound
@@ -351,18 +360,19 @@ function mmShow(e){
   else if (["save","post"].includes(e.k)){ if (typeof SND!=="undefined") SND.ooh(); }
   else if (e.k==="miss" && typeof SND!=="undefined") SND.groan();
   else if (["ht","ft"].includes(e.k) && typeof SND!=="undefined") SND.whistle(.5, e.k==="ft" ? 3 : 2);
-  else if (["yellow","red"].includes(e.k) && typeof SND!=="undefined") SND.whistle(.4, 1);
+  else if (["yellow","red"].includes(e.k) && typeof SND!=="undefined" && LV.speed>4) SND.whistle(.4, 1);
   mmFeed(e);
   mmBoard();
 }
 function mmFeed(e){
   LV.feed.unshift(e);
+  const t = document.getElementById("mmTick"); if (t && e.txt){ t.innerHTML = `<b>${e.k==="ko" && !e.m ? "" : e.m + "'"}</b> ${esc(e.txt)}`; t.className = `mm-tick k-${e.k} ${e.s===LV.us ? "us" : e.s>=0 ? "them" : ""}`; }
   if (LV.tab==="feed") mmPaintBody();
 }
-const MM_IC = {goal:"⚽", save:"🧤", post:"▮", miss:"✕", block:"⛉", yellow:"<i class='mm-card y'></i>", red:"<i class='mm-card r'></i>", inj:"✚", sub:"⇄", ht:"⏸", ft:"⏹", et:"⏱", pens:"◎", ko:"▶", info:"·", shout:"📣", talk:"🗣"};
+const MM_IC = {goal:"⚽", save:"🧤", post:"▮", miss:"✕", block:"⛉", yellow:"<i class='mm-card y'></i>", red:"<i class='mm-card r'></i>", inj:"✚", sub:"⇄", ht:"⏸", ft:"⏹", et:"⏱", pens:"◎", ko:"▶", info:"·", shout:"📣", talk:"🗣", corner:"◣", foul:"!", off:"⚑", play:"›"};
 function mmBoard(){
   const G = LV.G, sc = document.getElementById("mmSc"), ck = document.getElementById("mmClock");
-  if (sc) sc.textContent = `${LV.shown[0]}–${LV.shown[1]}${G.pens && G.done && !LV.anim ? ` (${G.pens[0]}–${G.pens[1]}p)` : ""}`;
+  if (sc) sc.textContent = `${LV.shown[0]}–${LV.shown[1]}${G.pens && G.done && !mdBusy() ? ` (${G.pens[0]}–${G.pens[1]}p)` : ""}`;
   if (ck) ck.textContent = G.phase==="ht" ? "HT" : G.done ? "FT" : G.phase==="et0" ? "ET" : `${mmMinTxt(G)}'`;
   const mom = document.getElementById("mmMom"); if (mom){ const v = G.mom; mom.style.setProperty("--m", ((v + 1)/2*100).toFixed(1) + "%"); }
   const n = document.getElementById("mmSubsN"); if (n) n.textContent = `${G.S[LV.us].subs}/5`;
@@ -375,18 +385,18 @@ function mmScorers(){
 }
 function mmFlash(e){
   const el = document.getElementById("mmFlash"); if (!el) return;
-  const c = meta(LV.G.S[e.s].club);
-  el.hidden = false; el.style.setProperty("--fc", c.c1); el.innerHTML = `<span class="mm-goal">GOAL!</span><span class="mm-goal-n">${esc(e.n)}</span>`;
+  const c = mgKits(LV.G.S[0].club, LV.G.S[1].club)[e.s];
+  el.hidden = false; el.style.setProperty("--fc", c[0]); el.innerHTML = `<span class="mm-goal">GOAL!</span><span class="mm-goal-n">${esc(e.n)}</span>`;
   el.classList.remove("on"); void el.offsetWidth; el.classList.add("on");
   clearTimeout(LV.flashT); LV.flashT = setTimeout(()=>{ el.hidden = true; }, 2200/Math.max(1, LV.speed/2));
 }
 function mmPaintBody(){
   const b = document.getElementById("mmBody"); if (!b || !LV) return;
   const G = LV.G;
-  if (LV.tab==="feed"){ b.innerHTML = `<ol class="mm-feed">${LV.feed.slice(0, 80).map(e=>`<li class="k-${e.k} ${e.s===LV.us ? "us" : e.s>=0 ? "them" : ""}"><span class="mm-m">${e.k==="ko" && !e.m ? "" : e.m + "'"}</span><span class="mm-ic">${MM_IC[e.k] || "·"}</span><span class="mm-t">${esc(e.txt)}</span></li>`).join("")}</ol>`; return; }
+  if (LV.tab==="feed"){ b.innerHTML = `<ol class="mm-feed">${LV.feed.slice(0, 90).map(e=>`<li class="k-${e.k} ${["corner","foul","off","play"].includes(e.k) ? "minor" : ""} ${e.s===LV.us ? "us" : e.s>=0 ? "them" : ""}"><span class="mm-m">${e.k==="ko" && !e.m ? "" : e.m + "'"}</span><span class="mm-ic">${MM_IC[e.k] || "·"}</span><span class="mm-t">${esc(e.txt)}</span></li>`).join("")}</ol>`; return; }
   if (LV.tab==="stats"){
     const [h, a] = G.S.map(S=>S.st), tp = G.poss[0] + G.poss[1] || 1, row = (l, x, y, fmt = v=>v) => { const t = (+x) + (+y) || 1; return `<div class="mm-st"><b>${fmt(x)}</b><span>${l}</span><b>${fmt(y)}</b><i style="--p:${(x/t*100).toFixed(0)}%"></i></div>`; };
-    b.innerHTML = `<div class="mm-stats">${row("Possession", Math.round(G.poss[0]/tp*100), Math.round(G.poss[1]/tp*100), v=>v + "%")}${row("Shots", h.sh, a.sh)}${row("On target", h.ont, a.ont)}${row("Expected goals", +h.xg.toFixed(2), +a.xg.toFixed(2), v=>(+v).toFixed(2))}${row("Corners", h.cor, a.cor)}${row("Fouls", h.fou, a.fou)}${row("Yellow cards", h.yc, a.yc)}${row("Red cards", h.rc, a.rc)}${row("Saves", h.sav, a.sav)}</div>`; return; }
+    b.innerHTML = `<div class="mm-stats">${row("Possession", Math.round(G.poss[0]/tp*100), Math.round(G.poss[1]/tp*100), v=>v + "%")}${row("Shots", h.sh, a.sh)}${row("On target", h.ont, a.ont)}${row("Expected goals", +h.xg.toFixed(2), +a.xg.toFixed(2), v=>(+v).toFixed(2))}${row("Corners", h.cor, a.cor)}${row("Offsides", h.off, a.off)}${row("Fouls", h.fou, a.fou)}${row("Yellow cards", h.yc, a.yc)}${row("Red cards", h.rc, a.rc)}${row("Saves", h.sav, a.sav)}</div>`; return; }
   const S = G.S[LV.us], rows = [...S.on, ...S.out].filter(o=>o.mins>0 || !o.off);
   b.innerHTML = `<div class="mm-rat">${rows.map(o=>`<div class="mm-r ${o.off ? "off" : ""}"><span class="mg-pos p-${MG_GROUP(o.pos)}">${o.pos}</span><span class="mm-rn">${esc(mgShort(o.p.n))}${o.g ? ` <i class="mm-g">${"⚽".repeat(o.g)}</i>` : ""}${o.yc ? `<i class='mm-card ${o.rc ? "r" : "y"}'></i>` : ""}${o.inj ? " ✚" : ""}</span><span class="mm-cond"><i style="width:${Math.round(o.cond)}%"></i></span><b class="mg-rt ${mmRtCls(o.rt)}">${o.rt.toFixed(1)}</b></div>`).join("")}</div>`;
 }
@@ -394,7 +404,7 @@ const mmRtCls = r => r>=8 ? "r-hi" : r>=7 ? "r-good" : r>=6.3 ? "r-ok" : "r-low"
 
 /* ---------- the touchline ---------- */
 function mmOpen(k){ LV.modal = k; mmModal(); }
-function mmShut(){ LV.modal = null; const m = document.getElementById("mmModal"); if (m){ m.hidden = true; m.innerHTML = ""; } if (LV.G.done && !LV.anim && !LV.ended) mmOpen("ft"); }
+function mmShut(){ LV.modal = null; const m = document.getElementById("mmModal"); if (m){ m.hidden = true; m.innerHTML = ""; } }
 function mmModal(){
   const m = document.getElementById("mmModal"), G = LV.G, S = G.S[LV.us], k = LV.modal; if (!m) return;
   m.hidden = false;
@@ -427,7 +437,8 @@ function mmModal(){
       <div class="row"><button type="button" class="btn" data-mm="shut">Close</button></div></div>`;
   } else if (k==="menu"){
     m.innerHTML = `<div class="mm-card-in"><div class="eyebrow">Match</div><h3>Highlights</h3>
-      <div class="mg-seg">${[["key","Key chances"],["all","Every chance"],["none","Commentary only"]].map(([v, l])=>`<button type="button" data-mm="hl" data-v="${v}" aria-pressed="${LV.hl===v}">${l}</button>`).join("")}</div>
+      <p class="hint">How much of the match is played out on the pitch. The full match is the longest; commentary only is the quickest.</p>
+      <div class="mg-seg">${[["full","Full match"],["ext","Extended"],["key","Key moments"],["none","Commentary only"]].map(([v, l])=>`<button type="button" data-mm="hl" data-v="${v}" aria-pressed="${LV.hl===v}">${l}</button>`).join("")}</div>
       <div class="row"><button type="button" class="btn" data-mm="sim">Sim to the end</button><button type="button" class="btn primary" data-mm="shut">Back to the match</button></div></div>`;
   } else if (k==="ft"){
     LV.ended = true;
@@ -453,7 +464,8 @@ function mmClick(e){
   else if (a==="tab"){ LV.tab = b.dataset.k; document.querySelectorAll('[data-mm="tab"]').forEach(x=>x.setAttribute("aria-selected", x===b)); mmPaintBody(); }
   else if (["tactics","subs","shout","menu"].includes(a)){ if (!G.done) mmOpen(a); }
   else if (a==="shut"){ LV.forced = null; LV.subOff = LV.subOn = null; mmShut(); }
-  else if (a==="hl"){ LV.hl = b.dataset.v; mmModal(); }
+  else if (a==="hl"){ LV.hl = b.dataset.v; try{ localStorage.setItem("efp-mg-hl", LV.hl); }catch(err){} mmModal(); }
+  else if (a==="big"){ LV.big = !LV.big; b.setAttribute("aria-pressed", LV.big); document.querySelector(".mm-wrap")?.classList.toggle("big", LV.big); }
   else if (a==="tac"){ S.tac[b.dataset.k] = +b.dataset.v; if (b.dataset.k==="ment") mmSay(G, LV.us, "info", `You switch to ${MG_MENT[S.tac.ment].toLowerCase()}.`); mmRate(S); mmModal(); }
   else if (a==="soff"){ LV.subOff = S.on[+b.dataset.i]; mmModal(); }
   else if (a==="son"){ LV.subOn = S.bench.find(x=>x.p.id===b.dataset.id)?.p || null; mmModal(); }
@@ -461,7 +473,7 @@ function mmClick(e){
   else if (a==="shoutdo"){ mmShout(b.dataset.v); mmShut(); }
   else if (a==="talk"){ mmTalk(b.dataset.v); LV.talkDone = true; mmShut(); }
   else if (a==="post"){ LV.post = b.dataset.v; mmModal(); }
-  else if (a==="sim"){ G.auto = true; LV.anim = null; mmRun(G); LV.shown = G.score.slice(); LV.feed = G.ev.slice().reverse(); mmScorers(); mmBoard(); mmPaintBody(); LV.modal = null; mmOpen("ft"); }
+  else if (a==="sim"){ G.auto = true; mdStop(); mmRun(G); LV.shown = G.score.slice(); LV.feed = G.ev.slice().reverse(); mmScorers(); mmBoard(); mmPaintBody(); LV.modal = null; mmOpen("ft"); }
   else if (a==="done"){ mmEnd(); }
 }
 function mmShout(k){
@@ -486,138 +498,4 @@ function mmEnd(){
   if (post){ const gd = G.score[LV.us] - G.score[1 - LV.us], v = {praise:gd>=0 ? 3 : -2, enc:gd<0 ? 2 : 1, crit:gd<0 ? (Math.random()<.5 ? 2 : -4) : -4}[post]; mgMine().forEach(p=>{ p.mor = clamp(p.mor + v, 0, 100); }); }
   mmClose();
   if (done) done(f, r);
-}
-
-/* ---------- the 2D pitch ---------- */
-function mmGeom(){
-  const cv = document.getElementById("mmCv"); if (!cv) return null;
-  const w = cv.clientWidth || 360, h = Math.round(w*.62), dpr = Math.min(2, window.devicePixelRatio || 1);
-  if (cv.width!==Math.round(w*dpr) || cv.height!==Math.round(h*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); cv.style.height = h + "px"; }
-  const m = Math.max(10, w*.035);
-  return {cv, g:cv.getContext("2d"), w, h, dpr, m, X:x=>m + x*(w - 2*m), Y:y=>m + y*(h - 2*m)};
-}
-// where a player stands now: his place in the shape, shifted with the ball
-function mmHome(s, o, k, bx, by, t){
-  const depth = o.pos==="GK" ? 0 : o.y, across = o.x;
-  let X = .035 + depth*.57, Y = across;
-  if (o.pos!=="GK") X += (bx - .5)*.42 + (LV.G.side===s ? .05 : -.04);
-  if (s===1){ X = 1 - (.035 + depth*.57) + (o.pos==="GK" ? 0 : (bx - .5)*.42 - (LV.G.side===s ? .05 : -.04)); Y = 1 - across; }
-  if (o.pos!=="GK") Y += (by - .5)*.22;
-  Y += Math.sin(t*.9 + k*1.7)*.012; X += Math.cos(t*.7 + k*2.3)*.008;
-  return [clamp(X, .02, .98), clamp(Y, .04, .96)];
-}
-function mmDot(s, o){ const id = o.p.id; return LV.dots[id] ||= {x:s ? .9 : .1, y:o.x, s}; }
-function mmAmbient(dt){
-  if (!LV) return;
-  const G = LV.G, B = LV.ball; LV.t = (LV.t || 0) + dt;
-  // the ball rolls to its target
-  if (B.t<1){ B.t = Math.min(1, B.t + dt/B.d); const e = B.t<.5 ? 2*B.t*B.t : 1 - Math.pow(-2*B.t + 2, 2)/2; B.x = B.fx + (B.tx - B.fx)*e; B.y = B.fy + (B.ty - B.fy)*e; B.z = B.loft ? Math.sin(B.t*Math.PI)*B.loft : 0; }
-  else if (B.own && LV.dots[B.own]){ const d = LV.dots[B.own], sd = d.s ? -1 : 1; B.x += (d.x + .012*sd - B.x)*Math.min(1, dt*8); B.y += (d.y + .01 - B.y)*Math.min(1, dt*8); B.z = 0; }
-  // the side on the ball knocks it about between themselves
-  if (!LV.anim && !G.done && G.phase!=="ht"){
-    LV.passT -= dt;
-    if (LV.passT<=0){
-      const s = G.side ?? 0, on = mmOn(G.S[s]).filter(o=>o.pos!=="GK" || Math.random()<.15);
-      if (on.length){ const own = B.own && LV.dots[B.own] ? LV.dots[B.own] : null, fwd = s ? -1 : 1;
-        const to = mmPick(on, o=>{ const d = mmDot(s, o); const ahead = (d.x - (own ? own.x : .5))*fwd; return .4 + Math.max(0, ahead*3) + (o.p.id===B.own ? -1 : 0); });
-        mmPass(to.p.id, .28 + Math.random()*.25); }
-      LV.passT = .55 + Math.random()*.8;
-    }
-  }
-  // everyone drifts to his place
-  G.S.forEach((S, s)=>mmOn(S).forEach((o, k)=>{
-    const d = mmDot(s, o); let [tx, ty] = mmHome(s, o, k, B.x, B.y, LV.t);
-    if (LV.anim && LV.anim.to && LV.anim.to[o.p.id]) [tx, ty] = LV.anim.to[o.p.id];
-    const sp = Math.min(1, dt*(LV.anim ? 3.2 : 1.6)); d.x += (tx - d.x)*sp; d.y += (ty - d.y)*sp;
-  }));
-}
-function mmPass(toId, dur, loft){ const B = LV.ball, d = LV.dots[toId]; if (!d) return; B.fx = B.x; B.fy = B.y; B.tx = d.x + (d.s ? -.012 : .012); B.ty = d.y + .01; B.t = 0; B.d = dur; B.own = toId; B.loft = loft || 0; }
-function mmKickTo(x, y, dur, loft){ const B = LV.ball; B.fx = B.x; B.fy = B.y; B.tx = x; B.ty = y; B.t = 0; B.d = dur; B.own = null; B.loft = loft || 0; if (typeof SND!=="undefined") SND.kick(.7); }
-// a chance, played out: a pass or two into the shooter as he arrives, then the shot and how it ends
-function mmHighlight(e){
-  if (LV.hl==="none"){ mmShow(e); return; }
-  const G = LV.G, s = e.s, S = G.S[s], O = G.S[1 - s], fwd = s ? -1 : 1, gx = s ? 0 : 1;
-  const sh = [...S.on, ...S.out].find(o=>o.p.id===e.p); if (!sh){ mmShow(e); return; }
-  const mates = mmOn(S).filter(o=>o!==sh && o.pos!=="GK"), passer = mates.length ? mmPick(mates, o=>MG_ASW[o.pos]) : null;
-  const pen = e.kind==="pen", wide = /W|M/.test(sh.pos) && !["CM","CDM","CAM"].includes(sh.pos);
-  const left = ["LW","LM","LB","LWB"].includes(sh.pos), right = ["RW","RM","RB","RWB"].includes(sh.pos);
-  let sy = pen ? .5 : left ? .28 + Math.random()*.12 : right ? .6 + Math.random()*.12 : .38 + Math.random()*.24; if (s===1) sy = 1 - sy;
-  const sx = pen ? (s ? .115 : .885) : (s ? .1 + Math.random()*.12 : .78 + Math.random()*.12);
-  const gk = mmOn(O).find(o=>o.pos==="GK");
-  const ty = e.k==="goal" ? .455 + Math.random()*.09 : e.k==="post" ? (Math.random()<.5 ? .447 : .553) : e.k==="miss" ? (Math.random()<.5 ? .38 + Math.random()*.04 : .58 + Math.random()*.04) : .47 + Math.random()*.06;
-  const to = {[sh.p.id]:[sx, sy]};
-  if (passer) to[passer.p.id] = [sx - fwd*(.14 + Math.random()*.08), wide ? .5 : (sy<.5 ? sy + .18 : sy - .18)];
-  const defs = mmOn(O).filter(o=>MG_GROUP(o.pos)==="DEF" && o.pos!=="GK").slice(0, 3);
-  defs.forEach((o, i)=>{ to[o.p.id] = [sx + fwd*(.04 + i*.02), sy + (i - 1)*.08]; });
-  if (gk) to[gk.p.id] = [s ? .03 : .97, .5 + (ty - .5)*.4];
-  const steps = [];
-  if (passer && !pen) steps.push({t:.55, run:()=>mmPass(passer.p.id, .4)});
-  if (!pen) steps.push({t:.65, run:()=>mmPass(sh.p.id, .45, e.head ? .06 : 0), label:sh.p.n});
-  else steps.push({t:.9, run:()=>{ LV.ball.x = sx + fwd*.012; LV.ball.y = sy; LV.ball.own = sh.p.id; LV.ball.t = 1; }, label:sh.p.n});
-  steps.push({t:.32, run:()=>{
-    if (e.k==="goal") mmKickTo(gx + fwd*.012, ty, .3, e.head ? .02 : .03);
-    else if (e.k==="save"){ mmKickTo(s ? .035 : .965, ty, .3, .02); if (gk) to[gk.p.id] = [s ? .035 : .965, ty]; }
-    else if (e.k==="block"){ const d = defs[0] ? LV.dots[defs[0].p.id] : null; mmKickTo(d ? d.x : sx + fwd*.05, d ? d.y : sy, .18); }
-    else mmKickTo(gx + fwd*.02, ty, .32, e.k==="miss" ? .05 : .03);
-  }});
-  if (e.k==="post") steps.push({t:.3, run:()=>mmKickTo(gx - fwd*.12, ty + (ty<.5 ? -.12 : .12), .35)});
-  steps.push({t:e.k==="goal" ? .2 : .1, run:()=>mmShow(e)});
-  steps.push({t:e.k==="goal" ? 1.5 : .7, run:()=>{}});
-  if (e.k==="goal") steps.push({t:.1, run:()=>{ LV.ball.x = .5; LV.ball.y = .5; LV.ball.t = 1; LV.ball.own = null; }});
-  LV.anim = {steps, i:0, t:0, to, s, label:null};
-}
-function mmAnimStep(dt){
-  const A = LV.anim; if (!A) return;
-  const st = A.steps[A.i];
-  if (!st.started){ st.started = true; st.run(); if (st.label) A.label = st.label; A.t = 0; }
-  A.t += dt;
-  if (A.t>=st.t){ A.i++; A.t = 0; if (A.i>=A.steps.length){ LV.anim = null; if (LV.G.done) mmOpen("ft"); } }
-}
-function mmDraw(dt){
-  const Q = mmGeom(); if (!Q || !LV) return;
-  const {g, w, h, dpr, m, X, Y} = Q, G = LV.G;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  // grass: mown stripes, darker at the edges
-  const bands = 14; for (let i = 0; i<bands; i++){ g.fillStyle = i % 2 ? "#0E4A2C" : "#11552F"; g.fillRect(i*w/bands, 0, w/bands + 1, h); }
-  const vg = g.createRadialGradient(w/2, h/2, h*.2, w/2, h/2, w*.75); vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,.45)"); g.fillStyle = vg; g.fillRect(0, 0, w, h);
-  // the markings, glowing a little
-  g.strokeStyle = "rgba(220,255,240,.75)"; g.lineWidth = 1.4; g.shadowColor = "rgba(0,240,168,.6)"; g.shadowBlur = 6;
-  g.strokeRect(X(0), Y(0), X(1) - X(0), Y(1) - Y(0));
-  g.beginPath(); g.moveTo(X(.5), Y(0)); g.lineTo(X(.5), Y(1)); g.stroke();
-  g.beginPath(); g.arc(X(.5), Y(.5), (Y(1) - Y(0))*.135, 0, Math.PI*2); g.stroke();
-  [[0, 1], [1, -1]].forEach(([x0, d])=>{
-    const bx = 16.5/105, by = 40.3/68, sx = 5.5/105, sy = 18.3/68;
-    g.strokeRect(Math.min(X(x0), X(x0 + d*bx)), Y(.5 - by/2), Math.abs(X(x0 + d*bx) - X(x0)), Y(.5 + by/2) - Y(.5 - by/2));
-    g.strokeRect(Math.min(X(x0), X(x0 + d*sx)), Y(.5 - sy/2), Math.abs(X(x0 + d*sx) - X(x0)), Y(.5 + sy/2) - Y(.5 - sy/2));
-    g.beginPath(); g.arc(X(x0 + d*11/105), Y(.5), 1.6, 0, Math.PI*2); g.fillStyle = "rgba(220,255,240,.8)"; g.fill();
-    // the goal and its net
-    g.fillStyle = "rgba(255,255,255,.18)"; const gw = 7.32/68, gd = Math.max(5, m*.6);
-    g.fillRect(x0 ? X(1) : X(0) - gd, Y(.5 - gw/2), gd, Y(.5 + gw/2) - Y(.5 - gw/2));
-    g.strokeStyle = "#fff"; g.strokeRect(x0 ? X(1) : X(0) - gd, Y(.5 - gw/2), gd, Y(.5 + gw/2) - Y(.5 - gw/2)); g.strokeStyle = "rgba(220,255,240,.75)";
-  });
-  g.shadowBlur = 0;
-  // players
-  const r = Math.max(5.5, w*.016);
-  G.S.forEach((S, s)=>{
-    const c = meta(S.club), c1 = c.c1 || "#888", c2 = c.c2 || "#fff", light = lvLight(c1);
-    mmOn(S).forEach(o=>{
-      const d = mmDot(s, o), x = X(d.x), y = Y(d.y), gk = o.pos==="GK";
-      g.beginPath(); g.ellipse(x + 1.5, y + r*.85, r*.9, r*.35, 0, 0, Math.PI*2); g.fillStyle = "rgba(0,0,0,.35)"; g.fill();
-      g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.fillStyle = gk ? (s ? "#F59E0B" : "#A3E635") : c1; g.fill();
-      g.lineWidth = 2; g.strokeStyle = s===LV.us ? "rgba(0,240,168,.95)" : (lvNear(c1, c2) ? (light ? "#111" : "#fff") : c2); g.stroke();
-      g.fillStyle = gk ? "#111" : (light ? "#111" : "#fff"); g.font = `700 ${Math.round(r*1.05)}px "Barlow Condensed", sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
-      g.fillText(String(o.p.num || ""), x, y + .5);
-    });
-  });
-  // the ball, its shadow and a short trail
-  const B = LV.ball, bx = X(B.x), by = Y(B.y) - (B.z || 0)*h*2.2;
-  LV.trail.push([bx, by]); if (LV.trail.length>8) LV.trail.shift();
-  LV.trail.forEach(([tx, ty], i)=>{ g.beginPath(); g.arc(tx, ty, r*.3*(i/8), 0, Math.PI*2); g.fillStyle = `rgba(255,255,255,${(i/8*.35).toFixed(2)})`; g.fill(); });
-  g.beginPath(); g.ellipse(bx, Y(B.y) + r*.35, r*.4, r*.18, 0, 0, Math.PI*2); g.fillStyle = "rgba(0,0,0,.4)"; g.fill();
-  g.beginPath(); g.arc(bx, by, r*.48, 0, Math.PI*2); g.fillStyle = "#fff"; g.shadowColor = "#fff"; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0;
-  // who's on it
-  const lab = LV.anim && LV.anim.label;
-  if (lab){ const d = Object.values(LV.dots).length ? LV.dots[B.own] : null; const tx = d ? X(d.x) : bx, ty = d ? Y(d.y) - r*2.2 : by - r*2;
-    g.font = `700 ${Math.round(r*1.2)}px "Barlow Condensed", sans-serif`; const t = mgSurname(lab).toUpperCase(), tw = g.measureText(t).width + 10;
-    g.fillStyle = "rgba(6,8,15,.82)"; g.fillRect(tx - tw/2, ty - r*.9, tw, r*1.8); g.fillStyle = "#00F0A8"; g.textAlign = "center"; g.fillText(t, tx, ty); }
 }

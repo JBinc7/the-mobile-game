@@ -174,7 +174,7 @@ html[data-app="manager"] .wrap{padding-bottom:calc(160px + env(safe-area-inset-b
 .mg-pos{display:inline-grid;place-items:center;min-width:40px;height:22px;padding:0 5px;border-radius:2px;font-family:var(--f-label);font-weight:700;font-size:12px;letter-spacing:.05em;color:#04120D}
 .mg-pos.p-GK{background:#FFB020} .mg-pos.p-DEF{background:#3B9CFF;color:#fff} .mg-pos.p-MID{background:#2EF2A0} .mg-pos.p-ATT{background:#FF4D6D;color:#fff}
 .mg-tag{display:inline-block;font-family:var(--f-label);font-weight:700;font-size:10.5px;letter-spacing:.06em;padding:1px 5px;border-radius:2px;background:var(--line);color:var(--ink);margin-right:3px;white-space:nowrap}
-.mg-tag.bad{background:var(--down);color:#fff} .mg-tag.warn{background:var(--gold);color:#1A1400} .mg-tag.cap{background:var(--accent);color:var(--accent-ink)}
+.mg-tag.bad{background:var(--down);color:#fff} .mg-tag.loan{background:#7C5CFF;color:#fff} .mg-tag.warn{background:var(--gold);color:#1A1400} .mg-tag.cap{background:var(--accent);color:var(--accent-ink)}
 .mg-fit{display:inline-block;width:46px;height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;vertical-align:middle}
 .mg-fit i{display:block;height:100%;background:linear-gradient(90deg,#00F0A8,#00B4FF);border-radius:999px}
 .mg-fit i.mid{background:linear-gradient(90deg,#FFD23F,#FFB020)} .mg-fit i.low{background:linear-gradient(90deg,#FF4D6D,#FF8FA3)}
@@ -437,7 +437,15 @@ html.mg-live-on body{overflow:hidden}
 .mm-scorers{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;color:#9AA6C4;min-height:16px}
 .mm-scorers span:first-child{text-align:right}
 .mm-pitchbox{position:relative;border-radius:3px;overflow:hidden;border:1px solid rgba(0,240,168,.3);box-shadow:0 0 40px -18px rgba(0,240,168,.7)}
-.mm-cv{display:block;width:100%}
+.mm-cv{display:block;margin:0 auto;touch-action:manipulation}
+.mm-pitchbox{background:#070A12}
+.mm-tick{min-height:22px;font-size:13.5px;color:#C9D6F0;padding:3px 8px;border-left:3px solid rgba(255,255,255,.2);background:rgba(255,255,255,.03);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm-tick b{color:#00F0A8;font-family:var(--f-display);margin-right:4px}
+.mm-tick.us{border-left-color:#00F0A8} .mm-tick.them{border-left-color:#FF2E88} .mm-tick.k-goal{color:#fff;font-weight:700}
+.mm-wrap.big .mm-tabs,.mm-wrap.big .mm-body,.mm-wrap.big .mm-scorers{display:none}
+.mm-b[aria-pressed="true"]{border-color:#00F0A8;color:#00F0A8}
+.mm-feed li.minor{background:transparent;color:#8E9AB8;font-size:13px;padding:3px 8px}
+.mm-feed li.minor .mm-m{color:#5F6B88}
 .mm-flash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--fc) 50%,transparent),transparent 70%)}
 .mm-flash.on{animation:mmGoal 2s ease-out both}
 .mm-goal{font-family:var(--f-display);font-weight:900;font-style:italic;font-size:clamp(54px,14vw,110px);line-height:.9;letter-spacing:.02em;color:#fff;text-shadow:0 0 30px var(--fc),0 0 60px #00F0A8,0 4px 0 rgba(0,0,0,.5)}

@@ -355,7 +355,7 @@ function mgNewFinances(club, first){
   const bill = mgMine().reduce((s, p)=>s + p.wage, 0);
   return {bal:Math.round(tb*1.4 + bill*30), tb, wb:mgRoundWage(bill*(1.04 + r*.1)), inc:{}, exp:{}, hist:[], start:tb};
 }
-const mgBill = () => mgMine().reduce((s, p)=>s + p.wage, 0) + M.short.length*0;
+const mgBill = () => mgMine().reduce((s, p)=>s + (p.loan ? 0 : p.lin ? p.wage*p.lin.pay : p.wage), 0);
 function mgFinAdd(kind, k, v){ const F = M.fin; (F[kind])[k] = (F[kind][k]||0) + v; F.bal += kind==="inc" ? v : -v; }
 
 /* ---------- the board ---------- */
@@ -796,7 +796,8 @@ function mgSpecial(w){
   if (w==="jopen"){ mgMail("transfer", "The January window is open", `Your transfer budget: ${mgMoney(M.fin.tb)}. The window closes on 1 February.`, {stop:1}); }
   if (w==="jclose") mgMail("transfer", "The January window has closed", `The window shuts until the summer.`);
   if (w==="youth") mgYouthIntake();
-  if (w==="renew"){ const ex = mgMine().filter(p=>p.con<=M.season); if (ex.length) mgMail("contract", `${ex.length} contract${ex.length===1 ? "" : "s"} running out`, `These players' contracts end this summer: ${ex.map(p=>p.n).join(", ")}. Offer new deals from their player cards, or they'll leave for nothing.`, {stop:1}); }
+  if (w==="renew") mgLoanees().filter(p=>p.lin.opt).forEach(p=>mgMail("transfer", `${p.n}: buy him or let him go?`, `${p.n}'s loan from ${p.lin.from} ends this summer. You can make it permanent for ${mgMoney(p.lin.opt)}.`, {act:{type:"loanopt", id:p.id}, stop:1}));
+  if (w==="renew"){ const ex = mgMine().filter(p=>p.con<=M.season && !p.lin); if (ex.length) mgMail("contract", `${ex.length} contract${ex.length===1 ? "" : "s"} running out`, `These players' contracts end this summer: ${ex.map(p=>p.n).join(", ")}. Offer new deals from their player cards, or they'll leave for nothing.`, {stop:1}); }
   if (w==="end") mgSeasonEnd();
 }
 function mgSacked(why, ended){
@@ -868,6 +869,7 @@ function mgSeasonEnd(){
   const promoted = (()=>{ const up = moves.find(x=>x.ups.includes(M.club)); return up ? up.k : null; })();
   rev.up = promoted!=null ? TIERS[promoted].name : null; rev.down = relegatedTo!=null ? TIERS[relegatedTo].name : null;
   M.tiers = nextT; M._tier = null;
+  rev.loans = mgLoanees().map(p=>p.n); mgLoanees().forEach(p=>mgLoanBack(p, true));
   mgAgeWorld();
   rev.retired = M._retired || []; M._retired = [];
   M.review = rev;
@@ -1113,6 +1115,66 @@ function mgRelease(p){
   Object.assign(p, {club:null, tl:0, ll:0, num:0, form:[], wage:mgRoundWage(p.wage*.8)}); (M.fa ||= []).push(p.id);
   mgMendXI(true); mgMail("contract", `${p.n} released`, `${p.n} has left the club. Paying up his contract cost ${mgMoney(cost)}.`); mgSave();
 }
+/* ---------- loans in ----------
+   Borrow a player until the end of the season. His club decides whether he can go (their young players and those
+   outside their first team can), and wants him playing and some of his wages paid: the bigger they are than you,
+   and the older he is, the more. You can agree an option to buy him. He goes back in the summer unless you take it. */
+const MG_LOAN_MAX = 4;
+const mgLoanees = () => mgMine().filter(p=>p.lin);
+function mgLoanable(p){ if (!p || !p.club || p.club===M.club || p.lin || p.yth) return false; const r = mgSquadRank(p); return !!p.tl || (p.age<=23 && r>=4) || r>=13; }
+function mgLoanInterest(p){
+  const o = mgOvr(p), lv = mgLevel(M.club);
+  if (o>lv + 9 && p.age>24) return {ok:false, txt:"Not interested: he'd rather fight for his place"};
+  return {ok:true, txt:o>=lv + 2 ? "Keen: he'd be a first-team player for you" : p.age<=21 ? "Keen: he wants games" : "Open to a loan"};
+}
+const mgLoanNeed = (p, role) => clamp(.45 + (mgRep(p.club) - mgRep(M.club))*.6 + (p.age>23 ? .25 : 0) - (role<=1 ? .25 : role===2 ? .1 : 0), 0, 1);
+function mgLoanAsk(p, pay, role, opt){
+  if (!mgInWindow()) return {txt:"The transfer window is closed."};
+  if (!mgLoanable(p)) return {txt:`${p.club} won't loan him out: he's part of their plans.`};
+  if (mgLoanees().length>=MG_LOAN_MAX) return {txt:`You already have ${MG_LOAN_MAX} players on loan.`};
+  const I = mgLoanInterest(p); if (!I.ok) return {txt:I.txt + "."};
+  if (p.age<=23 && role>=3) return {txt:`${p.club} want him playing: promise him more than a ${MG_ROLES[role].toLowerCase()} role.`};
+  const room = M.fin.wb - mgBill(); if (p.wage*pay>room + 1) return {txt:`Paying ${Math.round(pay*100)}% of his wages (${mgWageTxt(p.wage*pay)}) takes you over your wage budget.`};
+  const need = Math.ceil(mgLoanNeed(p, role)*4)/4;
+  if (pay + 1e-6<need) return {counter:need, txt:`${p.club} want you to pay ${Math.round(need*100)}% of his wages (${mgWageTxt(p.wage*need)}).`};
+  if (opt){ const min = mgRoundFee(mgValue(p)*1.2); if (opt<min) return {counter:pay, opt:min, txt:`For an option to buy him, ${p.club} want at least ${mgMoney(min)}.`}; }
+  return {ok:true, txt:`${p.club} agree: ${p.n} joins you on loan until the end of the season.`};
+}
+function mgLoanIn(p, pay, role, opt){
+  let q = p;
+  if (p.virt || !M.P[p.id]){ q = {...p, id:"p" + (M.nid++), st:mgStat(), lg:mgStat(), car:{ap:0, g:0, a:0}}; delete q.virt; M.gone[p.id] = 1; M.P[q.id] = q; mgVCache.clear(); }
+  if (p.club && M.cl[p.club]) M.cl[p.club].sq = M.cl[p.club].sq.filter(id=>id!==p.id);
+  const from = p.club;
+  Object.assign(q, {club:M.club, role, mor:Math.max(q.mor, 72), num:0, form:[], tl:0, ll:0, req:0, pt:MG_ROLE_SHARE[role]});
+  q.lin = {from, pay, opt:opt || 0, s:M.season};
+  M.cl[M.club].sq.push(q.id); mgNumbers(mgMine()); M.kn[q.id] = 100; M.short = M.short.filter(id=>id!==p.id);
+  if (M.tac.bench.length<9) M.tac.bench.push(q.id);
+  mgMail("transfer", `${q.n} arrives on loan`, `${q.n} (${q.pos}, ${q.age}) joins on loan from ${from} until the end of the season. You pay ${Math.round(pay*100)}% of his wages (${mgWageTxt(q.wage*pay)}). Squad role: ${MG_ROLES[role]}.${opt ? ` You can make it permanent for ${mgMoney(opt)}.` : ""}`);
+  mgSave(); return q;
+}
+function mgLoanBack(p, quiet){
+  if (!p.lin) return;
+  const from = p.lin.from;
+  M.cl[M.club].sq = M.cl[M.club].sq.filter(id=>id!==p.id);
+  M.tac.xi = M.tac.xi.map(id=>id===p.id ? null : id); M.tac.bench = M.tac.bench.filter(id=>id!==p.id); if (M.tac.cap===p.id) M.tac.cap = null;
+  M.train.ind = M.train.ind.filter(x=>x.id!==p.id);
+  delete p.lin;
+  if (from && M.cl[from]){ Object.assign(p, {club:from, num:0, role:2}); M.cl[from].sq.push(p.id); mgNumbers(mgSquad(from)); }
+  else delete M.P[p.id];
+  if (!quiet) mgMail("transfer", `${p.n} returns to ${from}`, `${p.n}'s loan is over and he has gone back to ${from}.`);
+  mgMendXI(true); mgSave();
+}
+function mgLoanBuy(p){
+  const fee = p.lin && p.lin.opt; if (!fee) return "There's no option to buy him.";
+  if (M.fin.tb<fee) return `You need ${mgMoney(fee)} in your transfer budget.`;
+  M.fin.tb -= fee; mgFinAdd("exp", "buys", fee);
+  const from = p.lin.from; delete p.lin;
+  Object.assign(p, {from, fee, joined:M.season, con:Math.max(p.con, M.season + 3)});
+  M.inbox.forEach(m=>{ if (m.act && m.act.type==="loanopt" && m.act.id===p.id && !m.act.done) m.act.done = "Signed"; });
+  mgMail("transfer", `${p.n} signs permanently`, `You've taken up the option: ${p.n} joins from ${from} for ${mgMoney(fee)}.`);
+  mgSave(); return "";
+}
+
 // the transfer market: everyone matching what you're looking for (clubs outside your league are drawn as needed)
 function mgSearch(q){
   const leagues = q.lg==="all" ? MG_PLAYABLE : q.lg==="fa" ? [] : [keyOf(q.lg)];
@@ -1120,7 +1182,7 @@ function mgSearch(q){
   if (q.lg==="all" || q.lg==="fa") pool = pool.concat(mgFreeAgents());
   const name = String(q.name || "").trim().toLowerCase();
   return pool.filter(p=>(q.pos==="any" || p.pos===q.pos || (q.pos==="DEF" && MG_GROUP(p.pos)==="DEF") || (q.pos==="MID" && MG_GROUP(p.pos)==="MID") || (q.pos==="ATT" && MG_GROUP(p.pos)==="ATT"))
-    && p.age<=q.age && mgEst(p).hi>=q.ovr && (!q.max || mgValue(p)<=q.max) && (!name || p.n.toLowerCase().includes(name)) && !M.gone[p.id])
+    && p.age<=q.age && mgEst(p).hi>=q.ovr && (!q.max || mgValue(p)<=q.max) && (!name || p.n.toLowerCase().includes(name)) && !M.gone[p.id] && (q.loan!=="loan" || mgLoanable(p)))
     .map(p=>({p, ok:mgInterest(p).ok ? 1 : 0, o:mgEst(p).mid})).sort((a, b)=>b.ok - a.ok || b.o - a.o).slice(0, 60).map(x=>x.p);
 }
 function mgFreeAgents(){
@@ -1160,7 +1222,7 @@ function mgWindowWeek(){
   const mine = mgMine(), lv = mgLevel(M.club), open = M.offers.filter(o=>o.st==="open").length;
   let n = 0;
   for (const p of mgShuffleR(mine, Math.random)){
-    if (n>=1 || open + n>=2 || M.offers.some(o=>o.pid===p.id && o.st==="open")) continue;
+    if (p.lin || n>=1 || open + n>=2 || M.offers.some(o=>o.pid===p.id && o.st==="open")) continue;
     const o = mgOvr(p), f = mgFormAvg(p) || 6.6;
     const ch = p.tl ? .3 : p.req ? .2 : (o>=lv + 2 ? .02 : .006) + (f>7.3 ? .015 : 0);
     if (Math.random()>ch) continue;
@@ -1272,7 +1334,7 @@ function mgYouthScoutDone(){
 
 /* ================= UNEXPECTED EVENTS, CHALLENGES AND THE PRESS ================= */
 function mgEvent(){
-  const sq = mgMine().filter(p=>!p.loan), star = sq.slice().sort((a, b)=>mgOvr(b) - mgOvr(a))[0], last = M.myres.filter(r=>r.c!=="F").slice(-3), lost = last.filter(r=>r.res==="L").length;
+  const sq = mgMine().filter(p=>!p.loan), star = sq.filter(p=>!p.lin).slice().sort((a, b)=>mgOvr(b) - mgOvr(a))[0], last = M.myres.filter(r=>r.c!=="F").slice(-3), lost = last.filter(r=>r.res==="L").length;
   const t = mgLeagueOf(), big = (MG_TB[t] || 1e5)*.04*mgRep(M.club);
   const opts = [];
   opts.push(()=>({t:"Sponsor challenge", b:`A sponsor will pay ${mgMoney(big)} if you win your next 3 games.`, ch:[["Accept the challenge", "sponsor"], ["Not now", "x"]]}));
