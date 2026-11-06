@@ -1149,8 +1149,22 @@ function mgLoanIn(p, pay, role, opt){
   q.lin = {from, pay, opt:opt || 0, s:M.season};
   M.cl[M.club].sq.push(q.id); mgNumbers(mgMine()); M.kn[q.id] = 100; M.short = M.short.filter(id=>id!==p.id);
   if (M.tac.bench.length<9) M.tac.bench.push(q.id);
-  mgMail("transfer", `${q.n} arrives on loan`, `${q.n} (${q.pos}, ${q.age}) joins on loan from ${from} until the end of the season. You pay ${Math.round(pay*100)}% of his wages (${mgWageTxt(q.wage*pay)}). Squad role: ${MG_ROLES[role]}.${opt ? ` You can make it permanent for ${mgMoney(opt)}.` : ""}`);
+  const xi = q._in = mgAssistIn(q);
+  mgMail("transfer", `${q.n} arrives on loan`, `${q.n} (${q.pos}, ${q.age}) joins on loan from ${from} until the end of the season. You pay ${Math.round(pay*100)}% of his wages (${mgWageTxt(q.wage*pay)}). Squad role: ${MG_ROLES[role]}.${opt ? ` You can make it permanent for ${mgMoney(opt)}.` : ""}${xi ? `\n\nYour assistant has put him straight into the XI at ${xi.pos}${xi.out ? `, in place of ${xi.out}` : ""}.` : "\n\nYour assistant has kept your XI as it is: he starts on the bench."}`);
   mgSave(); return q;
+}
+// the assistant's call on a new arrival: into the XI where he's clearly better than the man playing there
+function mgAssistIn(q){
+  if (!mgAvail(q)) return null;
+  const T = M.tac, slots = MG_FORM[T.f];
+  let best = -1, gain = .8;
+  T.xi.forEach((id, i)=>{ const cur = M.P[id], pos = slots[i][0], g = mgEff(q, pos) - (cur && mgAvail(cur) ? mgEff(cur, pos) : 0); if (g>gain){ gain = g; best = i; } });
+  if (best<0) return null;
+  const out = M.P[T.xi[best]];
+  T.xi[best] = q.id; T.bench = T.bench.filter(id=>id!==q.id);
+  if (out){ T.bench.unshift(out.id); T.bench = T.bench.slice(0, 9); }
+  mgMendXI(true);
+  return {pos:slots[best][0], out:out ? out.n : null};
 }
 function mgLoanBack(p, quiet){
   if (!p.lin) return;

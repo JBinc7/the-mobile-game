@@ -224,7 +224,7 @@ const G3 = (() => {
   const FACE_TONES = [["#F1C9A5", ["m301", "m019", "m001", "m003"]], ["#D9A37A", ["m301", "m013", "m003", "m017", "m001", "m019"]], ["#B57D52", ["m300", "m013", "m017", "m003"]],
     ["#8A5A3B", ["m006", "m300", "m007"]], ["#5C3A24", ["m007", "m006"]]];
   const faceImg = {}, faceN = {}; let headRough = null;
-  let peopleP = null, people = null, clips = null;
+  let peopleP = null, people = null, clips = null, cardWait = 0;
   const img = src => new Promise((res, rej)=>{ const i = new Image(); i.onload = ()=>res(i); i.onerror = rej; i.src = src; });
   const script = src => new Promise((res, rej)=>{ const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
   function loadPeople(){
@@ -1913,5 +1913,8 @@ void main(){
     if (!ok) return; if (typeof S!=="undefined" && S && document.querySelector(".board .card-top")) G3.cardNow();
     loadPeople().then(got=>{ if (got && typeof S!=="undefined" && S && document.querySelector(".board .card-top")) G3.cardNow(); });
   }), 400));
-  return {on, set, load, ready, glOK, lookOf, card:card, shot, save, header, tackle, cross, mirror:(stage, looks)=>{ MLOOKS = looks || MLOOKS; const W = mirror(stage); if (W && looks) Object.assign(W.looks ||= {}, looks); return W; }, cardNow(){ const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
+  return {on, set, load, ready, glOK, lookOf, card:card, shot, save, header, tackle, cross, mirror:(stage, looks)=>{ MLOOKS = looks || MLOOKS; const W = mirror(stage); if (W && looks) Object.assign(W.looks ||= {}, looks); return W; }, // the lifelike players are waited for (the 2D card shows meanwhile); only if they can't load is the simple one used
+    people:()=>window.THREE ? loadPeople() : Promise.resolve(false), real:()=>!!people,
+    cardNow(){ if (!people){ const t = ++cardWait; loadPeople().then(()=>{ if (t!==cardWait) return; const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }); return; }
+      const el = document.querySelector(".board .card-top"); if (el && S && S.player) card.mount(el, S.player, meta(S.club)); }};
 })();

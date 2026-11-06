@@ -728,7 +728,7 @@ document.addEventListener("click", e=>{
   if (a==="doloan"){
     const pay = D.pay ?? .5, role = +document.getElementById("mgRole").value, opt = Math.round(+document.getElementById("mgOpt").value || 0); D.role = role; D.opt = opt;
     const r = mgLoanAsk(p, pay, role, opt);
-    if (r.ok){ const q = mgLoanIn(p, pay, role, opt); mgDlgClose(); mgFlash(`✍ ${q.n} joins on loan from ${q.lin.from}!`); MG_RES = MG_RES ? MG_RES.filter(x=>x.id!==p.id) : null; re(); return; }
+    if (r.ok){ const q = mgLoanIn(p, pay, role, opt); mgDlgClose(); mgFlash(`✍ ${q.n} joins on loan from ${q.lin.from}! ${q._in ? `Your assistant has put him straight into the XI at ${q._in.pos}${q._in.out ? `, in place of ${mgShort(q._in.out)}` : ""}.` : "He starts on the bench."}`); MG_RES = MG_RES ? MG_RES.filter(x=>x.id!==p.id) : null; re(); return; }
     D.msg = r.txt; D.ok = false; if (r.counter!=null) D.pay = r.counter; if (r.opt) D.opt = r.opt; dlg(); return; }
   if (a==="loanback"){ if (!D.sure){ D.sure = true; dlg(); setTimeout(()=>{ if (MG_DLG===D){ D.sure = false; dlg(); } }, 3500); return; } const n = p.n, from = p.lin.from; mgLoanBack(p); mgDlgClose(); mgFlash(`${n} has gone back to ${from}.`); re(); return; }
   if (a==="dobid"){ const fee = Math.round(+document.getElementById("mgFee").value || 0); D.fee = fee; const r = mgBid(p, fee); D.msg = r.txt; D.ok = !!r.ok;

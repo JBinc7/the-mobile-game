@@ -154,18 +154,17 @@ const Hub = (() => {
     if (view==="home") mount3D();
   }
   // the last player career's player turns slowly on the Player Career card, in 3D where the phone can
+  // (the lifelike players only: the drawing stays until they've loaded)
   function mount3D(){
-    clearTimeout(mountT);
-    let tries = 0;
-    const go = () => {
-      const el = document.getElementById("hubPlayerArt"); if (!el || typeof G3==="undefined" || !G3.on || !G3.on()) return;
-      if (!G3.ready()){ if (++tries<20) mountT = setTimeout(go, 600); return; }
+    if (typeof G3==="undefined" || !G3.on || !G3.on() || !document.getElementById("hubPlayerArt")) return;
+    const t = ++mountT;
+    G3.load().then(ok=>ok ? G3.people() : false).then(got=>{
+      const el = document.getElementById("hubPlayerArt"); if (!got || t!==mountT || !el || APP!=="hub") return;
       let pl = null, club = null;
       for (let i = 1; i<=HUB_SLOTS && !pl; i++){ const d = read("player", i); if (d && d.player){ pl = d.player; club = d.club; } }
       pl ||= {name:"", skin:2, hair:"short", hairColour:"Black", number:"10"};
       if (G3.card.mount(el, {...pl, photo:null}, club ? meta(club) : {n:"", c1:"#0B1020", c2:"#00F0A8"})) el.classList.add("has3d");
-    };
-    go();
+    });
   }
 
   document.addEventListener("click", e=>{
