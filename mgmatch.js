@@ -19,7 +19,7 @@ const MG_MENT = ["Ultra defensive", "Defensive", "Balanced", "Attacking", "Ultra
 function mmSide(club, user, f){
   let form, xi, bench, tac;
   if (user){
-    mgMendXI(true);
+    if (mgDof()) mdfPrep(f); else mgMendXI(true);
     form = M.tac.f; xi = M.tac.xi.map(id=>M.P[id] || null); bench = M.tac.bench.map(id=>M.P[id]).filter(Boolean);
     tac = {ment:M.tac.ment, tempo:M.tac.tempo, press:M.tac.press, width:M.tac.width, pass:M.tac.pass, line:M.tac.line, style:M.tac.style};
   } else {
@@ -31,7 +31,9 @@ function mmSide(club, user, f){
   const slots = MG_FORM[form] || MG_FORM["4-3-3"];
   const on = xi.map((p, i)=>p ? mmMan(p, slots[i][0], slots[i][1], slots[i][2], true) : null).filter(Boolean);
   const fam = user ? (M.tac.fam[form] ?? 60) : 85;
-  return {club, user, form, on, bench:bench.map(p=>({p, used:false})), subs:0, subW:0, tac, fam, boost:0, boostT:0, push:0, pushT:0, focus:0,
+  // a director of football's head coach makes his team play better (or worse) than its ratings
+  const cb = user ? mdfBoost(f ? f.h===club && !f.neutral : false) : 0;
+  return {club, user, form, on, bench:bench.map(p=>({p, used:false})), subs:0, subW:0, tac, fam, boost:0, boostT:0, push:0, pushT:0, focus:0, cb,
     st:{sh:0, ont:0, xg:0, poss:0, cor:0, fou:0, yc:0, rc:0, sav:0, off:0}, R:null, out:[]};
 }
 function mmMan(p, pos, x, y, start){ return {p, pos, x, y, cond:p.fit ?? 100, in:0, mins:0, g:0, a:0, sh:0, ont:0, kp:0, tk:0, sv:0, yc:0, rc:0, inj:null, rt:6.3, off:false, start}; }
@@ -42,7 +44,7 @@ function mmEff(o, S){
   v += ((p.mor ?? 62) - 60)/20;
   const fa = mgFormAvg(p); if (fa) v += clamp((fa - 6.6)*1.1, -1.4, 1.4);
   v -= (100 - S.fam)*.05;
-  v += S.boost;
+  v += S.boost + (S.cb || 0);
   return v;
 }
 function mmRate(S){
@@ -281,11 +283,12 @@ function mgMatchFast(f, userSide = -1){ const G = mmNew(f, userSide); G.auto = t
 /* ================= THE MATCH SCREEN ================= */
 let LV = null;
 const MG_SPEEDS = [1, 2, 4, 8];
-function mgLive(f, onDone){
-  const us = f.h===M.club ? 0 : 1, G = mmNew(f, us);
+function mgLive(f, onDone, opt = {}){
+  const us = f.h===M.club ? 0 : 1, G = mmNew(f, us), watch = !!opt.watch;
+  if (watch) G.auto = true;
   let speed = 2, hl = "ext"; try{ speed = +localStorage.getItem("efp-mg-speed") || 2; hl = localStorage.getItem("efp-mg-hl") || "ext"; }catch(e){}
   if (!MD_SHOW[hl]) hl = "ext";
-  LV = {G, f, us, onDone, speed, paused:false, tab:"feed", feed:[], acc:0, last:0, shown:[0, 0], modal:null, shoutAt:-99, hl, raf:0, talkDone:false, big:false};
+  LV = {G, f, us, onDone, speed, paused:false, tab:"feed", feed:[], acc:0, last:0, shown:[0, 0], modal:null, shoutAt:-99, hl, raf:0, talkDone:watch, big:false, watch};
   const el = document.createElement("div"); el.id = "mgLive"; el.className = "mg-live"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Match");
   document.body.appendChild(el); document.documentElement.classList.add("mg-live-on");
   const [hk, ak] = mgKits(f.h, f.a);
@@ -303,9 +306,9 @@ function mgLive(f, onDone){
     <div class="mm-ctrl">
       <button type="button" class="mm-b" data-mm="pause" id="mmPause" aria-label="Pause">❚❚</button>
       <button type="button" class="mm-b" data-mm="speed" id="mmSpeed">${speed}×</button>
-      <button type="button" class="mm-b" data-mm="tactics">Tactics</button>
+      ${watch ? `<span class="mm-b mm-watch">${esc(M.coach ? M.coach.n : "The coach")} in the dugout</span>` : `<button type="button" class="mm-b" data-mm="tactics">Tactics</button>
       <button type="button" class="mm-b" data-mm="subs">Subs <span id="mmSubsN">0/5</span></button>
-      <button type="button" class="mm-b" data-mm="shout">Shout</button>
+      <button type="button" class="mm-b" data-mm="shout">Shout</button>`}
       <button type="button" class="mm-b" data-mm="big" id="mmBig" aria-pressed="false">Pitch ⤢</button>
       <button type="button" class="mm-b sim" data-mm="sim">Sim to end ⏭</button>
     </div>
@@ -450,8 +453,8 @@ function mmModal(){
       <p class="mm-ft-v ${won ? "w" : gd<0 || (G.dec && !won) ? "l" : "d"}">${won ? "Victory" : gd<0 || (G.dec && !won) ? "Defeat" : "Draw"}</p>
       ${G.potm ? `<p class="hint">Player of the Match: <b>${esc(G.potm.n)}</b> (${esc(G.potm.club)}) · ${G.potm.rt.toFixed(1)}</p>` : ""}
       <div class="mm-top3">${top.map(o=>`<div><b class="mg-rt ${mmRtCls(o.rt)}">${o.rt.toFixed(1)}</b><span>${esc(mgShort(o.p.n))}</span></div>`).join("")}</div>
-      <div class="label">Post-match words</div>
-      <div class="mg-seg">${[["praise","Praise"],["enc","Encourage"],["crit","Criticise"]].map(([v, l])=>`<button type="button" data-mm="post" data-v="${v}" aria-pressed="${LV.post===v}">${l}</button>`).join("")}</div>
+      ${LV.watch ? "" : `<div class="label">Post-match words</div>
+      <div class="mg-seg">${[["praise","Praise"],["enc","Encourage"],["crit","Criticise"]].map(([v, l])=>`<button type="button" data-mm="post" data-v="${v}" aria-pressed="${LV.post===v}">${l}</button>`).join("")}</div>`}
       <div class="row"><button type="button" class="btn primary big" data-mm="done">Continue</button></div></div>`;
   }
 }
@@ -462,7 +465,7 @@ function mmClick(e){
   if (a==="pause"){ LV.paused = !LV.paused; b.textContent = LV.paused ? "▶" : "❚❚"; b.setAttribute("aria-label", LV.paused ? "Play" : "Pause"); }
   else if (a==="speed"){ LV.speed = MG_SPEEDS[(MG_SPEEDS.indexOf(LV.speed) + 1) % MG_SPEEDS.length]; b.textContent = LV.speed + "×"; try{ localStorage.setItem("efp-mg-speed", LV.speed); }catch(err){} }
   else if (a==="tab"){ LV.tab = b.dataset.k; document.querySelectorAll('[data-mm="tab"]').forEach(x=>x.setAttribute("aria-selected", x===b)); mmPaintBody(); }
-  else if (["tactics","subs","shout","menu"].includes(a)){ if (!G.done) mmOpen(a); }
+  else if (["tactics","subs","shout","menu"].includes(a)){ if (!G.done && (a==="menu" || !LV.watch)) mmOpen(a); }
   else if (a==="shut"){ LV.forced = null; LV.subOff = LV.subOn = null; mmShut(); }
   else if (a==="hl"){ LV.hl = b.dataset.v; try{ localStorage.setItem("efp-mg-hl", LV.hl); }catch(err){} mmModal(); }
   else if (a==="big"){ LV.big = !LV.big; b.setAttribute("aria-pressed", LV.big); document.querySelector(".mm-wrap")?.classList.toggle("big", LV.big); }

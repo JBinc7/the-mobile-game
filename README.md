@@ -1,7 +1,7 @@
 # the-mobile-game
 making the game accessible and downloadable on phones via just a link.
 
-**English Footballing Pyramid** is a football career game with two modes: a **Player Career** (build your player, then play from the National League to the Champions League) and a **Manager Career** (take charge of any club and run it: tactics, transfers, the academy and a board to keep happy). It started as a Claude artifact. This repo is a standalone version that runs on its own, with no Claude account needed.
+**English Footballing Pyramid** is a football career game with three modes: a **Player Career** (build your player, then play from the National League to the Champions League), a **Manager Career** (take charge of any club and run it: tactics, transfers, the academy and a board to keep happy) and a **Director of Football** career (run the club above the dugout: hire and sack head coaches, buy and sell, and keep the owner happy with both the results and the books). It started as a Claude artifact. This repo is a standalone version that runs on its own, with no Claude account needed.
 
 - **One link to share.** Open it on any phone and you can play straight away in the browser.
 - **Installs like an app.** Add it to the home screen. It opens full screen, has its own icon and works without signal.
@@ -23,13 +23,13 @@ To try it before merging, pick this work's branch in step 3 instead of `main`, t
 
 ## The main menu and your saves
 
-After signing in you land on the main menu: pick **Player Career** or **Manager Career**. Each mode has **three save slots** on your account, so one account can keep three players and three managers going at once. The last save you played is a tap away at the top (*Continue*), and *Menu* in the header brings you back here from either mode.
+After signing in you land on the main menu: pick **Player Career**, **Manager Career** or **Director of Football**. Each mode has **three save slots** on your account, so one account can keep three players, three managers and three directors going at once. The last save you played is a tap away at the top (*Continue*), and *Menu* in the header brings you back here from any mode.
 
 - A slot shows who's in it (name, club, season, key numbers) with *Continue* and *Delete* (tap twice). An empty slot starts a new career.
 - Your first player career (from before slots existed) is in Player Career slot 1.
-- *Player Legacy* ranks every player you've had; the *Managers' hall of fame* ranks every manager by trophies and wins.
+- *Player Legacy* ranks every player you've had; the *Hall of fame* ranks every manager and director by trophies and wins.
 - The Player Career card shows your latest player in 3D, using the same lifelike players as the matches (the drawing shows until they've loaded).
-- Backups (Account menu) carry every slot of both modes. Loading one puts its saves back in their own slots if they're free, or in the first free slot; tick *overwrite* to replace the saves in the same slots.
+- Backups (Account menu) carry every slot of every mode. Loading one puts its saves back in their own slots if they're free, or in the first free slot; tick *overwrite* to replace the saves in the same slots.
 
 ## Manager Career
 
@@ -57,6 +57,20 @@ Inspired by Football Manager and the career modes of FIFA 17 and EA FC 26.
 - **The academy.** A youth intake every March, a youth scout you can send abroad, promotion to the first team (or release at 19).
 - **Training and growth.** A weekly team focus and intensity, and individual training for up to five players. Young players grow towards their potential, faster when they play; players over 30 decline; morale follows playing time, results and how you handle them.
 - **Unexpected events** (sponsor challenges, a star's head turned, dressing-room unrest, takeovers, wonderkids, injury crises), **awards** (Manager of the Month, the league's Golden Boot, Player of the Season, Manager of the Season and more), retirements, contracts that run out, and a career record of every season.
+
+## Director of Football
+
+The third career, in the same world as Manager Career. You don't pick the team: a **head coach** does. You decide who the coach is, which players he has to work with and what the club can afford.
+
+- **Your director.** Name, nationality, age and background: *chief scout* (your league's players are fully scouted from day one), *data analyst*, *former player* or *business* (a bigger transfer budget). Then any club in the twelve leagues.
+- **The head coach.** Each coach has a style (possession, gegenpress, counter-attack, direct, wing play, balanced or defensive) and the formation he plays it in, ratings for **tactics** (how well his teams play), **motivation** (the squad's morale), **development** (how fast players improve) and **youth trust** (how readily he picks young players), a reputation, a wage, a contract and a mood. Before every match he picks his XI and sets his tactics for the opponent; his training follows his style. The *Head coach* tab shows all of this, his record against what the squad should be getting, and his XI on the pitch.
+- **Sack and hire.** Sacking costs half his remaining wages (at least eight weeks), and the owner judges the call: sack a coach who's doing well and he won't like it. His assistant takes over as interim (weaker, and the owner gets restless after four weeks). *The coach market* lists coaches out of work and coaches at other clubs (whose clubs want compensation). Offer a wage and a contract length: he may want more, or not fancy your club. You can also offer your own coach a new contract before his runs out.
+- **Keeping him happy.** He asks for signings (a position and a rating) and is delighted when you deliver; he's unhappy when you sell his best players. A miserable coach plays worse and can resign; a successful one can be poached by a bigger club (you get compensation, then need a replacement).
+- **Watching a match.** *Watch the match* shows it in full on the 2D pitch with the coach in the dugout (no touchline controls, it's his job), or skip straight to the result.
+- **Transfers.** All of Manager Career's transfers, loans and the small print are yours to run. New arrivals go into the coach's plans when they're better than what he has.
+- **The owner.** Objectives on the pitch (league, cups, Europe, youth) and on the books: **a profit target** for the season and **wages kept below a share of revenue**. The confidence meter moves with results and money; stay in the red and it falls. Lose the owner's confidence and you're out.
+- **The books.** Match-day income, TV and prize money and commercial deals come in; player wages, the coach's wage, running costs (stadium, staff, travel; more with better facilities), fees and compensation go out. Set **ticket prices** (low fills the ground and helps at home; high earns more but the fans may protest). Invest in the **training ground** (players develop faster) and the **academy** (better youth intakes); building work comes out of the transfer budget but isn't counted against the profit target.
+- **Events for a director:** shirt sponsors, fan protests at ticket prices, takeovers, wonderkids and stars whose heads are turned.
 
 ## How the game looks
 
@@ -213,12 +227,14 @@ Players on different phones can't see each other's careers. That would need an o
 | File | What it is |
 | --- | --- |
 | `index.html` | The page: header, game area, app and phone settings |
-| `hub.js` | The main menu: Player Career or Manager Career, three save slots for each, and backups of every slot |
+| `hub.js` | The main menu: Player Career, Manager Career or Director of Football, three save slots for each, and backups of every slot |
 | `manager.js` | Manager Career's world and season: clubs and squads, the calendar, every league, cup and European competition, transfers, finances, the board, the academy, training, events and the job market |
 | `mgmatch.js` | Manager Career's matches: the engine every detailed match is played on, and the match screen (commentary, stats, ratings, substitutions, shouts and team talks) |
 | `mg2d.js` | The 2D match: open play between the engine's events, every big moment acted out, and the pitch and ground drawn on a canvas |
-| `mgui.js` | Manager Career's screens: making your manager and picking a club, Home, Squad, Tactics, Transfers, Competitions, Club, Inbox and the player card |
-| `manager.css` | The main menu's and Manager Career's styles |
+| `mgdof.js` | Director of Football: head coaches (style, ratings, mood, contracts), the coach's team selection and tactics, hiring and sacking, requests, the owner's money objectives, running costs, ticket prices and facilities |
+| `mgui.js` | Manager Career's screens (and Director of Football's): making your manager or director and picking a club, Home, Squad, Tactics, Transfers, Competitions, Club, Inbox and the player card |
+| `mgdofui.js` | Director of Football's own screens: the head coach page, the coach market, the coach on Home, the money line, facilities and ticket prices |
+| `manager.css` | The main menu's, Manager Career's and Director of Football's styles |
 | `theme.css` | The game's look: colours, panels, buttons, tabs and fields for every screen |
 | `game.js` / `game.css` | The game itself, taken from the artifact. Saving now goes to the signed-in account instead of Claude |
 | `account.js` | Accounts, the sign-in screen, the Account menu and the install instructions |

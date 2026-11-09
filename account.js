@@ -6,7 +6,7 @@
    calls Account.boot(start) once it has loaded, and this file calls back into the game (render, exportBackup…)
    only after that. */
 const Account = (() => {
-  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "2.3";
+  const LIST = "efp-accounts-v1", SESSION = "efp-session-v1", VERSION = "2.4";
   const OLD = {career:"efp-career-v1", hall:"efp-hall-v1"};   // where saves lived before accounts existed
   const $id = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -97,7 +97,7 @@ const Account = (() => {
   }
   function signOut(){ try{ localStorage.removeItem(SESSION); }catch(e){} location.reload(); }
   function wipe(acc){
-    for (const kind of [...Object.keys(OLD), "tips", "coins", "locker", "career-2", "career-3", "mgr-1", "mgr-2", "mgr-3", "mhall", "last"]){ try{ localStorage.removeItem(keyFor(acc, kind)); }catch(e){} }
+    for (const kind of [...Object.keys(OLD), "tips", "coins", "locker", "career-2", "career-3", "mgr-1", "mgr-2", "mgr-3", "dof-1", "dof-2", "dof-3", "mhall", "last"]){ try{ localStorage.removeItem(keyFor(acc, kind)); }catch(e){} }
     put(LIST, accounts().filter(a=>a.id!==acc.id));
   }
 
@@ -270,7 +270,7 @@ const Account = (() => {
     try{
       if (f.id==="acctForm"){
         nameVal = v("name"); btn.textContent = mode==="create" ? "Creating…" : "Signing in…";
-        if (mode==="create"){ const acc = await create(v("name"), v("pw"), v("pw2")); begin(acc, `Welcome, ${acc.name}! Your account is ready. Pick Player Career or Manager Career to begin.`); }
+        if (mode==="create"){ const acc = await create(v("name"), v("pw"), v("pw2")); begin(acc, `Welcome, ${acc.name}! Your account is ready. Pick Player Career, Manager Career or Director of Football to begin.`); }
         else begin(await signIn(v("name"), v("pw")));
       }
       else if (f.id==="forgotForm"){

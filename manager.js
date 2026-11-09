@@ -25,7 +25,10 @@ const MG_TB = {1:180e6, 2:18e6, 3:3e6, 4:.8e6, 5:.2e6, 6:.05e6, ES:160e6, DE:140
 const MG_WAGE = {1:45000, 2:9000, 3:3500, 4:2000, 5:900, 6:400, ES:35000, DE:32000, IT:30000, FR:25000, POR:8000, NED:7000, SCO:4500, ES2:5000, DE2:5000, IT2:4500, FR2:4000, POR2:1500, NED2:1500, SCO2:800};
 const MG_CAP = {1:[20000,55000], 2:[12000,22000], 3:[6000,14000], 4:[4000,8000], 5:[2000,4000], ES:[15000,70000], DE:[20000,60000], IT:[15000,60000], FR:[15000,35000], POR:[8000,45000], NED:[8000,45000], SCO:[6000,50000]};
 const MG_TICKET = {1:48, 2:28, 3:22, 4:20, 5:15, ES:38, DE:30, IT:32, FR:28, POR:18, NED:22, SCO:24};
-const MG_TV = {1:110e6, 2:9e6, 3:1.6e6, 4:1e6, 5:.15e6, ES:70e6, DE:60e6, IT:55e6, FR:40e6, POR:10e6, NED:9e6, SCO:4e6};
+const MG_TV = {1:35e6, 2:4e6, 3:1.6e6, 4:1e6, 5:.15e6, ES:12e6, DE:13e6, IT:13e6, FR:10e6, POR:1e6, NED:1e6, SCO:.5e6};
+// commercial income for the biggest club in each league (sponsors, shirts, tours): far more for the giants
+const MG_COM = {1:150e6, 2:8e6, 3:1e6, 4:.4e6, 5:.1e6, ES:130e6, DE:110e6, IT:100e6, FR:120e6, POR:30e6, NED:25e6, SCO:20e6};
+const mgCommercial = club => { const t = mgTierOf(club); return (MG_TV[t] || 2e5)*.1 + (MG_COM[t] || 1e5)*Math.pow(clamp((mgRep(club) - .55)/.45, 0, 1.1), 3); };
 const MG_NAT3 = {England:"ENG", Scotland:"SCO", Wales:"WAL", Ireland:"IRL", Spain:"ESP", Germany:"GER", Italy:"ITA", France:"FRA", Portugal:"POR", Netherlands:"NED", Belgium:"BEL",
   Denmark:"DEN", Norway:"NOR", Sweden:"SWE", Poland:"POL", Czechia:"CZE", Croatia:"CRO", Serbia:"SRB", Hungary:"HUN", Greece:"GRE", Ukraine:"UKR", Turkey:"TUR", Azerbaijan:"AZE",
   Brazil:"BRA", Argentina:"ARG", Uruguay:"URU", Colombia:"COL", USA:"USA", Nigeria:"NGA", Ghana:"GHA", Senegal:"SEN", "Ivory Coast":"CIV", Morocco:"MAR", Japan:"JPN", "South Korea":"KOR"};
@@ -301,7 +304,8 @@ function mgEuDays(code, Y){
 function mgNewSave(prof){
   const seed = Math.random().toString(36).slice(2, 10);
   M = {v:MG_V, id:"m" + Date.now().toString(36), seed, created:Date.now(), updated:Date.now(),
-    mgr:{name:prof.name, nat:prof.nat, age:+prof.age||42, bg:prof.bg||"pro", rep:{sunday:22, semi:34, pro:46, intl:58}[prof.bg] ?? 40, kit:prof.kit||0},
+    role:prof.role==="dof" ? "dof" : "mgr",
+    mgr:{name:prof.name, nat:prof.nat, age:+prof.age||42, bg:prof.bg||"pro", rep:{sunday:22, semi:34, pro:46, intl:58, scout:34, analyst:36, player:50, business:40}[prof.bg] ?? 40, kit:prof.kit||0},
     club:null, season:2026, day:MGD(2026, 6, 1), done:false, phase:"new",
     tiers:{}, rep:{}, vs:{}, am:{}, cl:{}, P:{}, nid:1, gone:{},
     tab:{}, order:{}, res:{}, myres:[], cups:{}, eu:{}, po:{}, euroQ:{...EURO_2026},
@@ -319,7 +323,7 @@ function mgTakeJob(club, first){
   const old = M.club;
   M.club = club; M._tier = null;
   const c = mgMaterialize(club);
-  c.mg = M.mgr.name;
+  if (!mgDof()) c.mg = M.mgr.name;
   if (old && old!==club){ M.am[old] = mgAiManager(old); if (M.cl[old]) M.cl[old].mg = M.am[old]; }
   // the rest of your new league comes into full detail too
   const t = mgTierOf(club); M.tiers[t].forEach(n=>mgMaterialize(n));
@@ -333,6 +337,7 @@ function mgTakeJob(club, first){
   mgMine().forEach(p=>{ p.role = mgRoleGuess(p); });
   M.fin = mgNewFinances(club, first);
   M.board = {conf:first ? 62 : 66, obj:mgObjectives(), hist:[], wk:0};
+  if (mgDof()) mdfSetup(club);
   (M.yth || []).forEach(id=>{ delete M.P[id]; });
   M.yth = []; M.ysc = null; M.short = []; M.scout = []; M.bids = []; M.offers = []; M.acad = null; M.chal = null; M.ev = null;
   mgYouthIntake(true);
@@ -341,6 +346,7 @@ function mgTakeJob(club, first){
   mgSave();
 }
 function mgWelcomeText(){
+  if (mgDof()) return mdfWelcome();
   const o = M.board.obj.map(x=>`• ${x.t} (${x.imp})`).join("\n");
   return `The board welcomes you as the new manager of ${M.club}.\n\nYour transfer budget is ${mgMoney(M.fin.tb)} and your wage budget is ${mgWageTxt(M.fin.wb)}.\n\nThis season the board expects:\n${o}\n\nKeep their confidence high: results, the objectives and the club's finances all count.`;
 }
@@ -380,7 +386,7 @@ function mgObjectives(){
   if (q){ const top = e<=4 && q==="UCL"; o.push({k:"eu", code:q, t:top ? `Reach the quarter-finals of the ${MG_EU[q].name}` : `Reach the knockout stage of the ${MG_EU[q].name}`, n:top ? 2 : 0, imp:"High", w:2}); }
   o.push({k:"wage", t:"Keep the wage bill within budget", imp:"Medium", w:1});
   if (SELLERS.has(M.club) || T.level>=3 || mgRep(M.club)<.72) o.push({k:"youth", t:"Give 15 starts to players aged 21 or under", n:15, imp:"Low", w:1});
-  return o;
+  return mgDof() ? mdfObjectives(o) : o;
 }
 const mgConfLabel = c => c>=80 ? "Delighted" : c>=65 ? "Pleased" : c>=50 ? "Satisfied" : c>=35 ? "Concerned" : c>=20 ? "Worried" : "Furious";
 function mgBoardShift(d, why){ const B = M.board; B.conf = +clamp(B.conf + d, 0, 100).toFixed(1); if (why) B.hist.push({d:M.day, v:d, why}); if (B.hist.length>40) B.hist.shift(); }
@@ -703,7 +709,8 @@ function mgFinishUserMatch(f, r){
     if (res==="W"){ J.w++; M.car.w++; } else if (res==="D"){ J.d++; M.car.d++; } else { J.l++; M.car.l++; }
     // the board's view of the result: against what a club of yours should get from this game
     const exp = mgExpPts(M.club, opp, mine ? 1 : -1), pts = res==="W" ? 3 : res==="D" ? 1 : 0;
-    mgBoardShift(clamp((pts - exp)*(f.c==="L" ? .95 : .7), -2.6, 2.6));
+    mgBoardShift(clamp((pts - exp)*(f.c==="L" ? .95 : .7)*(mgDof() ? .7 : 1), -2.6, 2.6));
+    mdfAfterMatch(res, pts, exp);
     mgMine().forEach(p=>{ const s = r.ps.find(x=>x.id===p.id), mins = s ? s.mins : 0;
       p.pt = +((p.pt ?? MG_ROLE_SHARE[p.role ?? 2])*.8 + Math.min(1, mins/90)*.2).toFixed(3);
       p.mor = clamp(p.mor + (res==="W" ? 1.5 : res==="L" ? -1.5 : 0)*(mins ? 1 : .5) + (s ? clamp((s.r - 6.6)*1.2, -1.5, 1.5) : 0), 5, 100); });
@@ -724,7 +731,7 @@ const mgWeeks = d => d<7 ? `${d} day${d===1 ? "" : "s"}` : `${Math.round(d/7)} w
 function mgExpPts(club, opp, home){ const lh = mgLam(mgLevel(club) - mgLevel(opp), home), la = mgLam(mgLevel(opp) - mgLevel(club), -home);
   let w = 0, d = 0; for (let i = 0; i<8; i++) for (let j = 0; j<8; j++){ const p = Math.exp(-lh)*lh**i/mgFact(i)*Math.exp(-la)*la**j/mgFact(j); if (i>j) w += p; else if (i===j) d += p; } return 3*w + d; }
 const mgFact = n => n<2 ? 1 : n*mgFact(n - 1);
-function mgGate(){ const t = mgLeagueOf(), cap = mgCapacity(M.club), fill = clamp(.55 + mgRep(M.club)*.3 + (mgTable(t).findIndex(r=>r.n===M.club)<5 ? .08 : 0), .3, 1); return Math.round(cap*fill*(MG_TICKET[t] || 15)); }
+function mgGate(){ const t = mgLeagueOf(), cap = mgCapacity(M.club), fill = clamp(.55 + mgRep(M.club)*.3 + (mgTable(t).findIndex(r=>r.n===M.club)<5 ? .08 : 0) + mdfFillF(), .3, 1); return Math.round(cap*fill*(MG_TICKET[t] || 15)*mdfGateF()); }
 // prize money: for reaching each round and winning a cup, and Europe's fees for games and wins
 function mgPrize(f, res, decW){
   const top = isTop(mgLeagueOf()) && TIERS[mgLeagueOf()].level===1;
@@ -776,24 +783,28 @@ function mgWeekly(){
     if (bill>M.fin.wb*1.02) mgBoardShift(-.6, "Wage bill over budget");
     if (M.board.conf<15 && played>=10) return mgSacked("results");
   }
+  if (mgDof()){ if (M.coach) mgFinAdd("exp", "staff", M.coach.wage); mdfWeekly(); }
   if (mgInWindow()) mgWindowWeek();
   mgAiManagers();
   if (!M.ev && M.phase==="season" && Math.random()<.13) mgEvent();
   M._lv = null;
 }
 function mgMonthly(){
-  const t = mgLeagueOf(), sp = (MG_TV[t] || 2e5)*.25*(.6 + mgRep(M.club)*.5);
+  const t = mgLeagueOf(), sp = mgCommercial(M.club);
   if (M.phase!=="summer") mgFinAdd("inc", "spons", Math.round(sp/12));
   // manager of the month: the best points haul in your league over the last month
   if (M.phase==="season" && M.mon && M.mon.pts){
     const tb = mgTable(t), gain = tb.map(r=>({n:r.n, g:r.pts - (M.mon.pts[r.n] || 0), p:r.p - (M.mon.p[r.n] || 0)})).filter(x=>x.p>=3).sort((a, b)=>b.g - a.g || mgLevel(a.n) - mgLevel(b.n));
     if (gain.length){ const w = gain[0], mo = MG_MO[(mgDate(M.day).getUTCMonth() + 11) % 12];
-      if (w.n===M.club){ M.mgr.rep = Math.min(100, M.mgr.rep + 1.5); M.aw.push({s:M.season, t:`Manager of the Month · ${mo}`}); mgMail("award", `Manager of the Month!`, `You're the ${TIERS[t].name} Manager of the Month for ${mo}: ${w.g} points from ${w.p} games.`, {stop:1}); }
+      if (w.n===M.club && mgDof()){ const C = M.coach; C.mood = clamp(C.mood + 5, 0, 100); C.rep = Math.min(99, C.rep + 1); M.aw.push({s:M.season, t:`Manager of the Month · ${mo} (${C.n})`}); mgMail("award", `${C.n}: Manager of the Month`, `Your head coach is the ${TIERS[t].name} Manager of the Month for ${mo}: ${w.g} points from ${w.p} games.`); }
+      else if (w.n===M.club){ M.mgr.rep = Math.min(100, M.mgr.rep + 1.5); M.aw.push({s:M.season, t:`Manager of the Month · ${mo}`}); mgMail("award", `Manager of the Month!`, `You're the ${TIERS[t].name} Manager of the Month for ${mo}: ${w.g} points from ${w.p} games.`, {stop:1}); }
       else mgMail("news", `Manager of the Month: ${M.am[w.n] || "the " + w.n + " boss"}`, `${M.am[w.n] || "The manager"} of ${w.n} wins the award for ${mo} with ${w.g} points from ${w.p} games.`); }
   }
   const tb = mgTable(t); M.mon = {pts:Object.fromEntries(tb.map(r=>[r.n, r.pts])), p:Object.fromEntries(tb.map(r=>[r.n, r.p]))};
 }
 function mgSpecial(w){
+  if (w==="wclose" || w==="jclose") mdfWindowShut();
+  if (w==="renew") mdfRenewNote();
   if (w==="wclose"){ mgMail("transfer", "The summer window has closed", `Deadline day is over. ${mgMoney(M.fin.tb)} left in your transfer budget; the window opens again on 1 January.`); M.tl = []; }
   if (w==="jopen"){ mgMail("transfer", "The January window is open", `Your transfer budget: ${mgMoney(M.fin.tb)}. The window closes on 1 February.`, {stop:1}); }
   if (w==="jclose") mgMail("transfer", "The January window has closed", `The window shuts until the summer.`);
@@ -807,7 +818,8 @@ function mgSacked(why, ended){
   if (!ended) M.hist.push(mgHistRow(true));
   M.mgr.rep = Math.max(5, M.mgr.rep - 6);
   M.jobs = mgVacancies(true);
-  mgMail("board", `Sacked by ${M.club}`, why==="relegated" ? `${M.club} have been relegated, and the board has decided to make a change. Thank you for your efforts.` : `The board has lost confidence in you and has decided to end your time at ${M.club}. Clubs with vacancies will be in touch.`, {stop:1});
+  if (mgDof()) mgMail("board", `Sacked by ${M.club}`, `${M.club}'s owner has decided to make a change and you've lost your job as Director of Football. Clubs with vacancies will be in touch.`, {stop:1});
+  else mgMail("board", `Sacked by ${M.club}`, why==="relegated" ? `${M.club} have been relegated, and the board has decided to make a change. Thank you for your efforts.` : `The board has lost confidence in you and has decided to end your time at ${M.club}. Clubs with vacancies will be in touch.`, {stop:1});
   mgHallRecord();
 }
 function mgHistRow(partial){
@@ -840,6 +852,9 @@ function mgSeasonEnd(){
     L.forEach((r, i)=>{ const e = byLv.indexOf(r.n); M.rep[r.n] = +clamp(mgRep(r.n) + (e - i)/L.length*.04, .55, 1.06).toFixed(3); }); }
   // awards in your league
   rev.aw = mgAwards(t);
+  // money: TV and league placing (before the books are judged)
+  const tv = (MG_TV[t] || 1e5)*(1 + (tb.length - pos)/tb.length*.6);
+  mgFinAdd("inc", "tv", Math.round(tv));
   // the board's verdict on each objective
   let score = 0, wsum = 0;
   M.board.obj.forEach(o=>{
@@ -850,6 +865,7 @@ function mgSeasonEnd(){
       const reached = won ? 9 : out==null ? (ko ? 1 : 0) : Math.max(0, MG_EU_KO.indexOf(out)); met = o.n===0 ? ko || won : reached>=o.n + 1 || won; note = won ? "Won it" : out ? `Out: ${out}` : ""; }
     else if (o.k==="wage"){ met = mgBill()<=M.fin.wb*1.02; note = `${mgWageTxt(mgBill())} of ${mgWageTxt(M.fin.wb)}`; }
     else if (o.k==="youth"){ const n = mgMine().filter(p=>p.age<=21).reduce((s, p)=>s + p.st.st, 0); met = n>=o.n; note = `${n} starts`; }
+    else { const r = mdfObjMet(o); if (r){ met = r.met; note = r.note; } }
     o.met = met; score += (met ? 1 : 0)*o.w; wsum += o.w;
     rev.obj.push({t:o.t, imp:o.imp, met, note});
   });
@@ -859,9 +875,7 @@ function mgSeasonEnd(){
   M.mgr.rep = clamp(M.mgr.rep + (grade - .5)*8, 1, 100);
   rev.conf = M.board.conf;
   M.hist.push(mgHistRow(false));
-  // money: TV and league placing, and next season's budget
-  const tv = (MG_TV[t] || 1e5)*(1 + (tb.length - pos)/tb.length*.6);
-  mgFinAdd("inc", "tv", Math.round(tv));
+  // next season's budget
   const F = M.fin; F.hist.push({s:seasonLabel(M.season), inc:{...F.inc}, exp:{...F.exp}, bal:F.bal});
   // where every club's going in Europe next season
   M.euroQ = mgEuroNext(champs);
@@ -877,6 +891,7 @@ function mgSeasonEnd(){
   mgDues("end");
   mgAgeWorld();
   rev.retired = M._retired || []; M._retired = [];
+  if (mgDof()) mdfSeasonEnd();
   M.review = rev;
   M.phase = "summer";
   mgHallRecord();
@@ -915,7 +930,7 @@ function mgAwards(t){
   // manager of the season: the biggest climb above expectations
   const L = mgTable(t), byLv = L.slice().sort((a, b)=>mgLevel(b.n) - mgLevel(a.n)).map(r=>r.n);
   const mos = L.map((r, i)=>({n:r.n, d:byLv.indexOf(r.n) - i + (i===0 ? 2.5 : 0)})).sort((a, b)=>b.d - a.d)[0];
-  out.push({t:"Manager of the Season", n:mos.n===M.club ? M.mgr.name : (M.am[mos.n] || "Their manager"), club:mos.n, v:`${ord(L.findIndex(r=>r.n===mos.n) + 1)} place`, me:mos.n===M.club});
+  out.push({t:"Manager of the Season", n:mos.n===M.club ? (mgDof() ? M.coach.n : M.mgr.name) : (M.am[mos.n] || "Their manager"), club:mos.n, v:`${ord(L.findIndex(r=>r.n===mos.n) + 1)} place`, me:mos.n===M.club && !mgDof()});
   out.forEach(a=>{ if (a.club===M.club){ M.aw.push({s:M.season, t:a.me ? a.t : `${a.t}: ${a.n}`}); if (a.me) M.mgr.rep = Math.min(100, M.mgr.rep + 3); } });
   return out;
 }
@@ -987,6 +1002,7 @@ function mgNewSeason(){
   M.mgr.age++;
   mgMine().forEach(p=>{ M.kn[p.id] = 100; });
   mgMendXI(true);
+  if (mgDof()) mdfPrep(null);
   M.review = null;
   if (M._dues){ M._dues = 0; mgDues("start"); }
   mgMail("board", `${seasonLabel(M.season)}: the new season`, `Pre-season starts today and the transfer window is open until 1 September.\n\nYour transfer budget: ${mgMoney(F.tb)}. Wage budget: ${mgWageTxt(F.wb)}.\n\nThe board expects:\n${M.board.obj.map(o=>`• ${o.t} (${o.imp})`).join("\n")}`, {stop:1});
@@ -1007,7 +1023,7 @@ function mgDevelop(p, weeks, T){
   const base = age<=18 ? .25 : age<=20 ? .22 : age<=22 ? .16 : age<=24 ? .1 : age<=26 ? .06 : age<=28 ? .03 : 0;
   const room = clamp((p.pot - o)/6, 0, 1.5), play = clamp((p._mins || 0)/170, 0, 1);
   const ind = T && T.ind ? T.ind.find(x=>x.id===p.id) : null;
-  const tm = T ? (T.int===2 ? 1.25 : T.int===0 ? .8 : 1)*(ind ? 1.3 : 1) : 1;
+  const tm = T ? (T.int===2 ? 1.25 : T.int===0 ? .8 : 1)*(ind ? 1.3 : 1)*(T.mult || 1) : 1;
   let g = base*room*(.45 + .55*play)*tm*weeks;
   if (age>=30) g -= (age - 29)*.02*weeks*(T && T.focus==="fit" ? .75 : 1);
   if (p.loan) g = base*room*(.45 + .55*p.loan.play)*weeks - (age>=30 ? (age - 29)*.02*weeks : 0);
@@ -1151,7 +1167,7 @@ function mgSign(p, c, yrs, role){
   if (c.rc) lines.push(`Release clause: ${mgMoney(c.rc)}.`);
   if (B) B.st = "done";
   if (M.tac.bench.length<9) M.tac.bench.push(q.id);
-  const xi = q._in = mgAssistIn(q);
+  const xi = q._in = mgAssistIn(q); mdfArrived(q);
   mgMail("transfer", `${q.n} signs!`, `${q.n} (${q.pos}, ${q.age}) joins from ${from}${fee ? ` for ${mgDealTxt(T)}` : ""} on ${mgWageTxt(c.wage)} until ${M.season + c.yrs}. Squad role: ${MG_ROLES[c.role]}.${lines.length ? "\n\n" + lines.join("\n") : ""}${xi ? `\n\nYour assistant has put him straight into the XI at ${xi.pos}${xi.out ? `, in place of ${xi.out}` : ""}.` : "\n\nYour assistant has kept your XI as it is: he starts on the bench."}`);
   mgSave(); return q;
 }
@@ -1174,6 +1190,7 @@ function mgRenew(p, c, yrs, role){
 function mgSell(p, to, t, why){
   if (typeof t==="number") t = {fee:t};
   const fee = t.fee || 0, now = Math.round(fee/((t.inst || 0) + 1)), lines = [];
+  mdfSold(p);
   M.cl[M.club].sq = M.cl[M.club].sq.filter(id=>id!==p.id);
   M.tac.xi = M.tac.xi.map(id=>id===p.id ? null : id); M.tac.bench = M.tac.bench.filter(id=>id!==p.id);
   if (M.tac.cap===p.id) M.tac.cap = null;
@@ -1270,7 +1287,7 @@ function mgLoanIn(p, pay, role, opt){
   q.lin = {from, pay, opt:opt || 0, s:M.season};
   M.cl[M.club].sq.push(q.id); mgNumbers(mgMine()); M.kn[q.id] = 100; M.short = M.short.filter(id=>id!==p.id);
   if (M.tac.bench.length<9) M.tac.bench.push(q.id);
-  const xi = q._in = mgAssistIn(q);
+  const xi = q._in = mgAssistIn(q); mdfArrived(q);
   mgMail("transfer", `${q.n} arrives on loan`, `${q.n} (${q.pos}, ${q.age}) joins on loan from ${from} until the end of the season. You pay ${Math.round(pay*100)}% of his wages (${mgWageTxt(q.wage*pay)}). Squad role: ${MG_ROLES[role]}.${opt ? ` You can make it permanent for ${mgMoney(opt)}.` : ""}${xi ? `\n\nYour assistant has put him straight into the XI at ${xi.pos}${xi.out ? `, in place of ${xi.out}` : ""}.` : "\n\nYour assistant has kept your XI as it is: he starts on the bench."}`);
   mgSave(); return q;
 }
@@ -1446,7 +1463,7 @@ function mgAnswerOffer(o, how, t){
 }
 
 /* ================= THE ACADEMY ================= */
-const mgAcademy = () => M.acad ?? (M.acad = clamp(Math.round(1 + (mgRep(M.club) - .55)/.12 + (isTop(mgLeagueOf()) ? .5 : 0)), 1, 5));
+const mgAcademy = () => M.acad ?? (M.acad = M.fac && M.fac.acad ? M.fac.acad : clamp(Math.round(1 + (mgRep(M.club) - .55)/.12 + (isTop(mgLeagueOf()) ? .5 : 0)), 1, 5));
 function mgYouthPlayer(R, region){
   const A = mgAcademy(), pos = mgPick(R, ["GK","CB","CB","LB","RB","CDM","CM","CM","CAM","LM","RM","LW","RW","ST","ST"]), age = 15 + Math.floor(R()*2);
   const gem = R()<.02 + A*.015, nat = region ? mgPick(R, {home:[mgCountry(M.club)], eu:["Spain","France","Germany","Netherlands","Portugal","Belgium","Italy","Croatia","Denmark"], sa:["Brazil","Argentina","Uruguay","Colombia"], af:["Nigeria","Ghana","Senegal","Ivory Coast","Morocco"]}[region] || [mgCountry(M.club)]) : (R()<.85 ? mgCountry(M.club) : mgPick(R, SQ_FOREIGN));
@@ -1491,22 +1508,33 @@ function mgEvent(){
   const opts = [];
   opts.push(()=>({t:"Sponsor challenge", b:`A sponsor will pay ${mgMoney(big)} if you win your next 3 games.`, ch:[["Accept the challenge", "sponsor"], ["Not now", "x"]]}));
   if (star && star.age<=30) opts.push(()=>({t:`${star.n}'s head has been turned`, b:`A bigger club is circling and ${star.n} is unsettled. How do you respond?`, ch:[["Promise him a new contract (+25% wages)", "star-new"], ["He's going nowhere", "star-no"], ["Open to offers", "star-sell"]], id:star.id}));
-  if (lost>=2) opts.push(()=>({t:"Dressing room unrest", b:`Results have been poor and the players are restless. What do you do?`, ch:[["Hold a team meeting", "meet"], ["Give them a day off", "dayoff"], ["Ignore it", "x"]]}));
+  if (lost>=2 && !mgDof()) opts.push(()=>({t:"Dressing room unrest", b:`Results have been poor and the players are restless. What do you do?`, ch:[["Hold a team meeting", "meet"], ["Give them a day off", "dayoff"], ["Ignore it", "x"]]}));
   opts.push(()=>({t:"Takeover rumours", b:`A consortium is in talks to invest in the club. They'll add ${mgMoney(big*2.5)} to your transfer budget now, but they want a higher league finish.`, ch:[["Welcome the investment", "invest"], ["Turn it down", "x"]]}));
   opts.push(()=>({t:"Wonderkid alert", b:`Your scouts have found a 16-year-old with rare talent at a smaller club. He'd cost ${mgMoney(Math.max(5e4, big*.35))}.`, ch:[["Sign him for the academy", "wonder"], ["Pass", "x"]]}));
   if (sq.filter(p=>p.inj).length>=3) opts.push(()=>({t:"Injury crisis", b:`With ${sq.filter(p=>p.inj).length} players injured, the board will let you sign an experienced free agent on a short deal.`, ch:[["Sign the free agent", "crisis"], ["We'll cope", "x"]]}));
   const yk = sq.find(p=>p.age<=20 && p.st.ap>0);
-  if (yk) opts.push(()=>({t:"Viral moment", b:`A clip of ${yk.n}'s skill has gone viral. Fans want to see more of him.`, ch:[["Promise him more games", "viral-yes"], ["Keep his feet on the ground", "x"]], id:yk.id}));
+  if (yk && !mgDof()) opts.push(()=>({t:"Viral moment", b:`A clip of ${yk.n}'s skill has gone viral. Fans want to see more of him.`, ch:[["Promise him more games", "viral-yes"], ["Keep his feet on the ground", "x"]], id:yk.id}));
+  // a director of football's own decisions: the shirt sponsor, the ticket prices
+  if (mgDof()){
+    const sp = mgRoundFee(Math.max((MG_TV[t] || 2e5)*.06, mgCommercial(M.club)*.2));
+    opts.push(()=>({t:"A new shirt sponsor", b:`A company wants its name on your shirts. They'll pay ${mgMoney(sp)} now for one season, or ${mgMoney(sp*.45)} a season for three seasons, starting now.`, ch:[["One season, cash now", "spon-1"], ["Three seasons", "spon-3"], ["Not interested", "x"]]}));
+    if ((M.fin.tix ?? 1)===2) opts.push(()=>({t:"Fans protest at ticket prices", b:`Supporters' groups are unhappy with the price of tickets and are planning a protest.`, ch:[["Bring prices back to normal", "tix-down"], ["Hold firm", "tix-hold"]]}));
+  }
   const e = mgPick(Math.random, opts)();
-  M.ev = {...e, d:M.day, id:(M.evid = (M.evid || 0) + 1)};
+  M.ev = {...e, pid:e.id || null, d:M.day, id:(M.evid = (M.evid || 0) + 1)};
   mgMail("event", e.t, e.b, {act:{type:"event", ev:M.ev.id, ch:e.ch}, stop:1});
 }
 function mgEventAnswer(k){
   const E = M.ev; if (!E) return "That's in the past now.";
   const m = M.inbox.find(x=>x.act && x.act.ev===E.id); M.ev = null;
-  const p = E.id ? M.P[E.id] : null, sq = mgMine(), t = mgLeagueOf(), big = (MG_TB[t] || 1e5)*.04*mgRep(M.club);
+  const p = E.pid ? M.P[E.pid] : null, sq = mgMine(), t = mgLeagueOf(), big = (MG_TB[t] || 1e5)*.04*mgRep(M.club);
   let out = "Noted.";
-  if (k==="sponsor"){ M.chal = {k:"win", need:3, got:0, left:3, reward:mgRoundFee(big)}; out = "Challenge accepted: win the next three."; }
+  if (k==="spon-1" || k==="spon-3"){ const sp = mgRoundFee(Math.max((MG_TV[mgLeagueOf()] || 2e5)*.06, mgCommercial(M.club)*.2));
+    if (k==="spon-1"){ M.fin.tb += sp; mgFinAdd("inc", "spons", sp); out = `${mgMoney(sp)} goes into your transfer budget.`; }
+    else { const a = mgRoundFee(sp*.45); M.fin.tb += a; mgFinAdd("inc", "spons", a); for (let y = 1; y<=2; y++) (M.recv ||= []).push({why:"inst", club:"Shirt sponsor", n:"the sponsorship", amt:a, s:M.season + y}); out = `${mgMoney(a)} now, and the same at the start of each of the next two seasons.`; } }
+  else if (k==="tix-down"){ M.fin.tix = 1; mgMine().forEach(p=>{ p.mor = clamp(p.mor + 2, 0, 100); }); out = "Prices are back to normal and the fans are behind the team again."; }
+  else if (k==="tix-hold"){ mgBoardShift(-2, "Fans protest at ticket prices"); out = "The protest goes ahead. The owner isn't pleased with the headlines."; }
+  else if (k==="sponsor"){ M.chal = {k:"win", need:3, got:0, left:3, reward:mgRoundFee(big)}; out = "Challenge accepted: win the next three."; }
   else if (k==="star-new" && p){ p.wage = mgRoundWage(p.wage*1.25); p.con = Math.max(p.con, M.season + 3); p.mor = clamp(p.mor + 15, 0, 100); out = `${p.n} is happy and signs a new deal.`; }
   else if (k==="star-no" && p){ p.mor = clamp(p.mor - 14, 0, 100); out = `${p.n} isn't pleased.`; }
   else if (k==="star-sell" && p){ p.tl = 1; out = `${p.n} is available. Expect offers.`; }
@@ -1533,7 +1561,7 @@ const MG_PRESS = [
   {q:o=>`Your opponents' manager says they'll dominate. Thoughts?`, a:[["Let's see on the pitch.", {mor:2, opp:1}], ["He's entitled to his opinion.", {mor:0}], ["He talks too much.", {mor:3, opp:2, board:-1}]]},
   {q:o=>`What do you expect from your young players?`, a:[["They'll get their chance.", {mor:2}], ["Experience wins games.", {mor:-1}], ["Nobody's place is safe.", {mor:1}]]}
 ];
-function mgPressFor(f){ const R = mgR(`${M.seed}|${f.key}`); if (f.c==="F" || R()<.55) return null; const Q = mgPick(R, MG_PRESS); return {q:Q.q({opp:f.h===M.club ? f.a : f.h}), a:Q.a}; }
+function mgPressFor(f){ if (mgDof()) return null; const R = mgR(`${M.seed}|${f.key}`); if (f.c==="F" || R()<.55) return null; const Q = mgPick(R, MG_PRESS); return {q:Q.q({opp:f.h===M.club ? f.a : f.h}), a:Q.a}; }
 function mgPressAnswer(fx, i){
   const P = mgPressFor(fx); if (!P) return; const e = P.a[i][1];
   if (e.mor) mgMine().forEach(p=>{ p.mor = clamp(p.mor + e.mor, 0, 100); });
@@ -1579,7 +1607,7 @@ function mgHallGet(){ try{ return JSON.parse(localStorage.getItem(mgHallKey())) 
 function mgHallRecord(){
   if (!M) return;
   const list = mgHallGet().filter(x=>x.id!==M.id), c = M.car;
-  list.push({id:M.id, name:M.mgr.name, nat:M.mgr.nat, club:M.club, clubs:[...new Set(M.clubs.map(x=>x.club))], seasons:M.hist.filter(h=>!h.part).length, p:c.p, w:c.w, d:c.d, l:c.l,
+  list.push({id:M.id, role:M.role || "mgr", name:M.mgr.name, nat:M.mgr.nat, club:M.club, clubs:[...new Set(M.clubs.map(x=>x.club))], seasons:M.hist.filter(h=>!h.part).length, p:c.p, w:c.w, d:c.d, l:c.l,
     tro:M.trophies.length, list:M.trophies.slice(-6).map(x=>`${x.n} (${x.s})`), rep:Math.round(M.mgr.rep), updated:Date.now()});
   try{ localStorage.setItem(mgHallKey(), JSON.stringify(list)); }catch(e){}
 }

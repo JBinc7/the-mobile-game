@@ -18,7 +18,8 @@ const MG_IC = {
   transfers:'<path d="M4 8h13l-3-3M20 16H7l3 3"/>',
   comps:'<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a2.5 2.5 0 0 0 3 4M16 6h3a2.5 2.5 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4"/>',
   club:'<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.2-7.5 9.5-4.3-1.3-7.5-4.9-7.5-9.5V6z"/><path d="M12 7v10"/>',
-  inbox:'<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/>'
+  inbox:'<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 6.5l8.5 6.5 8.5-6.5"/>',
+  coach:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.5 10h7M8.5 14h7M8.5 18h4"/>'
 };
 const mgPosC = (pos) => `<span class="mg-pos p-${MG_GROUP(pos)}">${pos}</span>`;
 function mgOvrB(v, cls = ""){ const t = v>=85 ? "elite" : v>=78 ? "gold" : v>=70 ? "silver" : "bronze"; return `<b class="mg-ovr ${t} ${cls}">${v}</b>`; }
@@ -66,15 +67,18 @@ function mgSummary(d){
   if (!d || !d.mgr) return null;
   let lg = ""; for (const t in d.tiers || {}) if ((d.tiers[t] || []).includes(d.club)) lg = TIERS[keyOf(t)] ? TIERS[keyOf(t)].name : "";
   const c = d.car || {}, tro = (d.trophies || []).length;
+  if (d.role==="dof") return {name:d.mgr.name, sub:d.club ? `Director of Football · ${d.club}` : "Out of work", club:d.club, season:seasonLabel(d.season), done:d.phase==="retired", updated:d.updated,
+    stats:[["Seasons", (d.hist || []).filter(h=>!h.part).length], ["Coach", d.coach ? String(d.coach.n).split(" ").slice(-1)[0] : "–"], ["Balance", d.fin ? mgMoney(d.fin.bal) : "–"], ["Trophies", tro]]};
   return {name:d.mgr.name, sub:d.club ? `${d.club}${lg ? " · " + lg : ""}` : "Out of work", club:d.club, season:seasonLabel(d.season), done:d.phase==="retired", updated:d.updated,
     stats:[["Games", c.p || 0], ["Won", c.w || 0], ["Win %", c.p ? Math.round(c.w/c.p*100) + "%" : "–"], ["Trophies", tro]]};
 }
 const Mgr = {
   summary:mgSummary,
-  open(slot, key){
+  open(slot, key, role){
     MG_SLOT = slot; MG_KEY = key; M = mgLoad(key); MG_TAB = "home"; MG_PRE = null; MG_LAST = null; MG_FLASH = ""; MG_SEL = null; MG_RES = null; mgVCache.clear();
     if (M){ M._tier = null; M._idx = null; M._lv = null; mgTierOf(M.club); if (M.phase!=="new" && M.club && M.tac) mgMendXI(true); }
-    else MG_NEW = {step:1, name:"", nat:"England", age:42, bg:"pro", kit:0, lg:1, club:null};
+    else MG_NEW = {step:1, name:"", nat:"England", age:42, bg:role==="dof" ? "analyst" : "pro", kit:0, lg:1, club:null, role:role==="dof" ? "dof" : "mgr"};
+    if (typeof Hub!=="undefined") Hub.paintBand(M ? M.role : role);
     mgRender();
   },
   close(){ if (M) mgSave(); if (typeof mmClose==="function") mmClose(); mgDlgClose(); M = null; MG_KEY = ""; },
@@ -85,10 +89,10 @@ const Mgr = {
   hallHTML(){
     const list = mgHallGet().sort((a, b)=>b.tro - a.tro || b.w - a.w);
     $("#bandRight").innerHTML = Hub.menuBtn();
-    return `<div class="hub"><div class="hub-top"><button type="button" class="btn small" data-hub="home">‹ Main menu</button><div><div class="eyebrow">Manager career</div><h2 class="hub-h">Managers' hall of fame</h2></div></div>
-      ${list.length ? `<div class="mg-list">${list.map((e, i)=>`<div class="mg-hall"><span class="mg-hall-n">${i + 1}</span>${e.club ? clubBadge(e.club, 34) : ""}<div style="min-width:0"><b>${esc(e.name)}</b><small>${esc(e.clubs.join(" · "))}</small><small>${e.list.length ? esc(e.list.join(", ")) : "No trophies yet"}</small></div>
+    return `<div class="hub"><div class="hub-top"><button type="button" class="btn small" data-hub="home">‹ Main menu</button><div><div class="eyebrow">Managers and directors</div><h2 class="hub-h">Hall of fame</h2></div></div>
+      ${list.length ? `<div class="mg-list">${list.map((e, i)=>`<div class="mg-hall"><span class="mg-hall-n">${i + 1}</span>${e.club ? clubBadge(e.club, 34) : ""}<div style="min-width:0"><b>${esc(e.name)} <span class="pill ${e.role==="dof" ? "eu" : ""}">${e.role==="dof" ? "Director" : "Manager"}</span></b><small>${esc(e.clubs.join(" · "))}</small><small>${e.list.length ? esc(e.list.join(", ")) : "No trophies yet"}</small></div>
         <div class="mg-hall-s"><span><b>${e.tro}</b> trophies</span><span><b>${e.p}</b> games · ${e.p ? Math.round(e.w/e.p*100) : 0}% won</span><span>${e.seasons} season${e.seasons===1 ? "" : "s"}</span></div></div>`).join("")}</div>`
-      : `<section class="panel"><p class="hint">No managers yet. Start a Manager Career and your record will be kept here.</p></section>`}</div>`;
+      : `<section class="panel"><p class="hint">Nobody yet. Start a Manager Career or a Director of Football career and your record will be kept here.</p></section>`}</div>`;
   }
 };
 
@@ -98,19 +102,20 @@ function mgRender(){
   if (!M){ mgRenderNew(); return; }
   const unread = M.inbox.filter(m=>!m.seen).length;
   $("#bandRight").innerHTML = `<span class="season-tag">${seasonLabel(M.season)}</span>${Hub.menuBtn()}`;
-  const tabs = [["home","Home"],["squad","Squad"],["tactics","Tactics"],["transfers","Transfers"],["comps","Competitions","Comps"],["club","Club"],["inbox","Inbox"]];
+  const dof = mgDof(), tabs = [["home","Home"],["squad","Squad"],dof ? ["coach","Head coach","Coach"] : ["tactics","Tactics"],["transfers","Transfers"],["comps","Competitions","Comps"],["club","Club"],["inbox","Inbox"]];
+  if (dof && MG_TAB==="tactics") MG_TAB = "coach"; if (!dof && MG_TAB==="coach") MG_TAB = "tactics";
   const nf = M.phase==="season" || M.phase==="pre" ? mgNextFixture() : null, today = nf && nf.day===M.day;
   const cont = M.phase==="summer" ? "Next season" : M.phase==="sacked" ? "Find a job" : today ? "Match day ▶" : "Continue";
-  const body = MG_PRE ? mgPreHTML() : MG_TAB==="home" ? mgHomeHTML(nf) : MG_TAB==="squad" ? mgSquadHTML() : MG_TAB==="tactics" ? mgTacticsHTML() : MG_TAB==="transfers" ? mgTransfersHTML()
+  const body = MG_PRE ? mgPreHTML() : MG_TAB==="home" ? mgHomeHTML(nf) : MG_TAB==="squad" ? mgSquadHTML() : MG_TAB==="tactics" ? mgTacticsHTML() : MG_TAB==="coach" ? mdfCoachHTML() : MG_TAB==="transfers" ? mgTransfersHTML()
     : MG_TAB==="comps" ? mgCompsHTML() : MG_TAB==="club" ? mgClubHTML() : mgInboxHTML();
   const c = meta(M.club);
   $("#app").innerHTML = `${MG_FLASH ? `<p class="ref mg-flash" role="status">${esc(MG_FLASH)}</p>` : ""}
   <div class="mg" style="--club1:${c.c1};--club2:${c.c2}">
     <section class="mg-head">
       <div class="mg-head-id">${clubBadge(M.club, 54)}<div style="min-width:0"><div class="mg-head-club">${esc(M.club)}</div>
-        <div class="mg-head-sub">${esc(M.mgr.name)} · ${TIERS[mgLeagueOf()].name} · <b>${(mgTable(mgLeagueOf()).find(r=>r.n===M.club) || {}).p ? ord(mgPos()) : M.phase==="pre" ? "Pre-season" : "–"}</b></div></div></div>
+        <div class="mg-head-sub">${esc(M.mgr.name)}${dof ? ` · Director of Football · coach ${esc(M.coach.n)}` : ""} · ${TIERS[mgLeagueOf()].name} · <b>${(mgTable(mgLeagueOf()).find(r=>r.n===M.club) || {}).p ? ord(mgPos()) : M.phase==="pre" ? "Pre-season" : "–"}</b></div></div></div>
       <div class="mg-head-chips"><span class="mg-chip"><small>Date</small><b>${mgFmt(M.day)}</b></span><span class="mg-chip"><small>Transfer budget</small><b>${mgMoney(M.fin.tb)}</b></span>
-        <span class="mg-chip ${M.board.conf<35 ? "bad" : ""}"><small>Board</small><b>${mgConfLabel(M.board.conf)}</b></span></div>
+        <span class="mg-chip ${M.board.conf<35 ? "bad" : ""}"><small>${dof ? "Owner" : "Board"}</small><b>${mgConfLabel(M.board.conf)}</b></span></div>
       ${MG_PRE ? "" : `<button type="button" class="mg-continue ${today ? "match" : ""}" data-mg="continue" ${MG_BUSY ? "disabled" : ""}><span>${cont}</span><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4l10 8-10 8z" fill="currentColor"/></svg></button>`}
     </section>
     <div class="tabs mg-tabs" role="tablist">${tabs.map(([k, l, sh])=>`<button class="tab" role="tab" aria-selected="${MG_TAB===k && !MG_PRE}" data-mg="tab" data-k="${k}" aria-label="${l}">${mgIc(MG_IC[k])}<span class="t-l">${l}</span><span class="t-s">${sh || l}</span>${k==="inbox" && unread ? `<span class="count">${unread}</span>` : ""}</button>`).join("")}</div>
@@ -142,20 +147,20 @@ const MG_KITS = ["#111827", "#1E3A8A", "#7F1D1D", "#F8FAFC"];
 function mgRenderNew(){
   const N = MG_NEW;
   $("#bandRight").innerHTML = Hub.menuBtn();
-  const steps = ["Manager", "League", "Club"];
+  const dof = N.role==="dof", steps = [dof ? "Director" : "Manager", "League", "Club"];
   let body = "";
   if (N.step===1){
     const nats = Object.keys(SQ_NAMES).sort();
-    body = `<section class="panel mg-new"><h2>Your manager</h2>
+    body = `<section class="panel mg-new"><h2>${dof ? "Your director" : "Your manager"}</h2>
       <div class="grid-form">
         <div class="field"><label for="mg-name">Name</label><input id="mg-name" data-mgin="name" value="${esc(N.name)}" maxlength="26" placeholder="e.g. Alex Carter" autocomplete="off"></div>
         <div class="field"><label for="mg-nat">Nationality</label><select id="mg-nat" data-mgin="nat">${nats.map(n=>`<option ${n===N.nat ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
         <div class="field"><label for="mg-age">Age · <output id="mgAgeOut">${N.age}</output></label><input id="mg-age" type="range" min="28" max="70" value="${N.age}" data-mgin="age"></div>
       </div>
-      <h3>Playing background</h3>
-      <div class="mg-bgs">${MG_BG.map(([k, t, d])=>`<button type="button" class="mg-bg" data-mg="nset" data-k="bg" data-v="${k}" aria-pressed="${N.bg===k}"><b>${t}</b><span>${d}</span></button>`).join("")}</div>
-      <h3>Touchline look</h3>
-      <div class="swatches">${MG_KITS.map((c, i)=>`<button type="button" class="sw" data-mg="nset" data-k="kit" data-v="${i}" aria-pressed="${N.kit===i}" aria-label="Suit ${i + 1}" style="--sw:${c}"></button>`).join("")}</div>
+      <h3>${dof ? "Background" : "Playing background"}</h3>
+      <div class="mg-bgs">${(dof ? MDF_BG : MG_BG).map(([k, t, d])=>`<button type="button" class="mg-bg" data-mg="nset" data-k="bg" data-v="${k}" aria-pressed="${N.bg===k}"><b>${t}</b><span>${d}</span></button>`).join("")}</div>
+      ${dof ? "" : `<h3>Touchline look</h3>
+      <div class="swatches">${MG_KITS.map((c, i)=>`<button type="button" class="sw" data-mg="nset" data-k="kit" data-v="${i}" aria-pressed="${N.kit===i}" aria-label="Suit ${i + 1}" style="--sw:${c}"></button>`).join("")}</div>`}
       <div class="row" style="margin-top:18px">${mgBtn("nnext", "Choose a league ▶", "primary big")}</div>
       <p class="err" id="mgNewErr" role="alert"></p></section>`;
   } else if (N.step===2){
@@ -174,21 +179,21 @@ function mgRenderNew(){
         ${clubBadge(c, 40)}<span class="mg-clubc-n"><b>${esc(c)}</b>${mgStarsHTML(starOf(c))}</span><span class="mg-clubc-o">${mgOvrB(lvOf(c))}</span></button>`).join("")}</div>
       ${pick ? `<div class="mg-pick" style="--c1:${META[pick].c1};--c2:${META[pick].c2}">${clubBadge(pick, 72)}<div><div class="eyebrow">${esc(META[pick].nick || "")} · founded ${esc(META[pick].founded || "")}</div><h3>${esc(pick)}</h3>
         <p class="hint">${esc(META[pick].bio || "")}</p><p class="hint">Ground: <b>${esc(META[pick].ground || "")}</b> · Team rating <b>${lvOf(pick)}</b></p></div></div>` : ""}
-      <div class="row" style="margin-top:18px">${mgBtn("nback", "‹ Back")}${mgBtn("ntake", pick ? `Take charge of ${esc(pick)} ▶` : "Pick a club", "primary big", pick ? "" : "disabled")}${mgBtn("nrand", "Random club")}</div></section>`;
+      <div class="row" style="margin-top:18px">${mgBtn("nback", "‹ Back")}${mgBtn("ntake", pick ? `${dof ? "Join" : "Take charge of"} ${esc(pick)} ▶` : "Pick a club", "primary big", pick ? "" : "disabled")}${mgBtn("nrand", "Random club")}</div></section>`;
   }
-  $("#app").innerHTML = `<div class="mg-newwrap"><div class="intro"><div class="eyebrow">New manager career · ${seasonLabel(2026)} · slot 0${MG_SLOT}</div><h2 class="intro-h">The dugout awaits</h2>
-    <p class="intro-p">Build your manager, pick a club and take charge: tactics, transfers, the academy and a board to keep happy.</p></div>
+  $("#app").innerHTML = `<div class="mg-newwrap"><div class="intro"><div class="eyebrow">New ${dof ? "director of football" : "manager"} career · ${seasonLabel(2026)} · slot 0${MG_SLOT}</div><h2 class="intro-h">${dof ? "The boardroom awaits" : "The dugout awaits"}</h2>
+    <p class="intro-p">${dof ? "Run a club from above the dugout: hire and fire head coaches, buy and sell players, balance the books and keep the owner happy." : "Build your manager, pick a club and take charge: tactics, transfers, the academy and a board to keep happy."}</p></div>
     <ol class="mg-steps">${steps.map((s, i)=>`<li class="${N.step===i + 1 ? "on" : N.step>i + 1 ? "done" : ""}"><span>${i + 1}</span>${s}</li>`).join("")}</ol>${body}</div>`;
 }
 function mgCreate(){
   const N = MG_NEW;
-  mgNewSave({name:N.name, nat:N.nat, age:N.age, bg:N.bg, kit:N.kit});
+  mgNewSave({name:N.name, nat:N.nat, age:N.age, bg:N.bg, kit:N.kit, role:N.role});
   M._tier = null; mgSeasonLevels();
   mgTakeJob(N.club, true);
   mgStartSeason(); M.phase = "pre";
   M.board.obj = mgObjectives(); M.board.season = M.season;
   MG_NEW = null; MG_TAB = "home"; mgSave(); mgHallRecord();
-  MG_FLASH = `Welcome to ${M.club}, boss. Press Continue to start pre-season.`;
+  MG_FLASH = mgDof() ? `Welcome to ${M.club}. Meet your head coach, ${M.coach.n}, then press Continue to start pre-season.` : `Welcome to ${M.club}, boss. Press Continue to start pre-season.`;
   mgRender(); window.scrollTo({top:0});
 }
 
@@ -206,12 +211,12 @@ function mgHomeHTML(nf){
   if (MG_LAST) out.push(mgLastHTML());
   if (nf){ const today = nf.day===M.day && !M.done;
     out.push(`<section class="panel mg-next"><div class="mg-next-top"><span class="mg-comp">${esc(mgCompName(nf))}</span><span class="mg-when">${mgFmt(nf.day)} · ${mgRel(nf.day)}</span></div>
-      ${mgVsHTML(nf, true)}<div class="row mg-next-go">${today ? mgBtn("prematch", "Go to match day ▶", "primary big") : ""}${mgBtn("tab", "Tactics", "", 'data-k="tactics"')}${mgBtn("tab", "Squad", "", 'data-k="squad"')}</div></section>`); }
+      ${mgVsHTML(nf, true)}<div class="row mg-next-go">${today ? mgBtn("prematch", "Go to match day ▶", "primary big") : ""}${mgDof() ? mgBtn("tab", "Head coach", "", 'data-k="coach"') : mgBtn("tab", "Tactics", "", 'data-k="tactics"')}${mgBtn("tab", "Squad", "", 'data-k="squad"')}</div></section>`); }
   const t = mgLeagueOf(), tb = mgTable(t), me = tb.findIndex(r=>r.n===M.club), from = clamp(me - 2, 0, Math.max(0, tb.length - 5));
   const sq = mgMine(), inj = sq.filter(p=>p.inj), ban = sq.filter(p=>p.ban>0), sad = sq.filter(p=>p.mor<40), exp = sq.filter(p=>p.con<=M.season && !p.loan);
   const mor = sq.length ? sq.reduce((s, p)=>s + p.mor, 0)/sq.length : 60, fam = M.tac.fam[M.tac.f] || 50, bill = mgBill();
   out.push(`<div class="mg-grid">
-    <section class="panel mg-board"><h2>The board</h2>${mgGauge(M.board.conf, mgConfLabel(M.board.conf))}
+    <section class="panel mg-board"><h2>${mgDof() ? "The owner" : "The board"}</h2>${mgGauge(M.board.conf, mgConfLabel(M.board.conf))}
       <ul class="mg-objs">${M.board.obj.map(o=>{ const s = mgObjState(o); return `<li class="${s.c}"><span class="mg-obj-i" aria-hidden="true">${s.c==="ok" ? "✓" : s.c==="bad" ? "!" : "•"}</span><span><b>${esc(o.t)}</b><small>${esc(o.imp)} · ${esc(s.txt)}</small></span></li>`; }).join("")}</ul></section>
     <section class="panel"><h2>${esc(TIERS[t].name)}</h2>${mgTableHTML(t, tb.slice(from, from + 5), from)}
       <div class="row">${mgBtn("go", "Full table", "small", 'data-k="comps" data-s="table"')}${mgBtn("go", "Fixtures", "small", 'data-k="comps" data-s="fixtures"')}</div></section>
@@ -222,11 +227,12 @@ function mgHomeHTML(nf){
       ${ban.length ? `<p class="mg-note bad"><b>Suspended:</b> ${ban.map(p=>`${esc(mgShort(p.n))} (${p.ban})`).join(", ")}</p>` : ""}
       ${sad.length ? `<p class="mg-note warn"><b>Unhappy:</b> ${sad.map(p=>esc(mgShort(p.n))).join(", ")}</p>` : ""}
       ${exp.length ? `<p class="mg-note warn"><b>Contracts ending:</b> ${exp.map(p=>esc(mgShort(p.n))).join(", ")}</p>` : ""}
-      <div class="row">${mgBtn("tab", "Squad", "small", 'data-k="squad"')}${mgBtn("go", "Training", "small", 'data-k="club" data-s="training"')}</div></section>
+      <div class="row">${mgBtn("tab", "Squad", "small", 'data-k="squad"')}${mgDof() ? "" : mgBtn("go", "Training", "small", 'data-k="club" data-s="training"')}</div></section>
+    ${mgDof() ? mdfHomeCoach() : ""}
     <section class="panel"><h2>Money</h2>
       <div class="mg-kpis"><div><span class="label">Transfer budget</span><b>${mgMoney(M.fin.tb)}</b></div><div><span class="label">Balance</span><b>${mgMoney(M.fin.bal)}</b></div></div>
       <div class="label" style="margin-top:10px">Wage bill · ${mgWageTxt(bill)} of ${mgWageTxt(M.fin.wb)}</div><span class="meter ${bill>M.fin.wb ? "over" : ""}"><span style="width:${Math.min(100, bill/M.fin.wb*100)}%"></span></span>
-      <p class="hint" style="margin-top:8px">Transfer window: ${esc(mgWindowLine())}</p>
+      ${mgDof() ? mdfMoneyLine() : ""}<p class="hint" style="margin-top:8px">Transfer window: ${esc(mgWindowLine())}</p>
       <div class="row">${mgBtn("tab", "Transfers", "small", 'data-k="transfers"')}${mgBtn("go", "Finances", "small", 'data-k="club" data-s="finances"')}</div></section>
     <section class="panel"><h2>Results</h2>${M.myres.length ? `<div class="mg-res">${M.myres.slice(-6).reverse().map(mgResRow).join("")}</div>` : `<p class="hint">No games yet this season.</p>`}</section>
     <section class="panel"><h2>Latest news</h2><div class="mg-news">${M.inbox.slice(0, 5).map(m=>`<button type="button" class="mg-newsi ${m.seen ? "" : "fresh"}" data-mg="tab" data-k="inbox"><span class="mg-k k-${m.k}">${m.k}</span><span>${esc(m.t)}</span><small>${mgFmt(m.d)}</small></button>`).join("")}</div></section>
@@ -234,6 +240,7 @@ function mgHomeHTML(nf){
   return out.join("");
 }
 function mgObjState(o){
+  const d = mdfObjState(o); if (d) return d;
   if (o.k==="league"){ const p = mgPos(), pl = mgTable(mgLeagueOf()).find(r=>r.n===M.club)?.p || 0; return {c:!pl ? "" : p<=o.n ? "ok" : p<=o.n + 2 ? "" : "bad", txt:pl ? `${ord(p)} now` : "Not started"}; }
   if (o.k==="cup"){ const C = M.cups[o.code]; if (!C) return {c:"", txt:""}; if (C.win===M.club) return {c:"ok", txt:"Won!"}; const out = C.out[M.club]; return out!=null ? {c:out>=o.n ? "ok" : "bad", txt:`Out in the ${C.rounds[out]}`} : {c:C.r>=o.n ? "ok" : "", txt:`Into the ${C.rounds[C.r]}`}; }
   if (o.k==="eu"){ const E = M.eu[o.code]; if (!E) return {c:"", txt:""}; if (E.win===M.club) return {c:"ok", txt:"Won!"}; const out = E.out[M.club]; return out ? {c:"bad", txt:`Out: ${out}`} : {c:"", txt:E.kr>=0 ? `In the ${MG_EU_KO[E.kr]}` : `League phase: ${ord(mgEuTable(E).findIndex(r=>r.n===M.club) + 1)}`}; }
@@ -290,18 +297,19 @@ function mgPreHTML(){
     <div class="mg-cmps">${bar("Attack", S0.R.att, S1.R.att)}${bar("Midfield", S0.R.mid, S1.R.mid)}${bar("Defence", S0.R.def, S1.R.def)}</div>
     ${notes.length ? `<p class="mg-note warn"><b>Assistant:</b> ${notes.map(esc).join("; ")}.</p>` : ""}
     <div class="mg-pre-grid">
-      <div><h3>${esc(M.club)} · ${esc(M.tac.f)} · ${esc(MG_MENT[M.tac.ment])}</h3><div class="mg-xi">${xi.map(x=>x.p ? `<div class="mg-xir">${mgPosC(x.pos)}<span>${esc(mgShort(x.p.n))}</span>${mgFitBar(x.p)}${mgOvrB(mgOvrAt(x.p, x.pos), "sm")}</div>` : `<div class="mg-xir empty">${mgPosC(x.pos)}<span>Nobody</span></div>`).join("")}</div></div>
+      <div><h3>${mgDof() ? `${esc(mgSurname(M.coach.n))}'s XI` : esc(M.club)} · ${esc(M.tac.f)} · ${esc(MG_MENT[M.tac.ment])}</h3><div class="mg-xi">${xi.map(x=>x.p ? `<div class="mg-xir">${mgPosC(x.pos)}<span>${esc(mgShort(x.p.n))}</span>${mgFitBar(x.p)}${mgOvrB(mgOvrAt(x.p, x.pos), "sm")}</div>` : `<div class="mg-xir empty">${mgPosC(x.pos)}<span>Nobody</span></div>`).join("")}</div></div>
       <div><h3>${esc(opp)} · ${esc(of)}</h3><div class="mg-xi">${oxi.xi.map((p, i)=>p ? `<div class="mg-xir">${mgPosC(MG_FORM[of][i][0])}<span>${esc(mgShort(p.n))}${p===key ? ` <span class="mg-tag warn">KEY</span>` : ""}</span>${mgOvrB(mgOvrAt(p, MG_FORM[of][i][0]), "sm")}</div>` : "").join("")}</div>
         <p class="hint">Manager: ${esc(M.am[opp] || "unknown")}</p></div>
     </div>
     ${P ? `<div class="mg-press"><div class="eyebrow">Pre-match press conference</div><p class="mg-press-q">“${esc(P.q)}”</p><div class="mg-opts">${P.a.map((a, i)=>`<button type="button" class="btn small" data-mg="press" data-i="${i}">${esc(a[0])}</button>`).join("")}</div></div>` : ""}
-    <div class="row mg-pre-go">${mgBtn("play", "Play the match ▶", "primary big")}${mgBtn("sim", "Quick sim", "big")}${mgBtn("pretac", "Edit tactics")}</div></section>`;
+    <div class="row mg-pre-go">${mgDof() ? `${mgBtn("play", "Watch the match ▶", "primary big")}${mgBtn("sim", "Skip to the result", "big")}${mgBtn("precoach", "Head coach")}` : `${mgBtn("play", "Play the match ▶", "primary big")}${mgBtn("sim", "Quick sim", "big")}${mgBtn("pretac", "Edit tactics")}`}</div>
+    ${mgDof() ? `<p class="hint" style="text-align:center">${esc(M.coach.n)} picks the team and makes the calls. You watch from the directors' box.</p>` : ""}</section>`;
 }
 function mgPlay(sim){
   const f = MG_PRE; if (!f) return;
   const finish = (fx, r) => { mgFinishUserMatch(fx, r); MG_LAST = {f:fx, r}; MG_PRE = null; MG_TAB = "home"; mgRender(); window.scrollTo({top:0}); };
   if (sim){ finish(f, mgMatchFast(f, f.h===M.club ? 0 : 1)); return; }
-  mgLive(f, finish);
+  mgLive(f, finish, {watch:mgDof()});
 }
 
 /* ================= SQUAD ================= */
@@ -520,9 +528,9 @@ function mgClubHTML(){
     const F = M.fin, inc = F.inc || {}, exp = F.exp || {}, ti = Object.values(inc).reduce((s, v)=>s + v, 0), te = Object.values(exp).reduce((s, v)=>s + v, 0), mx = Math.max(1, ti, te);
     const line = (l, v, cls) => `<div class="mg-fin"><span>${l}</span><span class="mg-finb ${cls}"><i style="width:${(v/mx*100).toFixed(1)}%"></i></span><b>${mgMoney(v)}</b></div>`;
     body = `<div class="mg-kpis"><div><span class="label">Balance</span><b>${mgMoney(F.bal)}</b></div><div><span class="label">Transfer budget</span><b>${mgMoney(F.tb)}</b></div><div><span class="label">Wage budget</span><b>${mgWageTxt(F.wb)}</b><small>Bill ${mgWageTxt(mgBill())}</small></div></div>
-      <h3>This season</h3>${line("Match day", inc.gate || 0, "in")}${line("TV and prize money", (inc.tv || 0) + (inc.prize || 0), "in")}${line("Sponsors", inc.spons || 0, "in")}${line("Player sales", inc.sales || 0, "in")}
-      ${line("Wages", exp.wages || 0, "out")}${line("Transfers", exp.buys || 0, "out")}${line("Other", exp.fees || 0, "out")}
-      <p class="hint">Profit this season: <b class="${ti - te>=0 ? "up-t" : "down-t"}">${mgMoney(ti - te)}</b></p>
+      <h3>This season</h3>${line("Match day", inc.gate || 0, "in")}${line("TV and prize money", (inc.tv || 0) + (inc.prize || 0), "in")}${line("Commercial", inc.spons || 0, "in")}${line("Player sales", inc.sales || 0, "in")}
+      ${line("Wages", exp.wages || 0, "out")}${exp.staff ? line("Head coach", exp.staff, "out") : ""}${exp.ops ? line("Running costs", exp.ops, "out") : ""}${exp.build ? line("Buildings", exp.build, "out") : ""}${line("Transfers", exp.buys || 0, "out")}${line("Other", exp.fees || 0, "out")}
+      <p class="hint">Profit this season: <b class="${ti - te>=0 ? "up-t" : "down-t"}">${mgMoney(ti - te)}</b></p>${mgDof() ? mdfTixHTML() : ""}
       <h3>Adjust your budgets</h3><p class="hint">Move money between the transfer budget and the wage budget (each £1/wk of wages costs about £${mgWeeksLeft()} of transfer budget this season).</p>
       <div class="row">${[["-big","− " + mgWageTxt(mgBudgetStep())],["+big","+ " + mgWageTxt(mgBudgetStep())]].map(([v, l])=>mgBtn("budget", l + " wages", "small", `data-v="${v}"`)).join("")}</div>`;
   }
@@ -557,6 +565,8 @@ function mgClubHTML(){
       ${M.aw.length ? `<h3>Awards</h3><div class="mg-tro">${M.aw.map(a=>`<span class="mg-trophy">⭐ ${esc(a.t)} <small>${seasonLabel(a.s)}</small></span>`).join("")}</div>` : ""}
       <h3>Seasons</h3>${M.hist.length ? `<div class="tablewrap"><table class="mg-table"><thead><tr><th class="l">Season</th><th class="l">Club</th><th>Pos</th><th>W–D–L</th></tr></thead><tbody>${M.hist.map(h=>`<tr><td class="l">${esc(h.s)}${h.part ? "*" : ""}</td><td class="l">${mgCrestName(h.club, 16)}</td><td>${h.pos ? ord(h.pos) : "–"}</td><td>${h.w}–${h.d}–${h.l}</td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">Your first season is under way.</p>`}`;
   }
+  if (mgDof() && sub==="training") MG_SUB.club = "facilities";
+  if (mgDof()) return `<section class="panel"><h2>${esc(M.club)}</h2>${mgSubTabs("club", [["overview","Overview"],["finances","Finances"],["facilities","Facilities"],["board","Owner"],["academy","Academy"],["jobs","Jobs"],["career","Your career"]])}<div class="subview">${sub==="facilities" ? mdfFacilitiesHTML() : body}</div></section>`;
   return `<section class="panel"><h2>${esc(M.club)}</h2>${mgSubTabs("club", [["overview","Overview"],["finances","Finances"],["board","Board"],["academy","Academy"],["training","Training"],["jobs","Jobs"],["career","Your career"]])}<div class="subview">${body}</div></section>`;
 }
 const mgWeeksLeft = () => Math.max(10, Math.round((MGD(M.season + 1, 5, 1) - M.day)/7));
@@ -574,6 +584,7 @@ function mgMsgAct(m){
   if (a.type==="req") return `<div class="row">${mgBtn("req", "Transfer list him", "small", `data-id="${esc(a.id)}" data-v="list" data-m="${m.id}"`)}${mgBtn("req", "Persuade him to stay", "small", `data-id="${esc(a.id)}" data-v="stay" data-m="${m.id}"`)}</div>`;
   if (a.type==="event"){ return M.ev && M.ev.id===a.ev ? `<div class="row">${a.ch.map(([l, k])=>mgBtn("ev", esc(l), "small", `data-v="${k}"`)).join("")}</div>` : ""; }
   if (a.type==="job") return M.phase==="sacked" || M.phase==="summer" || M.phase==="season" || M.phase==="pre" ? `<div class="row">${mgBtn("jobyes", `Take the ${esc(a.club)} job`, "small primary", `data-c="${esc(a.club)}" data-m="${m.id}"`)}${mgBtn("jobno", "Decline", "small", `data-m="${m.id}"`)}</div>` : "";
+  if (a.type==="poach") return M.coach && !M.coach.int ? `<div class="row">${mgBtn("mdfpoach", `Let him go · ${mgMoney(a.comp)}`, "small", `data-m="${m.id}" data-v="yes"`)}${mgBtn("mdfpoach", "Refuse", "small primary", `data-m="${m.id}" data-v="no"`)}</div>` : "";
   if (a.type==="loanopt"){ const p = M.P[a.id]; return p && p.lin ? `<div class="row">${mgBtn("loanbuy", `Sign him · ${mgMoney(p.lin.opt)}`, "small primary", `data-id="${esc(p.id)}"`)}${mgBtn("loanlet", "Let him go back", "small", `data-id="${esc(p.id)}" data-m="${m.id}"`)}</div>` : ""; }
   if (a.type==="player") return `<div class="row">${mgBtn("player", "View player", "small", `data-id="${esc(a.id)}"`)}</div>`;
   if (a.type==="prospects"){ const fee = mgRoundFee(Math.max(1e4, (MG_TB[mgLeagueOf()] || 1e5)*.0015));
@@ -712,6 +723,7 @@ document.addEventListener("click", e=>{
   if (a==="play"){ mgPlay(false); return; }
   if (a==="sim"){ mgPlay(true); return; }
   if (a==="pretac"){ MG_PRE = null; MG_TAB = "tactics"; re(); return; }
+  if (a==="precoach"){ MG_PRE = null; MG_TAB = "coach"; re(); return; }
   if (a==="press"){ mgPressAnswer(MG_PRE, +b.dataset.i); mgFlash("Your answer is in tomorrow's papers."); re(); return; }
   if (a==="lastx"){ MG_LAST = null; re(); return; }
   if (a==="apply"){ const r = mgApplyJob(b.dataset.c); mgFlash(r.txt); if (r.ok){ MG_TAB = "home"; MG_LAST = null; } re(); window.scrollTo({top:0}); return; }

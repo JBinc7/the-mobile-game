@@ -1,7 +1,7 @@
-/* ================= MAIN MENU: PLAYER OR MANAGER =================
-   After signing in, the main menu: a Player career (build your player and play his career, game.js) or a Manager
-   career (run a club from the dugout, manager.js). Each mode has three save slots on the account, so one account can
-   keep three players and three managers going at once. Slot 1 of the player career is where the one career lived
+/* ================= MAIN MENU: PLAYER, MANAGER OR DIRECTOR OF FOOTBALL =================
+   After signing in, the main menu: a Player career (build your player and play his career, game.js), a Manager
+   career (run the team from the dugout, manager.js) or a Director of Football career (run the club, hire and fire the
+   head coach, mgdof.js). Each mode has three save slots on the account, so one account can keep three of each. Slot 1 of the player career is where the one career lived
    before slots existed, so old saves turn up there. The last save played is a tap away at the top.
    Loaded after account.js and before manager.js and game.js; APP says which of the three is on screen, and game.js's
    render() hands over to Hub.render or Mgr.render when it isn't the player career. */
@@ -11,8 +11,10 @@ const Hub = (() => {
   const BOOT = "efp-boot";
   let view = "home", sure = "", playerSlot = 0, mountT = 0;
   const pKind = i => i===1 ? "career" : `career-${i}`;
-  const mKind = i => `mgr-${i}`;
-  const keyOf = (mode, i) => Account.storageKey(mode==="player" ? pKind(i) : mKind(i));
+  const mKind = i => `mgr-${i}`, dKind = i => `dof-${i}`;
+  const MODES = ["player", "manager", "dof"];
+  const keyOf = (mode, i) => Account.storageKey(mode==="player" ? pKind(i) : mode==="dof" ? dKind(i) : mKind(i));
+  const MODE_NAME = {player:"Player career", manager:"Manager career", dof:"Director of Football"};
   const read = (mode, i) => { try{ return JSON.parse(localStorage.getItem(keyOf(mode, i))); }catch(e){ return null; } };
   const lastGet = () => { try{ return JSON.parse(localStorage.getItem(Account.storageKey("last"))); }catch(e){ return null; } };
   const lastSet = (m, i) => { try{ localStorage.setItem(Account.storageKey("last"), JSON.stringify({m, i})); }catch(e){} };
@@ -41,8 +43,9 @@ const Hub = (() => {
       paintBand(); render(); window.scrollTo({top:0}); return;
     }
     if (APP==="player" && S) save();
-    APP = "manager"; lastSet("manager", i); paintBand();
-    Mgr.open(i, keyOf("manager", i)); window.scrollTo({top:0});
+    if (APP==="manager" && typeof Mgr!=="undefined") Mgr.close();
+    APP = "manager"; lastSet(mode, i); paintBand(mode==="dof" ? "dof" : "mgr");
+    Mgr.open(i, keyOf(mode, i), mode==="dof" ? "dof" : "mgr"); window.scrollTo({top:0});
   }
   function wipe(mode, i){
     try{ localStorage.removeItem(keyOf(mode, i)); }catch(e){}
@@ -54,10 +57,10 @@ const Hub = (() => {
     if (APP==="manager" && typeof Mgr!=="undefined") Mgr.close();
     APP = "hub"; view = "home"; sure = ""; paintBand(); render(); window.scrollTo({top:0});
   }
-  function paintBand(){
+  function paintBand(role){
     const h = document.querySelector(".band h1"), sub = document.querySelector(".band .sub");
     if (h) h.textContent = "English Footballing Pyramid";
-    if (sub) sub.textContent = APP==="manager" ? "Manager career · run the club, build a dynasty" : APP==="player" ? "Player career · from the National League to the Champions League" : "Player career · Manager career";
+    if (sub) sub.textContent = APP==="manager" ? (role==="dof" ? "Director of Football · pick the coach, build the club" : "Manager career · run the team, build a dynasty") : APP==="player" ? "Player career · from the National League to the Champions League" : "Player · Manager · Director of Football";
     document.documentElement.dataset.app = APP;
   }
 
@@ -93,12 +96,26 @@ const Hub = (() => {
     </g>
   </svg>`;
 
+  const DOF_ART = `<svg class="mode-svg" viewBox="0 0 320 200" aria-hidden="true" focusable="false">
+    <defs><linearGradient id="hbD1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFD23F"/><stop offset="1" stop-color="#FF8A3D"/></linearGradient>
+      <radialGradient id="hbD2" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#FFB020" stop-opacity=".3"/><stop offset="1" stop-color="#FFB020" stop-opacity="0"/></radialGradient></defs>
+    <rect width="320" height="200" fill="url(#hbD2)"/>
+    <g transform="translate(38 30)">
+      <rect width="244" height="140" rx="8" fill="rgba(10,14,28,.65)" stroke="rgba(255,255,255,.22)" stroke-width="1.5"/>
+      <g stroke="rgba(255,255,255,.12)">${[30, 60, 90, 120].map(y=>`<path d="M14 ${y}h216"/>`).join("")}</g>
+      ${[[28,92],[60,74],[92,82],[124,52],[156,58],[188,30]].map(([x, h], k)=>`<rect x="${x}" y="${120 - h}" width="20" height="${h}" rx="3" fill="${k===5 ? "url(#hbD1)" : "rgba(255,210,63,.35)"}"/>`).join("")}
+      <path class="mode-run" d="M22 96 L66 80 L98 88 L132 58 L166 64 L198 34 L226 20" fill="none" stroke="url(#hbD1)" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 6"/>
+      <circle cx="226" cy="20" r="6" fill="#FFD23F"/>
+    </g>
+    <g transform="translate(236 128)"><circle r="26" fill="#0B1020" stroke="#FFD23F" stroke-width="2"/><text y="9" text-anchor="middle" font-family="Big Shoulders Display, Impact, sans-serif" font-weight="900" font-size="26" fill="#FFD23F">£</text></g>
+  </svg>`;
+
   /* ---------- the screens ---------- */
   function slotCard(mode, i){
     const s = sumOf(mode, i), id = `${mode}-${i}`;
     if (!s) return `<article class="slot empty"><div class="slot-n">Slot 0${i}</div>
-      <div class="slot-empty"><span class="slot-plus" aria-hidden="true">+</span><b>Empty slot</b><span class="hint">${mode==="player" ? "Create a player and start a new career." : "Take charge of any club in the game."}</span></div>
-      <button type="button" class="btn primary" data-hub="enter" data-m="${mode}" data-i="${i}">${mode==="player" ? "New player career" : "New manager career"}</button></article>`;
+      <div class="slot-empty"><span class="slot-plus" aria-hidden="true">+</span><b>Empty slot</b><span class="hint">${mode==="player" ? "Create a player and start a new career." : mode==="dof" ? "Run any club in the game, from above the dugout." : "Take charge of any club in the game."}</span></div>
+      <button type="button" class="btn primary" data-hub="enter" data-m="${mode}" data-i="${i}">${mode==="player" ? "New player career" : mode==="dof" ? "New director career" : "New manager career"}</button></article>`;
     return `<article class="slot"><div class="slot-n">Slot 0${i}${s.done ? ` · <span class="pill">${mode==="player" ? "Retired" : "Finished"}</span>` : ""}<span class="slot-when">${esc(ago(s.updated))}</span></div>
       <div class="slot-id">${s.club ? clubBadge(s.club, 46) : ""}<div style="min-width:0"><p class="slot-name">${esc(s.name)}</p><p class="slot-sub">${esc(s.sub)}</p></div><span class="slot-season">${esc(s.season)}</span></div>
       <div class="slot-stats">${s.stats.map(([k, v])=>`<div><span class="label">${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div>
@@ -111,9 +128,9 @@ const Hub = (() => {
     return `<div class="hub">
       ${flash ? `<p class="ref" role="status">${esc(flash)}</p>` : ""}
       <div class="hub-hero"><div class="eyebrow">Main menu</div><h2 class="hub-h">Choose your path</h2>
-        <p class="intro-p">Live it on the pitch as a player, or run the whole club from the dugout. Three save slots for each.</p></div>
+        <p class="intro-p">Live it on the pitch as a player, run the team from the dugout, or run the whole club from the boardroom. Three save slots for each.</p></div>
       ${ls ? `<button type="button" class="hub-last" data-hub="enter" data-m="${L.m}" data-i="${L.i}">
-          <span class="hub-last-k">Continue · ${L.m==="player" ? "Player career" : "Manager career"} · slot 0${L.i}</span>
+          <span class="hub-last-k">Continue · ${MODE_NAME[L.m] || "Career"} · slot 0${L.i}</span>
           <span class="hub-last-id">${ls.club ? clubBadge(ls.club, 40) : ""}<span><b>${esc(ls.name)}</b><small>${esc(ls.sub)} · ${esc(ls.season)}</small></span></span>
           <span class="hub-last-go" aria-hidden="true">▶</span></button>` : ""}
       <div class="hub-modes">
@@ -129,10 +146,16 @@ const Hub = (() => {
             <span class="mode-p">Pick any club. Sign players, set your tactics, watch your team play and keep the board happy.</span>
             <span class="mode-meta"><span>${count("manager")} / ${HUB_SLOTS} saves</span><span class="mode-go">Manage ▶</span></span></span>
         </button>
+        <button type="button" class="mode-card mode-dof" data-hub="mode" data-v="dof">
+          <span class="mode-art">${DOF_ART}</span>
+          <span class="mode-body"><span class="mode-k">Mode 03</span><span class="mode-t">Director of Football</span>
+            <span class="mode-p">Hire and fire head coaches, buy and sell players, balance the books and keep the owner happy.</span>
+            <span class="mode-meta"><span>${count("dof")} / ${HUB_SLOTS} saves</span><span class="mode-go">Direct ▶</span></span></span>
+        </button>
       </div>
       <div class="hub-more">
         <button type="button" class="btn small" data-hub="legacy">Player Legacy</button>
-        ${typeof Mgr!=="undefined" ? `<button type="button" class="btn small" data-hub="mhall">Managers' hall of fame</button>` : ""}
+        ${typeof Mgr!=="undefined" ? `<button type="button" class="btn small" data-hub="mhall">Hall of fame</button>` : ""}
         <button type="button" class="btn small" data-acct="open">Account &amp; backups</button>
       </div>
     </div>`;
@@ -141,8 +164,8 @@ const Hub = (() => {
     return `<div class="hub">
       ${flash ? `<p class="ref" role="status">${esc(flash)}</p>` : ""}
       <div class="hub-top"><button type="button" class="btn small" data-hub="home">‹ Main menu</button>
-        <div><div class="eyebrow">${mode==="player" ? "Mode 01" : "Mode 02"}</div><h2 class="hub-h">${mode==="player" ? "Player Career" : "Manager Career"}</h2></div></div>
-      <p class="hint" style="margin:0 0 16px">${mode==="player" ? "Each slot is its own player. Your Legacy keeps every player you've had on this account." : "Each slot is its own manager, at any club in the game. Your saves are kept on this phone and travel in backups."}</p>
+        <div><div class="eyebrow">${mode==="player" ? "Mode 01" : mode==="dof" ? "Mode 03" : "Mode 02"}</div><h2 class="hub-h">${mode==="player" ? "Player Career" : mode==="dof" ? "Director of Football" : "Manager Career"}</h2></div></div>
+      <p class="hint" style="margin:0 0 16px">${mode==="player" ? "Each slot is its own player. Your Legacy keeps every player you've had on this account." : mode==="dof" ? "Each slot is its own director of football, at any club in the game. Your saves are kept on this phone and travel in backups." : "Each slot is its own manager, at any club in the game. Your saves are kept on this phone and travel in backups."}</p>
       <div class="slots">${Array.from({length:HUB_SLOTS}, (_, k)=>slotCard(mode, k + 1)).join("")}</div>
     </div>`;
   }
@@ -193,12 +216,12 @@ const Hub = (() => {
     menuBtn: () => `<button type="button" class="btn ghost hub-menu" data-hub="home" aria-label="Main menu"><span aria-hidden="true">☰</span> Menu</button>`,
     slotKey: keyOf, read,
     // every slot of both modes, for backups: {"player-2": {...}, "manager-1": {...}}
-    all(){ const out = {}; for (const mode of ["player", "manager"]) for (let i = 1; i<=HUB_SLOTS; i++){ const d = read(mode, i); if (d) out[`${mode}-${i}`] = d; } return out; },
+    all(){ const out = {}; for (const mode of MODES) for (let i = 1; i<=HUB_SLOTS; i++){ const d = read(mode, i); if (d) out[`${mode}-${i}`] = d; } return out; },
     // a backup's saves go back in their own slot when it's free (or when replacing), otherwise in the first free one
     restore(all, replace){
       let n = 0, skipped = 0;
       for (const [k, d] of Object.entries(all || {})){
-        const [mode, si] = k.split("-"), i = +si; if (!["player", "manager"].includes(mode) || !(i>=1 && i<=HUB_SLOTS) || !d) continue;
+        const [mode, si] = k.split("-"), i = +si; if (!MODES.includes(mode) || !(i>=1 && i<=HUB_SLOTS) || !d) continue;
         let to = (replace || !read(mode, i)) ? i : 0;
         for (let j = 1; !to && j<=HUB_SLOTS; j++) if (!read(mode, j)) to = j;
         if (!to){ skipped++; continue; }
