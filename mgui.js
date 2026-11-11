@@ -210,7 +210,7 @@ function mgHomeHTML(nf){
   const out = [];
   if (MG_LAST) out.push(mgLastHTML());
   if (nf){ const today = nf.day===M.day && !M.done;
-    out.push(`<section class="panel mg-next"><div class="mg-next-top"><span class="mg-comp">${esc(mgCompName(nf))}</span><span class="mg-when">${mgFmt(nf.day)} · ${mgRel(nf.day)}</span></div>
+    out.push(`<section class="panel mg-next themed themed-top" data-pat="${mgTheme(nf).pat}" style="${themeVars(mgTheme(nf))}"><div class="mg-next-top">${compChip(mgTheme(nf), mgCompName(nf), "mg-comp")}<span class="mg-when">${mgFmt(nf.day)} · ${mgRel(nf.day)}</span></div>
       ${mgVsHTML(nf, true)}${mgxHomeAsst(nf)}<div class="row mg-next-go">${today ? mgBtn("prematch", "Go to match day ▶", "primary big") : ""}${mgDof() ? mgBtn("tab", "Head coach", "", 'data-k="coach"') : mgBtn("tab", "Tactics", "", 'data-k="tactics"')}${mgBtn("tab", "Squad", "", 'data-k="squad"')}</div></section>`); }
   const t = mgLeagueOf(), tb = mgTable(t), me = tb.findIndex(r=>r.n===M.club), from = clamp(me - 2, 0, Math.max(0, tb.length - 5));
   const sq = mgMine(), inj = sq.filter(p=>p.inj), ban = sq.filter(p=>p.ban>0), sad = sq.filter(p=>p.mor<40), exp = sq.filter(p=>p.con<=M.season && !p.loan);
@@ -249,11 +249,11 @@ function mgObjState(o){
   if (o.k==="youth"){ const n = mgMine().filter(p=>p.age<=21).reduce((s, p)=>s + p.st.st, 0); return {c:n>=o.n ? "ok" : "", txt:`${n} of ${o.n}`}; }
   return {c:"", txt:""};
 }
-function mgResRow(r){ return `<div class="mg-resr"><span class="tf ${r.res.toLowerCase()}">${r.res}</span><span class="mg-resc">${esc(r.comp)}</span>${clubBadge(r.o, 18)}<span class="mg-reso">${r.h ? "" : "@ "}${esc(r.o)}</span><b>${r.gf}–${r.ga}${r.pens ? ` <small>(${r.pens}p)</small>` : r.et ? " <small>aet</small>" : ""}</b></div>`; }
+function mgResRow(r){ return `<div class="mg-resr"><span class="tf ${r.res.toLowerCase()}">${r.res}</span><span class="mg-resc">${compDot(mgTheme(r))}${esc(r.comp)}</span>${clubBadge(r.o, 18)}<span class="mg-reso">${r.h ? "" : "@ "}${esc(r.o)}</span><b>${r.gf}–${r.ga}${r.pens ? ` <small>(${r.pens}p)</small>` : r.et ? " <small>aet</small>" : ""}</b></div>`; }
 function mgLastHTML(){
   const {f, r} = MG_LAST, mine = f.h===M.club, gf = mine ? r.hg : r.ag, ga = mine ? r.ag : r.hg, won = r.dec ? r.dec.w===M.club : gf>ga, lost = r.dec ? r.dec.w!==M.club : gf<ga;
   const others = f.c==="L" ? (M.res[f.r] || []).filter(x=>x[0]!==M.club && x[1]!==M.club) : [];
-  return `<section class="panel mg-last ${won ? "w" : lost ? "l" : "d"}"><div class="mg-next-top"><span class="mg-comp">${esc(mgCompName(f))}</span><span class="mg-when">Full-time</span></div>
+  return `<section class="panel mg-last ${won ? "w" : lost ? "l" : "d"} themed themed-top" data-pat="${mgTheme(f).pat}" style="${themeVars(mgTheme(f))}"><div class="mg-next-top">${compChip(mgTheme(f), mgCompName(f), "mg-comp")}<span class="mg-when">Full-time</span></div>
     <div class="mg-last-sc">${clubBadge(f.h, 44)}<b>${r.hg}–${r.ag}</b>${clubBadge(f.a, 44)}</div>
     <p class="mg-last-v">${won ? "Victory" : lost ? "Defeat" : "Draw"}${r.dec && r.dec.pens ? ` · ${r.dec.pens.join("–")} on penalties` : r.dec && r.dec.et ? " · after extra time" : ""}</p>
     ${r.goals.length ? `<p class="hint mg-last-g">${r.goals.map(g=>`${g.side===0 ? "" : ""}<b>${esc(mgSurname(g.n))}</b> ${g.m}'${g.pen ? " (p)" : ""}`).join(" · ")}</p>` : ""}
@@ -293,7 +293,7 @@ function mgPreHTML(){
   const P = M.pressDone!==f.key ? mgPressFor(f) : null;
   const S0 = mmSide(M.club, true, f), S1 = mmSide(opp, false, f); mmRate(S0); mmRate(S1);
   const bar = (l, a, b) => `<div class="mg-cmp"><b>${Math.round(a)}</b><span>${l}</span><b>${Math.round(b)}</b><i style="--p:${(clamp(50 + (a - b)*4, 8, 92)).toFixed(0)}%"></i></div>`;
-  return `<section class="panel mg-pre"><div class="mg-next-top"><span class="mg-comp">${esc(mgCompName(f))}</span><span class="mg-when">Match day · ${mgFmt(f.day)}</span></div>
+  return `<section class="panel mg-pre themed themed-top" data-pat="${mgTheme(f).pat}" style="${themeVars(mgTheme(f))}"><div class="mg-next-top">${compChip(mgTheme(f), mgCompName(f), "mg-comp")}<span class="mg-when">Match day · ${mgFmt(f.day)}</span></div>
     ${mgVsHTML(f, true)}
     <div class="mg-cmps">${bar("Attack", S0.R.att, S1.R.att)}${bar("Midfield", S0.R.mid, S1.R.mid)}${bar("Defence", S0.R.def, S1.R.def)}</div>
     ${mgxDerby(f) ? `<p class="mg-note bad"><b>Derby day.</b> The fans and the ${mgDof() ? "owner" : "board"} care about this one more than any other.</p>` : ""}
@@ -475,7 +475,7 @@ function mgTableHTML(t, rows, offset = 0, full){
 }
 function mgMyFixtures(){
   const out = M.myres.map(r=>({...r, played:true}));
-  for (let d = M.day; d<=MGD(M.season + 1, 5, 1); d++){ mgFixturesOn(d).forEach(f=>{ if (mgIsMine(f) && !M.played[f.key]) out.push({d, comp:mgCompName(f, true), full:mgCompName(f), o:f.h===M.club ? f.a : f.h, h:f.h===M.club, played:false}); }); }
+  for (let d = M.day; d<=MGD(M.season + 1, 5, 1); d++){ mgFixturesOn(d).forEach(f=>{ if (mgIsMine(f) && !M.played[f.key]) out.push({d, c:f.c, t:f.t, code:f.code, comp:mgCompName(f, true), full:mgCompName(f), o:f.h===M.club ? f.a : f.h, h:f.h===M.club, played:false}); }); }
   return out;
 }
 function mgCompsHTML(){
@@ -483,7 +483,7 @@ function mgCompsHTML(){
   let body = "";
   if (sub==="table"){ const tb = mgTable(t); body = `${mgTableHTML(t, tb, 0, true)}<p class="hint mg-legend"><span class="mz mz-ucl"></span>Champions League <span class="mz mz-uel"></span>Europa League <span class="mz mz-uecl"></span>Conference League <span class="mz mz-up"></span>Promotion <span class="mz mz-po"></span>Play-offs <span class="mz mz-down"></span>Relegation</p>`; }
   else if (sub==="fixtures"){ const L = mgMyFixtures();
-    body = `<div class="mg-fx">${L.map(r=>`<div class="mg-fxr ${r.played ? "done" : ""}"><span class="mg-fxd">${mgFmt(r.d)}</span><span class="mg-fxc">${esc(r.comp)}</span><span class="mg-fxo">${clubBadge(r.o, 18)}${r.h ? "" : "@ "}${esc(r.o)}</span>${r.played ? `<b><span class="tf ${r.res.toLowerCase()}">${r.res}</span> ${r.gf}–${r.ga}${r.pens ? ` (${r.pens}p)` : ""}</b>` : `<span class="hint">${r.d===M.day ? "Today" : ""}</span>`}</div>`).join("")}</div>
+    body = `<div class="mg-fx">${L.map(r=>`<div class="mg-fxr ${r.played ? "done" : ""}"><span class="mg-fxd">${mgFmt(r.d)}</span><span class="mg-fxc" style="${themeVars(mgTheme(r))}">${compDot(mgTheme(r))}${esc(r.comp)}</span><span class="mg-fxo">${clubBadge(r.o, 18)}${r.h ? "" : "@ "}${esc(r.o)}</span>${r.played ? `<b><span class="tf ${r.res.toLowerCase()}">${r.res}</span> ${r.gf}–${r.ga}${r.pens ? ` (${r.pens}p)` : ""}</b>` : `<span class="hint">${r.d===M.day ? "Today" : ""}</span>`}</div>`).join("")}</div>
       <p class="hint">Cup ties appear once they're drawn.</p>`; }
   else if (sub==="stats"){
     const ps = M.tiers[t].flatMap(c=>M.cl[c] ? M.cl[c].sq.map(id=>M.P[id]).filter(Boolean) : []);
@@ -527,7 +527,7 @@ function mgClubHTML(){
       <p class="hint">${esc(c.bio || "")}</p></div></div>
       <div class="mg-kpis"><div><span class="label">Stadium</span><b>${esc(c.ground || "–")}</b><small>${mgCapacity(M.club).toLocaleString()} seats</small></div><div><span class="label">League</span><b>${esc(TIERS[t].name)}</b></div>
         <div><span class="label">Academy</span><b>${"★".repeat(mgAcademy())}${"☆".repeat(5 - mgAcademy())}</b></div><div><span class="label">Team rating</span><b>${Math.round(mgLevel(M.club))}</b></div></div>
-      <h3>Honours with you</h3>${tro.length ? `<div class="mg-tro">${tro.map(x=>`<span class="mg-trophy">🏆 ${esc(x.n)} <small>${esc(x.s)}</small></span>`).join("")}</div>` : `<p class="hint">None yet.</p>`}`;
+      <h3>Honours with you</h3>${tro.length ? `<div class="mg-tro">${tro.map(x=>`<span class="mg-trophy themed" style="${themeVars(trophyTheme(null, x.n))}">🏆 ${esc(x.n)} <small>${esc(x.s)}</small></span>`).join("")}</div>` : `<p class="hint">None yet.</p>`}`;
   }
   else if (sub==="finances"){
     const F = M.fin, inc = F.inc || {}, exp = F.exp || {}, ti = Object.values(inc).reduce((s, v)=>s + v, 0), te = Object.values(exp).reduce((s, v)=>s + v, 0), mx = Math.max(1, ti, te);
@@ -566,7 +566,7 @@ function mgClubHTML(){
     body = `<div class="mg-mgr">${mgAvatar({lk:{s:1, h:2, c:"Brown", b:0}}, M.club, 84)}<div><h3>${esc(M.mgr.name)}</h3><p class="hint">${esc(M.mgr.nat)} · ${M.mgr.age} · ${esc((MG_BG.find(b=>b[0]===M.mgr.bg) || [])[1] || "")}</p>
       <div class="label">Reputation</div><span class="meter"><span style="width:${M.mgr.rep}%"></span></span></div></div>
       <div class="mg-kpis"><div><span class="label">Games</span><b>${c2.p}</b></div><div><span class="label">W–D–L</span><b>${c2.w}–${c2.d}–${c2.l}</b></div><div><span class="label">Win rate</span><b>${c2.p ? Math.round(c2.w/c2.p*100) : 0}%</b></div><div><span class="label">Trophies</span><b>${M.trophies.length}</b></div></div>
-      ${M.trophies.length ? `<h3>Trophies</h3><div class="mg-tro">${M.trophies.map(x=>`<span class="mg-trophy">🏆 ${esc(x.n)} <small>${esc(x.club)} · ${esc(x.s)}</small></span>`).join("")}</div>` : ""}
+      ${M.trophies.length ? `<h3>Trophies</h3><div class="mg-tro">${M.trophies.map(x=>`<span class="mg-trophy themed" style="${themeVars(trophyTheme(null, x.n))}">🏆 ${esc(x.n)} <small>${esc(x.club)} · ${esc(x.s)}</small></span>`).join("")}</div>` : ""}
       ${M.aw.length ? `<h3>Awards</h3><div class="mg-tro">${M.aw.map(a=>`<span class="mg-trophy">⭐ ${esc(a.t)} <small>${seasonLabel(a.s)}</small></span>`).join("")}</div>` : ""}
       <h3>Seasons</h3>${M.hist.length ? `<div class="tablewrap"><table class="mg-table"><thead><tr><th class="l">Season</th><th class="l">Club</th><th>Pos</th><th>W–D–L</th></tr></thead><tbody>${M.hist.map(h=>`<tr><td class="l">${esc(h.s)}${h.part ? "*" : ""}</td><td class="l">${mgCrestName(h.club, 16)}</td><td>${h.pos ? ord(h.pos) : "–"}</td><td>${h.w}–${h.d}–${h.l}</td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">Your first season is under way.</p>`}`;
   }

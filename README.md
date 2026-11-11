@@ -96,6 +96,13 @@ Fixed in 2.5: substituted players were counted twice (doubled appearances, minut
 - **Interceptions are played, not tapped.** You move your defender yourself: hold a finger on the pitch and he runs to it. Their midfielder looks at the man he's about to find (a dashed gold line), then passes: be in the way of the ball and it's yours. He won't pass through you, so camping in a lane just sends it elsewhere.
 - **Practise first.** Every mini-game's guide has a *Practise it first* button: a go at the real thing that doesn't count. The rebuilt games show their new guide once more.
 
+## 3.0, part 2: one look for every competition
+
+Every competition now has its own two colours and pattern, the same in all three modes (`themes.js`): leagues wear stripes, domestic cups a spotlight, the Champions League stars, the other European cups rays, international tournaments rings.
+
+- **Player Career:** a banner on the pre-match card and at full time, a strip over the scoreboard during your key moments, a coloured edge and dot on every fixture and result, and trophies in the cabinet in their competition's colours.
+- **Manager Career and Director of Football:** the next match, match day and last result panels take the competition's colours; fixtures, results and trophies carry its dot.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
@@ -277,6 +284,7 @@ Players on different phones can't see each other's careers. That would need an o
 | `crests.js` | Every club's badge, drawn from its colours |
 | `targets.js` | The manager's season targets and your agent's clauses |
 | `shop.js` | The shop: boots (and their icons) and training boosts bought with gold coins, coin packs, and the Editor pen with its player editor |
+| `themes.js` | The competition themes (3.0): colours and patterns for every league, cup, European and international competition, and the banners, strips and chips that show them in all three modes. |
 | `g3d.js` | The 3D graphics (three.js): the player on the home screen, the 3D scenes for shots, saves, headers, volleys, tackles and crosses, and a 3D version of every other mini-game drawn from its 2D picture; the stadium, light and weather, replays and celebrations, and the broadcast finish over the picture |
 | `sound.js` | The sound, all made in the browser (no recordings): the crowd, its chants and reactions, the ball, the net, the whistle and the rain |
 | `sw.js` | Offline support: keeps a copy of the game on the phone |

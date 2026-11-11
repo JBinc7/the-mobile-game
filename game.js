@@ -522,7 +522,7 @@ function profilePanel(id){
     <div class="legend" style="margin-top:8px"><span><i style="background:var(--accent)"></i>Market value / transfer</span><span><i style="background:var(--surface);border:2px solid var(--accent)"></i>Loan</span><span><i style="background:var(--euro)"></i>New contract</span><span><i style="background:var(--gold)"></i>Trophy</span><span><i style="background:var(--down)"></i>Serious injury</span></div>
   </section>
   <section class="panel"><h2>Trophy cabinet</h2>
-    ${Object.keys(groups).length?`<div class="cabinet">${Object.entries(groups).sort((a,b)=>order[a[1].kind]-order[b[1].kind]).map(([name,g])=>`<div class="tro">${trophyIcon(g.kind, name)}<div class="tn">${esc(name)}</div>${g.items.length>1?`<div class="tc">×${g.items.length}</div>`:""}<div class="ts">${g.items.map(i=>`${i.s} · ${esc(i.c)}`).join("<br>")}</div></div>`).join("")}</div>`:`<p class="empty">No trophies won.</p>`}
+    ${Object.keys(groups).length?`<div class="cabinet">${Object.entries(groups).sort((a,b)=>order[a[1].kind]-order[b[1].kind]).map(([name,g])=>`<div class="tro themed" style="${themeVars(trophyTheme(g.kind, name))}">${trophyIcon(g.kind, name)}<div class="tn">${esc(name)}</div>${g.items.length>1?`<div class="tc">×${g.items.length}</div>`:""}<div class="ts">${g.items.map(i=>`${i.s} · ${esc(i.c)}`).join("<br>")}</div></div>`).join("")}</div>`:`<p class="empty">No trophies won.</p>`}
   </section>
   <section class="panel"><h2>Season by season</h2>
     <div class="tablewrap"><table style="min-width:600px"><thead><tr><th>Season</th><th class="n">Age</th><th>Club</th><th>Finish</th><th class="n">Apps</th><th class="n">Mins</th><th class="n">Goals</th><th class="n">Assists</th>${DEF.includes(r.pos)?`<th class="n">CS</th>`:""}<th class="n">Rating</th><th class="n">Value</th></tr></thead><tbody>
@@ -2618,7 +2618,7 @@ function windowPanel(){
     ${S.release&&S.years>0?`<p class="hint" style="margin-top:6px">Your release clause is ${money(S.release)}. Any club that pays it can talk to you directly.</p>`:""}
     ${offers.length ? `<div class="offers" style="margin-top:12px">${P.offers.renewal?offerCard(P.offers.renewal,"renew"):""}${P.offers.list.map((o,i)=>offerCard(o,i)).join("")}</div>` : `<p class="empty" style="margin-top:12px">No offers this summer.</p>`}`;
   const reportView = `${sim?seasonResults(sim, last):""}
-    ${P.won.length?`<h3>New in the cabinet</h3><div class="cabinet" style="margin-bottom:16px">${P.won.map(w=>`<div class="tro">${trophyIcon(w.kind, w.name)}<div class="tn">${esc(w.name)}</div><div class="ts">${last.season}</div></div>`).join("")}</div>`:""}
+    ${P.won.length?`<h3>New in the cabinet</h3><div class="cabinet" style="margin-bottom:16px">${P.won.map(w=>`<div class="tro themed" style="${themeVars(trophyTheme(w.kind, w.name))}">${trophyIcon(w.kind, w.name)}<div class="tn">${esc(w.name)}</div><div class="ts">${last.season}</div></div>`).join("")}</div>`:""}
     <h3>How the valuation was built</h3>
     <div class="factors">
       <div class="factor"><div class="label">${TIERS[last.tier].short} base</div><div class="v">${money(f.base)}</div></div>
@@ -2686,7 +2686,7 @@ function cabinetPanel(){
   const intlCount = S.trophies.filter(t=>t.kind==="intl").length;
   return `<section class="panel"><h2>Trophy cabinet</h2>
     <p class="hint" style="margin-bottom:14px">${team} team trophies · ${S.trophies.length-team} personal awards</p>
-    <div class="cabinet">${Object.entries(groups).sort((a,b)=>order[a[1].kind]-order[b[1].kind]).map(([name,g])=>`<div class="tro">${trophyIcon(g.kind, name)}<div class="tn">${esc(name)}</div>${g.items.length>1?`<div class="tc">×${g.items.length}</div>`:""}<div class="ts">${g.items.map(i=>`${i.season} · ${esc(i.club)}`).join("<br>")}</div></div>`).join("")}</div>
+    <div class="cabinet">${Object.entries(groups).sort((a,b)=>order[a[1].kind]-order[b[1].kind]).map(([name,g])=>`<div class="tro themed" style="${themeVars(trophyTheme(g.kind, name))}">${trophyIcon(g.kind, name)}<div class="tn">${esc(name)}</div>${g.items.length>1?`<div class="tc">×${g.items.length}</div>`:""}<div class="ts">${g.items.map(i=>`${i.season} · ${esc(i.club)}`).join("<br>")}</div></div>`).join("")}</div>
     <div class="shelf" style="margin-top:14px"></div></section>`;
 }
 function zoneOf(t,pos,n){

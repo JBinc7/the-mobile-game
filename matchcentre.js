@@ -492,8 +492,8 @@ function mcFxRow(f, w){
   const done = !!f.res, wdl = done ? (f.res.gf>f.res.ga || f.res.pens==="won" ? "w" : f.res.gf<f.res.ga || f.res.pens==="lost" ? "l" : "d") : "";
   const opp = f.opp ? `${f.neutral ? "" : f.home ? "" : "at "}${esc(f.opp)}` : "Opponent to be drawn";
   const extra = done && f.agg ? ` · ${f.agg[0]}–${f.agg[1]} on aggregate` : "", pens = done && f.res.pens ? ` · ${f.res.pens==="won" ? "won" : "lost"} on penalties` : "";
-  return `<div class="fx ${f.big?"big":""} ${done?"":"todo"}"><span class="fx-d">${mcDate(w, f)}</span>
-    <span class="fx-o"><span class="fx-n">${f.opp ? clubBadge(f.opp, 20) : ""}<span>${f.big?"★ ":""}${opp}</span></span><small>${esc(mcCompLabel(f))}${f.code!=="league" ? " · " + esc(f.round) + (f.leg ? `, leg ${f.leg}` : "") : f.home ? " · home" : ""}${!done && f.code==="league" && lgPosOf(f.opp) ? ` · ${ord(lgPosOf(f.opp))} in the table` : ""}${extra}${pens}</small></span>
+  return `<div class="fx fx-th ${f.big?"big":""} ${done?"":"todo"}" style="${themeVars(fxTheme(f))}"><span class="fx-d">${mcDate(w, f)}</span>
+    <span class="fx-o"><span class="fx-n">${f.opp ? clubBadge(f.opp, 20) : ""}<span>${f.big?"★ ":""}${opp}</span></span><small>${compDot(fxTheme(f))}${esc(mcCompLabel(f))}${f.code!=="league" ? " · " + esc(f.round) + (f.leg ? `, leg ${f.leg}` : "") : f.home ? " · home" : ""}${!done && f.code==="league" && lgPosOf(f.opp) ? ` · ${ord(lgPosOf(f.opp))} in the table` : ""}${extra}${pens}</small></span>
     <span class="fx-s ${wdl}">${done ? `${f.res.gf}–${f.res.ga}` : ""}</span>
     ${done ? `<span class="fx-me">${mcMeLine(f)}</span>` : ""}</div>`;
 }
@@ -504,7 +504,7 @@ function mcHero(f, w){
     : `<div class="mc-side"><span class="crest-q" aria-hidden="true">?</span><b>To be drawn</b></div>`;
   const ground = f.neutral ? "Neutral venue" : f.opp ? meta(h).ground : "";
   return `<div class="mc-vs">${side(h)}<span class="mc-v">v</span>${side(a)}</div>
-    <p class="mc-vs-sub">${f.big ? "★ " : ""}${esc(mcCompLabel(f))}${f.code!=="league" ? ` · ${esc(f.round)}${f.leg ? `, leg ${f.leg}` : ""}` : ""} · ${mcDate(w, f)}${ground ? ` · ${esc(ground)}` : ""}</p>`;
+    <p class="mc-vs-sub">${compChip(fxTheme(f), (f.big ? "★ " : "") + fxTheme(f).name)}${f.code!=="league" ? ` ${esc(f.round)}${f.leg ? `, leg ${f.leg}` : ""}` : ""} · ${mcDate(w, f)}${ground ? ` · ${esc(ground)}` : ""}</p>`;
 }
 function mcPanel(){
   if (!S.mc || S.mc.key!==mcKey()) { mcBuild(); save(); }

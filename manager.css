@@ -578,3 +578,4 @@ button.mg-xir:hover{background:rgba(255,255,255,.05)} .mgx-marked{outline:1px so
 .mgx-item-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .mgx-item-h b{display:block} .mgx-item-h small{color:var(--muted)} .mgx-item-h .pill{margin-left:auto}
 .mgx-pick{display:grid;grid-template-columns:22px auto minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}
 .mgx-rank{font-family:var(--f-display);font-weight:900;font-size:18px;color:#C86BFF}
+@media (max-width:480px){.mg-fxr{grid-template-columns:72px 64px minmax(0,1fr) auto;gap:6px;padding-inline:8px}.mg-fxo{text-overflow:ellipsis}.mg-fxo>svg{flex:none}}

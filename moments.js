@@ -396,7 +396,8 @@ function lvHead(st, min, step){
   if (st.drill) return drHead(st);   // a training drill (drills.js) has its own scoreboard
   const [f, a] = lvScore(st, min), left = st.f.home || st.f.neutral, us = lvAbbr(left ? lvUs(st) : st.f.opp), them = lvAbbr(left ? st.f.opp : lvUs(st));
   const [l, r] = left ? [f, a] : [a, f], [cl, cr] = lvBugCols(st, left);
-  return `<div class="lv-top bug"><span class="lv-sc"><b style="--tc:${cl}">${esc(us)}</b><i>${l}–${r}</i><b style="--tc:${cr}">${esc(them)}</b></span><span class="lv-min">${lvMinTxt(st, min)}</span>
+  const th = st.f && st.f.code && typeof fxTheme==="function" ? fxTheme(st.f) : null;
+  return `${th ? compLine(th, [th.name, fxRound(st.f)].filter(Boolean).join(" · ")) : ""}<div class="lv-top bug"><span class="lv-sc"><b style="--tc:${cl}">${esc(us)}</b><i>${l}–${r}</i><b style="--tc:${cr}">${esc(them)}</b></span><span class="lv-min">${lvMinTxt(st, min)}</span>
     ${step ? `<span class="lv-steps-dots" aria-label="Step ${step[0]} of ${step[1]}">${[...Array(step[1])].map((_,i)=>`<i class="${i<step[0]?"on":""}"></i>`).join("")}</span>` : ""}
     ${st.left>1 || step ? `<button type="button" class="lv-skip" data-lv-skip>Sim the rest</button>` : ""}</div>`;
 }
@@ -624,7 +625,7 @@ async function lvPlayMatch(f, w){
     if (!lvSeen().intro) await lvHelp(["intro"], true);
     let go;
     while ((go = await lvAsk(`<div class="lv-card">
-        <div class="lv-eye">${f.big ? "★ " : ""}${esc(mcCompLabel(f))}${f.code!=="league" ? " · " + esc(f.round) + (f.leg ? `, leg ${f.leg}` : "") : ""} · ${mcDate(w, f)}</div>
+        ${compBand(fxTheme(f), [f.big ? "★ Big game" : "", fxRound(f), mcDate(w, f)].filter(Boolean).join(" · "))}
         <div class="lv-teams"><span>${clubBadge(home, 34)}${esc(home)}</span><i>v</i><span>${clubBadge(away, 34)}${esc(away)}</span></div>
         ${sqLineups(f)}
         <div class="lv-forms">${[[S.mc.club, "Your team"], [f.opp, f.opp]].map(([n, l])=>`<div class="lv-form"><span>${esc(l)}</span>${mcFormPills(mcTeamForm(n).L)}</div>`).join("")}</div>
@@ -726,6 +727,7 @@ async function lvFullTime(st, home, away){
   const bits = [me.g ? `${me.g} goal${me.g>1?"s":""}` : "", me.a ? `${me.a} assist${me.a>1?"s":""}` : "", me.og ? `${me.og} own goal${me.og>1?"s":""}` : "", me.cs && (DEF.includes(S.player.pos) || S.player.pos==="CDM") ? "clean sheet" : "",
     me.card==="y" ? "booked" : me.card ? "sent off" : ""].filter(Boolean);
   const html = `<div class="lv-card lv-ftc">
+      ${f.code ? compBand(fxTheme(f), fxRound(f), "slim") : ""}
       <div class="lv-eye">Full time${f.res.pens ? ` · ${f.res.pens==="won"?"won":"lost"} on penalties` : f.res.et ? " · after extra time" : ""}${f.agg && !f.res.pens ? ` · ${f.agg[0]}–${f.agg[1]} on aggregate` : ""}</div>
       <div class="lv-ft"><span>${clubBadge(home, 44)}<em>${esc(home)}</em></span><b>${l}–${r}</b><span>${clubBadge(away, 44)}<em>${esc(away)}</em></span></div>
       ${sqScorers(f)}

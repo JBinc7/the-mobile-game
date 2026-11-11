@@ -708,7 +708,7 @@ function mgFinishUserMatch(f, r){
   if (f.c!=="F"){ mgApply(f, r.hg, r.ag, r.dec); }
   const res = gf>ga ? "W" : gf<ga ? "L" : "D", opp = mine ? f.a : f.h;
   const decW = r.dec ? r.dec.w===M.club : null;
-  M.myres.push({d:M.day, c:f.c, comp:mgCompName(f, true), full:mgCompName(f), o:opp, h:mine, gf, ga, res, ko:decW, pens:r.dec && r.dec.pens ? (mine ? r.dec.pens : r.dec.pens.slice().reverse()).join("–") : "", et:!!(r.dec && r.dec.et),
+  M.myres.push({d:M.day, c:f.c, t:f.t, code:f.code, comp:mgCompName(f, true), full:mgCompName(f), o:opp, h:mine, gf, ga, res, ko:decW, pens:r.dec && r.dec.pens ? (mine ? r.dec.pens : r.dec.pens.slice().reverse()).join("–") : "", et:!!(r.dec && r.dec.et),
     sc:r.goals.filter(g=>g.side===(mine ? 0 : 1)).map(g=>`${mgSurname(g.n)} ${g.m}'`)});
   if (f.c!=="F"){
     const J = M.job; J.p++; M.car.p++; M.car.gf += gf; M.car.ga += ga;
