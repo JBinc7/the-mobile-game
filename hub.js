@@ -9,7 +9,10 @@ let APP = "hub";
 const HUB_SLOTS = 3;
 const Hub = (() => {
   const BOOT = "efp-boot";
-  let view = "home", sure = "", playerSlot = 0, mountT = 0;
+  let view = "home", sure = "", playerSlot = 0, mountT = 0, recTab = "ach";
+  // every save on the account, for the Records room (records.js)
+  const allSaves = () => Object.fromEntries(MODES.map(m=>[m, Array.from({length:HUB_SLOTS}, (_, k)=>read(m, k + 1)).filter(Boolean)]));
+  const recCheck = () => typeof Records!=="undefined" ? Records.check(allSaves(), typeof Mgr!=="undefined" ? Mgr.hall() : []) : null;
   const pKind = i => i===1 ? "career" : `career-${i}`;
   const mKind = i => `mgr-${i}`, dKind = i => `dof-${i}`;
   const MODES = ["player", "manager", "dof"];
@@ -153,6 +156,8 @@ const Hub = (() => {
             <span class="mode-meta"><span>${count("dof")} / ${HUB_SLOTS} saves</span><span class="mode-go">Direct ▶</span></span></span>
         </button>
       </div>
+      ${(()=>{ const R = recCheck(); if (!R) return ""; const done = R.rows.filter(r=>r.done).length, next = R.rows.filter(r=>!r.done).sort((a, b)=>b.a/b.b - a.a/a.b)[0];
+        return `<button type="button" class="hub-rec" data-hub="records"><span class="hub-rec-i" aria-hidden="true">🏆</span><span class="hub-rec-t"><b>Records room</b><small>${R.fresh.length ? `New: ${R.fresh.map(x=>esc(x.t)).join(", ")}` : next ? `Next: ${esc(next.t)}${next.b>1 ? ` (${next.a.toLocaleString()} / ${next.b.toLocaleString()})` : ""}` : "Every achievement unlocked"}</small></span><span class="hub-rec-n">${done}<small> / ${R.rows.length}</small></span></button>`; })()}
       <div class="hub-more">
         <button type="button" class="btn small" data-hub="legacy">Player Legacy</button>
         ${typeof Mgr!=="undefined" ? `<button type="button" class="btn small" data-hub="mhall">Hall of fame</button>` : ""}
@@ -172,6 +177,7 @@ const Hub = (() => {
   function hubRender(){
     $("#bandRight").innerHTML = "";
     if (view==="mhall" && typeof Mgr!=="undefined"){ $("#app").innerHTML = Mgr.hallHTML(); return; }
+    if (view==="records" && typeof Records!=="undefined"){ $("#app").innerHTML = Records.html(allSaves(), typeof Mgr!=="undefined" ? Mgr.hall() : [], recTab); return; }
     $("#app").innerHTML = view==="home" ? homeHTML() : slotsHTML(view);
     flash = "";
     if (view==="home") mount3D();
@@ -203,6 +209,8 @@ const Hub = (() => {
     }
     else if (a==="legacy"){ APP = "player"; showBoard = true; render(); window.scrollTo({top:0}); }
     else if (a==="mhall"){ view = "mhall"; hubRender(); window.scrollTo({top:0}); }
+    else if (a==="records"){ view = "records"; recTab = "ach"; hubRender(); window.scrollTo({top:0}); }
+    else if (a==="rectab"){ recTab = b.dataset.v; hubRender(); }
   });
 
   return {

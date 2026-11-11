@@ -103,6 +103,14 @@ Every competition now has its own two colours and pattern, the same in all three
 - **Player Career:** a banner on the pre-match card and at full time, a strip over the scoreboard during your key moments, a coloured edge and dot on every fixture and result, and trophies in the cabinet in their competition's colours.
 - **Manager Career and Director of Football:** the next match, match day and last result panels take the competition's colours; fixtures, results and trophies carry its dot.
 
+## 3.0, part 3: the Records room
+
+A new **Records room** on the main menu covers everything you've done on the account, in all three modes (`records.js`).
+
+- **Achievements:** 41 of them (19 as a player, 12 as a manager, 7 as a director of football and 3 that span every mode), each bronze, silver or gold, with a progress bar. Unlocking one pays gold coins once: 40, 120 or 300.
+- **All-time records:** your best across every career: most goals in a season, best season rating, most trophies, biggest win, best top-flight finish and more.
+- It's all worked out from your saves, so careers started before 3.0 count. What you've unlocked is kept on the account and in backups, so deleting a save never takes an achievement away.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
@@ -285,6 +293,7 @@ Players on different phones can't see each other's careers. That would need an o
 | `targets.js` | The manager's season targets and your agent's clauses |
 | `shop.js` | The shop: boots (and their icons) and training boosts bought with gold coins, coin packs, and the Editor pen with its player editor |
 | `themes.js` | The competition themes (3.0): colours and patterns for every league, cup, European and international competition, and the banners, strips and chips that show them in all three modes. |
+| `records.js` | The Records room (3.0): achievements and all-time records across all three modes, worked out from your saves. |
 | `g3d.js` | The 3D graphics (three.js): the player on the home screen, the 3D scenes for shots, saves, headers, volleys, tackles and crosses, and a 3D version of every other mini-game drawn from its 2D picture; the stadium, light and weather, replays and celebrations, and the broadcast finish over the picture |
 | `sound.js` | The sound, all made in the browser (no recordings): the crowd, its chants and reactions, the ball, the net, the whistle and the rain |
 | `sw.js` | Offline support: keeps a copy of the game on the phone |

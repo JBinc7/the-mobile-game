@@ -590,7 +590,7 @@ async function exportBackup(){
   const slots = Hub.all();
   // "career" is slot 1's player career, as backups always had; "slots" has every player and manager save
   const data = {game:"English Footballing Pyramid", saved:new Date().toISOString(), career:slots["player-1"]||null, slots, legacy:loadHall(),
-    mhall:(typeof Mgr!=="undefined" ? Mgr.hall() : []), coins:Account.coins(), locker:Account.locker()};
+    mhall:(typeof Mgr!=="undefined" ? Mgr.hall() : []), coins:Account.coins(), locker:Account.locker(), ach:(typeof Records!=="undefined" ? Records.got() : {})};
   const json = JSON.stringify(data), filename = `pyramid-backup-${Account.fileTag()}-${new Date().toISOString().slice(0,10)}.json`;
   // on phones, hand the file to the share sheet (Save to Files, AirDrop, email…) where the browser allows it
   try{
@@ -617,6 +617,7 @@ function importBackup(file){
       if (d.coins) Account.mergeCoins(d.coins);
       Account.mergeLocker(d.locker);   // the bigger balance wins, so a backup can't be loaded twice for double coins
       if (typeof Mgr!=="undefined" && d.mhall) Mgr.mergeHall(d.mhall);
+      if (typeof Records!=="undefined" && d.ach) Records.merge(d.ach);
       // older backups have one career; newer ones have every slot of both modes
       const all = d.slots || (d.career ? {"player-1":d.career} : {});
       const got = Hub.restore(all, confirmImport);
