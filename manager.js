@@ -210,7 +210,7 @@ function mgEff(p, pos){
   let v = mgOvrAt(p, pos);
   if (p.fit<80) v -= (80 - p.fit)*.12;
   v += (p.mor - 60)/20;
-  const f = p.form && p.form.length ? p.form.reduce((s, x)=>s + x, 0)/p.form.length : 6.6; v += clamp((f - 6.6)*1.2, -1.5, 1.5);
+  v += mgxAdj(p);
   return v;
 }
 // the best XI a club can put out in a formation: the most important places first, then each place's best man
@@ -233,11 +233,13 @@ function mgScarce(sq, pos){ return sq.filter(p=>p.pos===pos || (p.alt||[]).inclu
 function mgMendXI(quiet){
   const T = M.tac, slots = MG_FORM[T.f], mine = new Set(M.cl[M.club].sq), notes = [];
   T.xi = (T.xi||[]).slice(0, slots.length); while (T.xi.length<slots.length) T.xi.push(null);
+  mgxReturn(T, slots, mine, notes, quiet);
   const used = new Set(T.xi.filter(Boolean));
   T.xi = T.xi.map((id, i)=>{
     const p = M.P[id];
     if (p && mine.has(id) && mgAvail(p)) return id;
     used.delete(id);
+    if (p && mine.has(id) && (p.inj || p.ban>0)) (T.out ||= {})[i] = id;
     const cand = mgMine().filter(q=>mgAvail(q) && !used.has(q.id) && !T.xi.includes(q.id)).sort((a, b)=>mgEff(b, slots[i][0]) - mgEff(a, slots[i][0]))[0];
     if (cand){ used.add(cand.id); if (p && !quiet) notes.push(`${mgShort(cand.n)} in for ${mgShort(p.n)} (${p.inj ? "injured" : p.ban>0 ? "suspended" : "unavailable"})`); return cand.id; }
     return null;
@@ -250,7 +252,7 @@ function mgMendXI(quiet){
   if (!T.xi.includes(T.cap)) T.cap = T.xi.map(id=>M.P[id]).filter(Boolean).sort((a, b)=>(b.age + mgOvr(b)/3) - (a.age + mgOvr(a)/3))[0]?.id || null;
   return notes;
 }
-function mgPickBest(){ const A = mgAutoXI(M.club, M.tac.f, mgMine()); M.tac.xi = A.xi.map(p=>p ? p.id : null); M.tac.bench = A.subs.map(p=>p.id); mgMendXI(true); }
+function mgPickBest(){ M.tac.out = {}; const A = mgAutoXI(M.club, M.tac.f, mgMine()); M.tac.xi = A.xi.map(p=>p ? p.id : null); M.tac.bench = A.subs.map(p=>p.id); mgMendXI(true); }
 
 /* ---------- the calendar ---------- */
 const MGD = (y, m, d) => Math.round(Date.UTC(y, m, d)/864e5);
@@ -665,9 +667,13 @@ function mgApplyDetail(f, r){
     p.form = (p.form || []).concat(+s.r.toFixed(1)).slice(-5);
     p._mins = (p._mins || 0) + s.mins;
     p.fit = Math.max(25, Math.round(p.fit - s.drain));
-    if (s.yc){ p.ycc = (p.ycc||0) + s.yc; if (p.ycc>=5){ p.ban = (p.ban||0) + 1; p.ycc = 0; } }
-    if (s.rc) p.ban = (p.ban||0) + (s.yc>=2 ? 1 : 3);
-    if (s.inj) p.inj = s.inj;
+    p.shp = Math.min(100, mgxShp(p) + s.mins/90*14);
+    // cards in a friendly don't count
+    if (f.c!=="F"){
+      if (s.yc){ p.ycc = (p.ycc||0) + s.yc; if (p.ycc>=5){ p.ban = (p.ban||0) + 1; p.ycc = 0; } }
+      if (s.rc) p.ban = (p.ban||0) + (s.yc>=2 ? 1 : 3);
+    }
+    if (s.inj){ p.inj = s.inj; mgxPhysio(p); }
   }
   // a ban is served by missing a match: everyone banned at these clubs who didn't play has one fewer to serve
   [f.h, f.a].forEach(c=>{ if (M.cl[c]) M.cl[c].sq.forEach(id=>{ const p = M.P[id]; if (p && p.ban>0 && !r.ps.some(s=>s.id===id && s.mins>0)) p.ban--; }); });
@@ -720,6 +726,7 @@ function mgFinishUserMatch(f, r){
     const bon = r.ps.reduce((t, x)=>{ const q = M.P[x.id]; return t + (q && q.club===M.club && q.bon && x.mins>0 ? q.bon : 0); }, 0); if (bon) mgFinAdd("exp", "fees", bon);
     mgPrize(f, res, decW);
     if (M.chal) mgChallengeTick(f, res, gf);
+    mgxAfterMatch(f, r, res, pts, exp, opp, gf, ga);
   }
   const hurt = r.ps.filter(s=>s.inj && M.P[s.id] && M.P[s.id].club===M.club);
   hurt.forEach(s=>mgMail("injury", `${M.P[s.id].n} is injured`, `${M.P[s.id].n} picked up ${s.inj.n.toLowerCase()} and will be out for about ${mgWeeks(s.inj.d)}.`));
@@ -745,9 +752,10 @@ function mgTick(){
   // recovery: players get their legs back day by day; injuries heal
   const hard = M.train ? M.train.int : 1;
   for (const id in M.P){ const p = M.P[id]; if (!p.club || !M.cl[p.club]) continue;
-    if (p.inj){ p.inj.d--; if (p.inj.d<=0){ p.inj = null; if (p.club===M.club) mgMail("injury", `${p.n} is fit again`, `${p.n} has recovered and is available for selection.`); } }
-    const mine = p.club===M.club, rec = 8 + ((p.pos==="GK" ? 70 : p.at[5]) - 60)/12 - (p.age>30 ? 1.5 : 0) + (mine ? (hard===0 ? 2.5 : hard===2 ? -2 : 0) : 0);
-    p.fit = Math.min(100, Math.round(p.fit + Math.max(3, rec)));
+    if (p.inj){ p.inj.t ??= p.inj.d; p.inj.d--; p.shp = Math.max(30, mgxShp(p) - 1.3); if (p.inj.d<=0) mgxRecovered(p); }
+    const mine = p.club===M.club, rec = 8 + ((p.pos==="GK" ? 70 : p.at[5]) - 60)/12 - (p.age>30 ? 1.5 : 0) + (mine ? (hard===0 ? 2.5 : hard===2 ? -2 : 0) + mgxPhysRec() : 0);
+    p.fit = Math.min(100, Math.round(p.fit + Math.max(3, rec)*(p.stam ? .55 : 1)));
+    if (p.stam && --p.stam.d<=0) p.stam = null;
   }
   if (M.phase==="pre" && M.day>=MGD(M.season, 7, 1)) M.phase = "season";
   if (dow===1) mgWeekly();
@@ -768,7 +776,7 @@ function mgWeekly(){
     mgDevelop(p, 1, T);
     p._mins = (p._mins || 0)*.55;
     if (M.phase==="season" && !p.inj && !p.loan){ const want = MG_ROLE_SHARE[p.role ?? 2]; p.mor = clamp(p.mor + clamp(((p.pt ?? want) - want)*5, -1.5, 1) + (66 - p.mor)*.08, 5, 100); }
-    if (T.int===2 && Math.random()<.006*(p.fit<70 ? 2 : 1)) { p.inj = mgInjury(true); mgMail("injury", `${p.n} hurt in training`, `${p.n} picked up ${p.inj.n.toLowerCase()} in training and will be out for about ${mgWeeks(p.inj.d)}.`); }
+    if (T.int===2 && Math.random()<.006*(p.fit<70 ? 2 : 1)) { p.inj = mgInjury(true); mgxPhysio(p); mgMail("injury", `${p.n} hurt in training`, `${p.n} picked up ${p.inj.n.toLowerCase()} in training and will be out for about ${mgWeeks(p.inj.d)}.`); }
     if (p.mor<28 && !p.req && p.age>19 && M.phase==="season" && Math.random()<.2){ p.req = 1; mgMail("contract", `${p.n} wants to leave`, `${p.n} is unhappy (${mgMorLabel(p.mor)}) and has asked to be put on the transfer list.`,
       {act:{type:"req", id:p.id}, stop:1}); }
   });
@@ -781,8 +789,9 @@ function mgWeekly(){
     const o = M.board.obj.find(x=>x.k==="league"), pos = mgPos(), played = mgTable(mgLeagueOf()).find(r=>r.n===M.club)?.p || 0;
     if (o && played>=8){ const gap = o.n - pos; mgBoardShift(clamp(gap*.1, -.8, .5)); }
     if (bill>M.fin.wb*1.02) mgBoardShift(-.6, "Wage bill over budget");
-    if (M.board.conf<15 && played>=10) return mgSacked("results");
+    if (mgxBoardCheck(played)) return;
   }
+  mgxWeekly();
   if (mgDof()){ if (M.coach) mgFinAdd("exp", "staff", M.coach.wage); mdfWeekly(); }
   if (mgInWindow()) mgWindowWeek();
   mgAiManagers();
@@ -1357,7 +1366,7 @@ const mgScoutsMax = () => clamp(Math.round(1 + mgRep(M.club)*3), 2, 4);
 function mgScout(p){
   if (M.scout.some(s=>s.id===p.id)) return "Already being scouted.";
   if (M.scout.length>=mgScoutsMax()) return `All ${mgScoutsMax()} of your scouts are busy.`;
-  M.scout.push({id:p.id, n:p.n, club:p.club, d:mgCountry(p.club)===mgCountry(M.club) ? 4 : 8, p:p.virt ? {...p} : null}); mgSave(); return "";
+  M.scout.push({id:p.id, n:p.n, club:p.club, d:Math.max(2, Math.round((mgCountry(p.club)===mgCountry(M.club) ? 4 : 8)*mgxScoutF())), p:p.virt ? {...p} : null}); mgSave(); return "";
 }
 function mgScoutDone(s){
   M.kn[s.id] = 100;

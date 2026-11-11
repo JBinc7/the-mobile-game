@@ -72,6 +72,24 @@ The third career, in the same world as Manager Career. You don't pick the team: 
 - **The books.** Match-day income, TV and prize money and commercial deals come in; player wages, the coach's wage, running costs (stadium, staff, travel; more with better facilities), fees and compensation go out. Set **ticket prices** (low fills the ground and helps at home; high earns more but the fans may protest). Invest in the **training ground** (players develop faster) and the **academy** (better youth intakes); building work comes out of the transfer budget but isn't counted against the profit target.
 - **Events for a director:** shirt sponsors, fan protests at ticket prices, takeovers, wonderkids and stars whose heads are turned.
 
+## Form, sharpness and the staff (2.5)
+
+In both Manager Career and Director of Football:
+
+- **Form and sharpness.** A small **+** or **−** beside a player's rating is what he's worth today. *Form* is his last five match ratings (up to +3 or −3). *Sharpness* is match practice: it drops while he's injured or not playing and comes back with minutes; a rusty player plays below his rating. Managers (yours, the computer's, and your head coach) pick on today's level, so a man in form can keep a better player out.
+- **Fitness is always shown** as a bar and a number. It falls with minutes played and recovers day by day (faster with more stamina). A player back from injury is **short of stamina** for a while (▾): he tires faster and recovers slower.
+- **Staff** (Club → Staff): an assistant manager, a head physio and a chief scout, each with a rating and a wage. Hire better ones from the market.
+- **The assistant's report** before every match: who's tired, rusty or in form, the changes he'd make, one thing to go after in the opposition and their danger man. *Do what he suggests* applies it. When you quick sim he freshens the team (switch this off in Club → Staff). Players back from injury or a ban go back into the XI if they're good enough on the day.
+- **Player conversations.** Players knock on your door about game time, their form or their contract. Promises are remembered: keep them and morale rises, break them and the whole dressing room notices.
+- **Opposition instructions and set pieces.** On match day, tap one of their players to mark him tightly. In Tactics, choose who takes penalties, free kicks and corners.
+- **Did it work?** A few minutes after a substitution, shout or tactical change, the commentary tells you what it did.
+- **Derbies** matter more to the board, the fans and the dressing room.
+- **The season so far** (Home): your points against what a club like yours would expect, game by game, and your best and worst runs.
+- **An ultimatum before the sack.** The board calls you in and sets a points target over the next five league games.
+- **The head coach's window plan** (Director of Football): each window he names the positions he wants and his three preferred players for each, chosen for his style. *Trust him* signs his first available choice at the asking price, or find your own. He's happiest with his own picks, fine with a good one of yours, and frustrated if the window shuts with nothing done.
+
+Fixed in 2.5: substituted players were counted twice (doubled appearances, minutes and injury messages), cards in friendlies led to bans, and a first-choice player back from injury stayed on the bench.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
@@ -234,6 +252,7 @@ Players on different phones can't see each other's careers. That would need an o
 | `mgdof.js` | Director of Football: head coaches (style, ratings, mood, contracts), the coach's team selection and tactics, hiring and sacking, requests, the owner's money objectives, running costs, ticket prices and facilities |
 | `mgui.js` | Manager Career's screens (and Director of Football's): making your manager or director and picking a club, Home, Squad, Tactics, Transfers, Competitions, Club, Inbox and the player card |
 | `mgdofui.js` | Director of Football's own screens: the head coach page, the coach market, the coach on Home, the money line, facilities and ticket prices |
+| `mgplus.js` | Form and sharpness, stamina after injury, staff, the assistant's report, player conversations, opposition instructions, set-piece takers, derbies, the season's story, the board's ultimatum, and the head coach's window plan |
 | `manager.css` | The main menu's, Manager Career's and Director of Football's styles |
 | `theme.css` | The game's look: colours, panels, buttons, tabs and fields for every screen |
 | `game.js` / `game.css` | The game itself, taken from the artifact. Saving now goes to the signed-in account instead of Claude |

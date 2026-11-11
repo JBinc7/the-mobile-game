@@ -42,7 +42,8 @@ function mmEff(o, S){
   const p = o.p; let v = mgOvrAt(p, o.pos);
   if (o.cond<72) v -= (72 - o.cond)*.16;
   v += ((p.mor ?? 62) - 60)/20;
-  const fa = mgFormAvg(p); if (fa) v += clamp((fa - 6.6)*1.1, -1.4, 1.4);
+  v += mgxAdj(p);
+  if (o.marked) v -= 3;
   v -= (100 - S.fam)*.05;
   v += S.boost + (S.cb || 0);
   return v;
@@ -52,7 +53,7 @@ function mmRate(S){
   const on = mmOn(S);
   on.forEach(o=>{ const e = mmEff(o, S); a += e*MG_AW[o.pos]; aw += MG_AW[o.pos]; d += e*MG_DW[o.pos]; dw += MG_DW[o.pos]; m += e*MG_MW[o.pos]; mw += MG_MW[o.pos]; if (o.pos==="GK") gk = e; });
   const short = 11 - on.length, line = S.tac.line;
-  S.R = {att:(aw ? a/aw : 40) - short*3 + (S.tac.width===2 ? .6 : 0), def:(dw ? d/dw : 40) - short*3.5 + (line===0 ? .8 : line===2 ? -.6 : 0) + S.focus, mid:(mw ? m/mw : 40) - short*3 + (S.tac.press===2 ? .8 : 0), gk};
+  S.R = {att:(aw ? a/aw : 40) - short*3 + (S.tac.width===2 ? .6 : 0), def:(dw ? d/dw : 40) - short*3.5 + (line===0 ? .8 : line===2 ? -.6 : 0) + S.focus, mid:(mw ? m/mw : 40) - short*3 + (S.tac.press===2 ? .8 : 0) - (S.marking ? .5 : 0), gk};
 }
 
 /* ---------- a match ---------- */
@@ -61,6 +62,7 @@ function mmNew(f, userSide){
   const G = {f, S:[H, A], min:0, add:[1 + Math.floor(Math.random()*4), 2 + Math.floor(Math.random()*5)], half:1, score:[0, 0], ev:[], poss:[0, 0], mom:0, user:userSide,
     ko:!!f.ko, first:f.first || null, neutral:!!f.neutral, phase:"1h", et:false, pens:null, done:false, pressOpp:0};
   if (userSide>=0 && M.pressDone===f.key && M.pressOpp){ G.S[1 - userSide].boost += M.pressOpp*.4; }
+  if (userSide>=0) mgxMatchSetup(G, userSide);
   G.S.forEach(mmRate);
   return G;
 }
@@ -88,7 +90,7 @@ function mmMinute(G){
   const live = [];
   G.S.forEach((S, s)=>{
     const drain = (S.tac.press===2 ? 1.22 : S.tac.press===0 ? .9 : 1)*(S.tac.tempo===2 ? 1.08 : 1);
-    mmOn(S).forEach(o=>{ o.mins++; o.cond = Math.max(10, o.cond - (o.pos==="GK" ? .08 : .32*(1.15 - (o.p.at[5] || 60)/200)*drain)); });
+    mmOn(S).forEach(o=>{ o.mins++; o.cond = Math.max(10, o.cond - (o.pos==="GK" ? .08 : .32*(1.15 - (o.p.at[5] || 60)/200)*drain*(o.p.stam ? 1.3 : 1))); });
     if (S.boostT && --S.boostT<=0) S.boost = 0;
     if (S.pushT && --S.pushT<=0) S.push = 0;
   });
@@ -105,6 +107,7 @@ function mmMinute(G){
   for (const s of [0, 1]) if (Math.random()<.0017*(1 + mmOn(G.S[s]).filter(o=>o.cond<55).length*.3)) mmInjure(G, s);
   for (const s of [0, 1]) if (G.user!==s || G.auto) mmAiCoach(G, s);
   G.mom = clamp(G.mom*.9, -1, 1);
+  mgxFxSay(G);
   return live;
 }
 const MG_SHOT_T = {
@@ -123,11 +126,12 @@ const mmT = (k, o) => mgPick(Math.random, MG_SHOT_T[k]).replace(/\{(\w+)\}/g, (m
 function mmShot(G, s){
   const A = G.S[s], B = G.S[1 - s], on = mmOn(A), them = mmOn(B);
   if (!on.length) return null;
-  const sh = mmPick(on, o=>MG_SW[o.pos]*Math.pow(mmSho(o)/70, 2));
+  let sh = mmPick(on, o=>MG_SW[o.pos]*Math.pow(mmSho(o)/70, 2));
   const r = Math.random(); let kind, xg;
   if (r<.025){ kind = "pen"; xg = .76; } else if (r<.085){ kind = "big"; xg = .3 + Math.random()*.35; } else if (r<.28){ kind = "good"; xg = .12 + Math.random()*.18; } else { kind = "low"; xg = .02 + Math.random()*.1; }
+  let fk = false; { const sp = mgxTaker(A, on, kind); if (sp){ sh = sp.o; fk = sp.fk; } }
   if (kind!=="pen") xg *= Math.exp(clamp(A.R.att - B.R.def, -15, 15)/120);
-  const head = kind!=="pen" && ["CB","ST"].includes(sh.pos) && Math.random()<.3;
+  const head = kind!=="pen" && !fk && ["CB","ST"].includes(sh.pos) && Math.random()<.3;
   const gk = them.find(o=>o.pos==="GK"), gkv = gk ? mmEff(gk, B) : 40;
   const fin = Math.exp((mmSho(sh) + (sh.cond - 70)*.05 - 70)/100)/Math.exp((gkv - 70)/100);
   const pg = clamp(xg*fin, .01, .9);
@@ -137,12 +141,12 @@ function mmShot(G, s){
   if (x<pg){
     G.score[s]++; A.st.ont++; sh.ont++; sh.g++; sh.rt += 1.05;
     let as = null;
-    if (kind!=="pen" && Math.random()<.78){ const pool = on.filter(o=>o!==sh); if (pool.length){ as = mmPick(pool, o=>MG_ASW[o.pos]*Math.pow(mmPas(o)/70, 2)); as.a++; as.kp++; as.rt += .7; } }
+    if (kind!=="pen" && Math.random()<.78){ const pool = on.filter(o=>o!==sh); if (pool.length){ as = (head && mgxCorner(A, pool)) || mmPick(pool, o=>MG_ASW[o.pos]*Math.pow(mmPas(o)/70, 2)); as.a++; as.kp++; as.rt += .7; } }
     if (gk) gk.rt -= .35;
     them.filter(o=>MG_GROUP(o.pos)==="DEF").forEach(o=>{ o.rt -= .12; });
     on.forEach(o=>{ o.rt += .05; });
     G.mom = clamp(G.mom + (s ? -.6 : .6), -1, 1);
-    const txt = kind==="pen" ? mmT("pen", names) : head ? mmT("head", names) : as ? mmT("goal", names) + " " + mmT("goalA", {...names, a:mgShort(as.p.n)}) : mmT("goal", names);
+    const txt = kind==="pen" ? mmT("pen", names) : fk ? `GOAL! ${names.p} curls the free kick into the top corner!` : head ? mmT("head", names) : as ? mmT("goal", names) + " " + mmT("goalA", {...names, a:mgShort(as.p.n)}) : mmT("goal", names);
     out = mmSay(G, s, "goal", txt, {p:sh.p.id, n:sh.p.n, a:as ? as.p.n : null, kind, xg, head});
     (G.goals ||= []).push({side:s, n:sh.p.n, m:mmMinTxt(G), pen:kind==="pen", a:as ? as.p.n : null});
   } else {
@@ -157,7 +161,7 @@ function mmShot(G, s){
     if (kind==="big" || kind==="pen") sh.rt -= .2;
     G.mom = clamp(G.mom + (s ? -.2 : .2), -1, 1);
     const txt = kind==="pen" ? mmT("penMiss", names) : k==="save" ? (kind==="big" ? mmT("big", names) : mmT("save", names)) : mmT(k, names);
-    out = mmSay(G, s, k, (kind==="pen" ? "PENALTY! " : "") + txt, {p:sh.p.id, n:sh.p.n, kind, xg, head});
+    out = mmSay(G, s, k, (kind==="pen" ? "PENALTY! " : fk ? "Free kick. " : "") + txt, {p:sh.p.id, n:sh.p.n, kind, xg, head});
   }
   out.pos = sh.pos;
   if (cor) mmCorner(G, s, out);
@@ -192,7 +196,7 @@ function mmSub(G, s, off, onP){
   b.used = true; S.subs++;
   const m = mmMan(onP, off.pos, off.x, off.y, false); m.in = G.min;
   off.off = true; off.subbed = G.min;
-  S.on.push(m); S.out.push(off);
+  S.on.push(m);
   mmSay(G, s, "sub", `Substitution: ${mgShort(onP.n)} replaces ${mgShort(off.p.n)}.`, {p:onP.id, n:onP.n, o:off.p.n, off:off.p.id});
   mmRate(S); return true;
 }
@@ -469,11 +473,11 @@ function mmClick(e){
   else if (a==="shut"){ LV.forced = null; LV.subOff = LV.subOn = null; mmShut(); }
   else if (a==="hl"){ LV.hl = b.dataset.v; try{ localStorage.setItem("efp-mg-hl", LV.hl); }catch(err){} mmModal(); }
   else if (a==="big"){ LV.big = !LV.big; b.setAttribute("aria-pressed", LV.big); document.querySelector(".mm-wrap")?.classList.toggle("big", LV.big); }
-  else if (a==="tac"){ S.tac[b.dataset.k] = +b.dataset.v; if (b.dataset.k==="ment") mmSay(G, LV.us, "info", `You switch to ${MG_MENT[S.tac.ment].toLowerCase()}.`); mmRate(S); mmModal(); }
+  else if (a==="tac"){ mgxFxMark(G, LV.us, "tac"); S.tac[b.dataset.k] = +b.dataset.v; if (b.dataset.k==="ment") mmSay(G, LV.us, "info", `You switch to ${MG_MENT[S.tac.ment].toLowerCase()}.`); mmRate(S); mmModal(); }
   else if (a==="soff"){ LV.subOff = S.on[+b.dataset.i]; mmModal(); }
   else if (a==="son"){ LV.subOn = S.bench.find(x=>x.p.id===b.dataset.id)?.p || null; mmModal(); }
-  else if (a==="dosub"){ if (LV.subOff && LV.subOn && mmSub(G, LV.us, LV.subOff, LV.subOn)){ mmFeed(G.ev[G.ev.length - 1]); LV.forced = null; LV.subOff = LV.subOn = null; mmBoard(); mmShut(); } }
-  else if (a==="shoutdo"){ mmShout(b.dataset.v); mmShut(); }
+  else if (a==="dosub"){ mgxFxMark(G, LV.us, "sub"); if (LV.subOff && LV.subOn && mmSub(G, LV.us, LV.subOff, LV.subOn)){ mmFeed(G.ev[G.ev.length - 1]); LV.forced = null; LV.subOff = LV.subOn = null; mmBoard(); mmShut(); } }
+  else if (a==="shoutdo"){ mgxFxMark(G, LV.us, "shout"); mmShout(b.dataset.v); mmShut(); }
   else if (a==="talk"){ mmTalk(b.dataset.v); LV.talkDone = true; mmShut(); }
   else if (a==="post"){ LV.post = b.dataset.v; mmModal(); }
   else if (a==="sim"){ G.auto = true; mdStop(); mmRun(G); LV.shown = G.score.slice(); LV.feed = G.ev.slice().reverse(); mmScorers(); mmBoard(); mmPaintBody(); LV.modal = null; mmOpen("ft"); }

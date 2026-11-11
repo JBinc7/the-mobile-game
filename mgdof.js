@@ -147,6 +147,7 @@ function mdfWeekly(){
   if (!C.int && mgInWindow() && C.rec.p>=8 && mdfPerf(C)>5 && Math.random()<.04) mdfPoach();
 }
 function mdfRequest(){
+  if (mgxPlanOpen()) return;
   const T = M.tac, slots = MG_FORM[T.f], lv = mgLevel(M.club);
   let wi = -1, wv = 99; T.xi.forEach((id, i)=>{ const p = M.P[id], v = p ? mgOvrAt(p, slots[i][0]) : 0; if (v<wv){ wv = v; wi = i; } });
   if (wi<0 || wv>=lv + 2) return;
@@ -158,6 +159,7 @@ const MG_POS_NAME = {GK:"goalkeeper", CB:"centre-back", LB:"left-back", RB:"righ
 // a signing (or loan) the coach asked for?
 function mdfArrived(q){
   const R = M.creq, C = M.coach; if (!mgDof() || !C || C.int) return;
+  if (mgxPlanArrived(q)) return;
   if (R && (q.pos===R.pos || (q.alt || []).includes(R.pos)) && mgOvrAt(q, R.pos)>=R.need){ C.mood = clamp(C.mood + 12, 0, 100); M.creq = null;
     mgMail("board", `${C.n} is delighted`, `"${q.n} is exactly what I asked for. Thank you."`); }
   else C.mood = clamp(C.mood + 2, 0, 100);
