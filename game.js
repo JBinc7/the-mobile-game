@@ -2062,7 +2062,7 @@ function genOffers(pf, opts={}){
 function getOffer(key){ return key==="renew" ? S.pending.offers.renewal : S.pending.offers.list[+key]; }
 function negotiate(key){
   const o = getOffer(key); if (!o || o.status!=="open") return;
-  const ask = roundWage(+$(`#ask-${key}`).value || o.wage), years = +$(`#yrs-${key}`).value;
+  const ask = roundWage(moneyOut($(`#ask-${key}`).value) || o.wage), years = +$(`#yrs-${key}`).value;
   const clRaw = ($(`#cl-${key}`)?.value ?? "").toString().trim();
   const askClause = clRaw==="" ? null : roundTM(+clRaw*1e6);
   const ys = clamp(years, o.minY, o.maxY);
@@ -2582,7 +2582,7 @@ function offerCard(o, key){
     ${o.status==="open"?`<button class="btn small primary" data-act="sign" data-k="${key}">Accept as is</button>
       <details class="nego-d" ${negoOpen.has(String(key))?"open":""}><summary>Negotiate · ${o.patience} round${o.patience===1?"":"s"} of talks left</summary>
       <div class="nego">
-        <div class="field"><label for="ask-${key}">Ask for (£/wk)</label><input id="ask-${key}" type="number" min="0" step="50" inputmode="numeric" value="${roundWage(o.wage*1.15)}"></div>
+        <div class="field"><label for="ask-${key}">Ask for (£/wk)</label><input id="ask-${key}" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(roundWage(o.wage*1.15))}"></div>
         <div class="field"><label for="yrs-${key}">Years</label><select id="yrs-${key}">${[1,2,3,4,5].map(y=>`<option ${y===o.years?"selected":""}>${y}</option>`).join("")}</select></div>
         <div class="field" style="grid-column:1/-1"><label for="cl-${key}">Release clause (€m, blank for none)</label><input id="cl-${key}" type="number" min="0" step="0.5" inputmode="decimal" value="${o.clause?Math.round(o.clause/1e5)/10:""}" placeholder="${o.policy==="none"?"This club won't include one":"e.g. "+Math.round(o.minClause*1.1/1e6*10)/10}"></div>
       </div>

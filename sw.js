@@ -2,7 +2,7 @@
    The game's own files are fetched fresh when the network answers quickly (so updates arrive on their own),
    and come from the phone's copy when it doesn't. Fonts and icons never change, so they always come from the copy.
    Bump CACHE when files are renamed or removed, so phones drop the old copy. */
-const CACHE = "pyramid-v101";
+const CACHE = "pyramid-v102";
 const FONTS = ["barlow-condensed-latin-500", "barlow-condensed-latin-600", "barlow-condensed-latin-700", "barlow-condensed-latin-ext-500", "barlow-condensed-latin-ext-600", "barlow-condensed-latin-ext-700",
   "barlow-latin-400", "barlow-latin-500", "barlow-latin-600", "barlow-latin-700", "barlow-latin-ext-400", "barlow-latin-ext-500", "barlow-latin-ext-600", "barlow-latin-ext-700",
   "big-shoulders-display-latin", "big-shoulders-display-latin-ext"].map(f => `fonts/${f}.woff2`);

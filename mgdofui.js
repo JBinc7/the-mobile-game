@@ -25,7 +25,7 @@ function mdfCoachHTML(){
     <p class="hint">He picks the team and the tactics. The squad knows his ${esc(T.f)} ${fam}% well${fam<85 ? ": it takes a few weeks to learn a new coach's shape" : ""}.</p>
     <div class="mg-pitch mdf-pitch" aria-label="The coach's XI">${xi.map(({p, pos, x, y})=>`<span class="mg-tok ${mgFitCls(p, pos)}" style="left:${(x*100).toFixed(1)}%;bottom:${(4 + y*88).toFixed(1)}%"><b>${p ? mgOvrAt(p, pos) : "–"}${p ? mgxAdjB(p) : ""}</b><span>${p ? esc(mgSurname(p.n)) : "Empty"}</span><small>${pos}${p ? ` · <em class="${p.fit<70 ? "low" : p.fit<85 ? "mid" : ""}">${Math.round(p.fit)}%</em>` : ""}</small></span>`).join("")}</div>
     <p class="hint">He picks on what a player is worth today: rating, plus or minus form and match sharpness, and fitness. A man in form can keep a better player out.</p>
-    ${C.int ? "" : `<h3>His contract</h3><div class="mdf-form"><div class="field"><label for="mdfWage">Weekly wage (£)</label><input id="mdfWage" type="number" min="0" step="1000" value="${mdfWage(C.rep, mgLeagueOf())}" inputmode="numeric"></div>
+    ${C.int ? "" : `<h3>His contract</h3><div class="mdf-form"><div class="field"><label for="mdfWage">Weekly wage (£)</label><input id="mdfWage" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(mdfWage(C.rep, mgLeagueOf()))}"></div>
         <div class="field"><label for="mdfYrs">Years</label><select id="mdfYrs">${[1,2,3,4].map(y=>`<option ${y===2 ? "selected" : ""}>${y}</option>`).join("")}</select></div>${mgBtn("mdfrenew", "Offer a new contract", "primary")}</div>
       <div class="row" style="margin-top:12px">${mgBtn("mdfsack", MDF_SURE ? `Tap again: compensation ${mgMoney(mdfComp(C))}` : `Sack ${esc(mgSurname(C.n))}`, "danger")}<span class="hint">Sacking him costs ${mgMoney(mdfComp(C))}: half his remaining wages.</span></div>`}
     <h3>The coach market</h3>${C.int || MDF_MARKET ? mdfMarketHTML() : `<p class="hint">Coaches out of work, and some at other clubs, who you could bring in.</p>${mgBtn("mdfmarket", "Look at the market", "small")}`}
@@ -39,7 +39,7 @@ function mdfMarketHTML(){
         <small>${c.club ? `At ${esc(c.club)} · compensation ${mgMoney(c.comp)}` : "Out of work"} · reputation ${c.rep}</small></div></div>
       <div class="mdf-mini"><span>TAC <b>${c.tac}</b></span><span>MOT <b>${c.mot}</b></span><span>DEV <b>${c.dev}</b></span><span>YTH <b>${c.yth}</b></span></div>
       <p class="mg-int ${I.ok ? "ok" : "bad"}">${esc(I.txt)}</p>
-      ${I.ok ? `<div class="mdf-form"><div class="field"><label for="mdfW${i}">Wage (£/wk) · he wants about ${mgWageTxt(ask)}</label><input id="mdfW${i}" type="number" min="0" step="1000" value="${ask}" inputmode="numeric"></div>
+      ${I.ok ? `<div class="mdf-form"><div class="field"><label for="mdfW${i}">Wage (£/wk) · he wants about ${mgWageTxt(ask)}</label><input id="mdfW${i}" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(ask)}"></div>
         <div class="field"><label for="mdfY${i}">Years</label><select id="mdfY${i}">${[1,2,3,4].map(y=>`<option ${y===c.yrs ? "selected" : ""}>${y}</option>`).join("")}</select></div>${mgBtn("mdfhire", "Appoint him", "primary small", `data-i="${i}"`)}</div>` : ""}</article>`; }).join("")}</div>`;
 }
 // the coach on the home screen
@@ -73,8 +73,8 @@ document.addEventListener("click", e=>{
   const a = b.dataset.mg, re = () => mgRender();
   if (a==="mdfmarket"){ MDF_MARKET = true; re(); return; }
   if (a==="mdfsack"){ if (!MDF_SURE){ MDF_SURE = true; re(); setTimeout(()=>{ if (MDF_SURE){ MDF_SURE = false; if (MG_TAB==="coach") re(); } }, 3500); return; } MDF_SURE = false; const err = mdfSack(); mgFlash(err || "Done. The search for a new head coach begins."); re(); return; }
-  if (a==="mdfrenew"){ const r = mdfRenew(Math.round(+document.getElementById("mdfWage").value || 0), +document.getElementById("mdfYrs").value); mgFlash(r.txt); re(); return; }
-  if (a==="mdfhire"){ const i = +b.dataset.i, r = mdfHire(i, Math.round(+document.getElementById(`mdfW${i}`).value || 0), +document.getElementById(`mdfY${i}`).value); mgFlash(r.txt); if (r.ok) MDF_MARKET = false; re(); return; }
+  if (a==="mdfrenew"){ const r = mdfRenew(moneyOut(document.getElementById("mdfWage").value), +document.getElementById("mdfYrs").value); mgFlash(r.txt); re(); return; }
+  if (a==="mdfhire"){ const i = +b.dataset.i, r = mdfHire(i, moneyOut(document.getElementById(`mdfW${i}`).value), +document.getElementById(`mdfY${i}`).value); mgFlash(r.txt); if (r.ok) MDF_MARKET = false; re(); return; }
   if (a==="mdfseek"){ MG_TAB = "transfers"; MG_SUB.transfers = "search"; MG_Q = {...MG_Q, pos:b.dataset.p, ovr:Math.max(0, Math.floor(+b.dataset.o/5)*5 - 5)}; MG_RES = mgSearch(MG_Q); re(); window.scrollTo({top:0}); return; }
   if (a==="mdfbuild"){ const err = mdfBuild(b.dataset.k); mgFlash(err || "Work has started."); re(); return; }
   if (a==="mdftix"){ M.fin.tix = +b.dataset.v; mgSave(); re(); return; }

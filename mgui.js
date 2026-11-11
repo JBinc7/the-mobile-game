@@ -616,8 +616,8 @@ function mgDlgPaint(first){
     const ask = mgKnow(p)>=100 ? mgAsk(p) : null, val = mgValue(p), clause = mgClauseOf(p);
     const swaps = mgMine().filter(q=>!q.lin && !q.loan).sort((x, y)=>mgOvr(y) - mgOvr(x));
     act = `<div class="mg-neg"><h3>Make an offer to ${esc(p.club)}</h3>${clause ? `<p class="hint">Release clause: <b>${mgMoney(clause)}</b>. Pay it in full, up front, and they can't refuse.</p>` : ""}
-      <div class="grid-form"><div class="field"><label for="mgFee">Transfer fee (£)</label><input id="mgFee" type="number" min="0" step="50000" value="${D.fee ?? val}" inputmode="numeric"></div>
-        <div class="field"><label for="mgAddon">Add-ons (£, if he plays 20 league games)</label><input id="mgAddon" type="number" min="0" step="50000" value="${D.addon ?? 0}" inputmode="numeric"></div></div>
+      <div class="grid-form"><div class="field"><label for="mgFee">Transfer fee (£)</label><input id="mgFee" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.fee ?? val)}"></div>
+        <div class="field"><label for="mgAddon">Add-ons (£, if he plays 20 league games)</label><input id="mgAddon" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.addon ?? 0)}"></div></div>
       <div class="row">${[["Value", val], ...(ask ? [["Their price", ask]] : []), ...(clause ? [["Clause", clause]] : [])].map(([l, v])=>`<button type="button" class="chip" data-mg="feeset" data-v="${v}">${l} · ${mgMoney(v)}</button>`).join("")}</div>
       <div class="label">Payment</div>${mgSeg("dset", "inst", MG_INST.map((l, i)=>[i, l]), D.inst ?? 0)}
       <div class="label">Sell-on clause for ${esc(p.club)}</div>${mgSeg("dset", "sell", [[0,"None"],[10,"10%"],[15,"15%"],[20,"20%"],[25,"25%"]], D.sell ?? 0)}
@@ -627,12 +627,12 @@ function mgDlgPaint(first){
   } else if (D.mode==="contract" || D.mode==="renew"){
     const renew = D.mode==="renew", role = D.role ?? (renew ? p.role ?? 2 : mgRoleGuessFor(p)), dem = mgDemand(p, role, renew), val = mgValue(p);
     act = `<div class="mg-neg"><h3>${renew ? "New contract" : "Personal terms"}</h3><p class="hint">${D.hint ? esc(D.hint) : `His agent says he's looking for around ${mgWageTxt(dem)}.`} Wage room: ${mgWageTxt(M.fin.wb - mgBill() + (renew ? p.wage : 0))}.</p>
-      <div class="grid-form"><div class="field"><label for="mgWage">Weekly wage (£)</label><input id="mgWage" type="number" min="0" step="250" value="${D.wage ?? dem}" inputmode="numeric"></div>
+      <div class="grid-form"><div class="field"><label for="mgWage">Weekly wage (£)</label><input id="mgWage" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.wage ?? dem)}"></div>
         <div class="field"><label for="mgYrs">Years</label><select id="mgYrs">${[1,2,3,4,5].map(y=>`<option ${(D.yrs ?? 3)===y ? "selected" : ""}>${y}</option>`).join("")}</select></div>
         <div class="field"><label for="mgRole">Squad role</label><select id="mgRole">${MG_ROLES.map((r, i)=>`<option value="${i}" ${role===i ? "selected" : ""}>${r}</option>`).join("")}</select></div>
-        <div class="field"><label for="mgSignOn">Signing-on fee (£)</label><input id="mgSignOn" type="number" min="0" step="10000" value="${D.sign ?? 0}" inputmode="numeric"></div>
-        <div class="field"><label for="mgApp">Appearance bonus (£ a game)</label><input id="mgApp" type="number" min="0" step="250" value="${D.app ?? 0}" inputmode="numeric"></div>
-        <div class="field"><label for="mgRc">Release clause (£, 0 for none)</label><input id="mgRc" type="number" min="0" step="100000" value="${D.rc ?? (renew ? p.rc || 0 : 0)}" inputmode="numeric"></div></div>
+        <div class="field"><label for="mgSignOn">Signing-on fee (£)</label><input id="mgSignOn" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.sign ?? 0)}"></div>
+        <div class="field"><label for="mgApp">Appearance bonus (£ a game)</label><input id="mgApp" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.app ?? 0)}"></div>
+        <div class="field"><label for="mgRc">Release clause (£, 0 for none)</label><input id="mgRc" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.rc ?? (renew ? p.rc || 0 : 0))}"></div></div>
       <div class="row"><button type="button" class="chip" data-mg="rcset" data-v="${mgRoundFee(val*2)}">Clause · 2× value (${mgMoney(mgRoundFee(val*2))})</button><button type="button" class="chip" data-mg="rcset" data-v="${mgRoundFee(val*4)}">Clause · 4× value</button><button type="button" class="chip" data-mg="rcset" data-v="0">No clause</button></div>
       <p class="hint">A signing-on fee or bonuses can bring his weekly wage down. He likes a release clause too, and a low one makes him cheaper, but a bigger club can pay it and take him.</p>
       <div class="row">${mgBtn("doterms", renew ? "Offer the contract" : "Offer terms", "primary")}${mgBtn("dmode", "Back", "", 'data-v="info"')}</div></div>`;
@@ -641,8 +641,8 @@ function mgDlgPaint(first){
     act = !o ? `<p class="hint">That offer's gone.</p>` : `<div class="mg-neg"><h3>${esc(o.club)}'s offer</h3><p class="mg-int ok">${esc(mgDealTxt(o))}</p><p class="hint">His value: ${mgMoney(mgValue(p))}. ${o.exp - M.day} day${o.exp - M.day===1 ? "" : "s"} left to answer.</p>
       <div class="row">${mgBtn("ofr", "Accept", "primary", `data-o="${o.id}" data-v="yes"`)}${mgBtn("ofr", "Reject", "", `data-o="${o.id}" data-v="no"`)}</div>
       <h3>Or counter</h3>
-      <div class="grid-form"><div class="field"><label for="mgFee">Fee you want (£)</label><input id="mgFee" type="number" min="0" step="50000" value="${D.fee ?? mgRoundFee(Math.max(o.fee*1.2, mgValue(p)))}" inputmode="numeric"></div>
-        <div class="field"><label for="mgBb">Buy-back clause (£, 0 for none)</label><input id="mgBb" type="number" min="0" step="100000" value="${D.bb ?? 0}" inputmode="numeric"></div></div>
+      <div class="grid-form"><div class="field"><label for="mgFee">Fee you want (£)</label><input id="mgFee" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.fee ?? mgRoundFee(Math.max(o.fee*1.2, mgValue(p))))}"></div>
+        <div class="field"><label for="mgBb">Buy-back clause (£, 0 for none)</label><input id="mgBb" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.bb ?? 0)}"></div></div>
       <div class="label">Payment</div>${mgSeg("dset", "inst", MG_INST.map((l, i)=>[i, l]), D.inst ?? o.inst ?? 0)}
       <div class="label">Sell-on clause for you</div>${mgSeg("dset", "sell", [[0,"None"],[10,"10%"],[15,"15%"],[20,"20%"],[25,"25%"],[30,"30%"]], D.sell ?? 0)}
       <div class="row"><button type="button" class="chip" data-mg="bbset" data-v="${mgRoundFee(mgValue(p)*1.5)}">Buy-back · ${mgMoney(mgRoundFee(mgValue(p)*1.5))}</button><button type="button" class="chip" data-mg="bbset" data-v="0">No buy-back</button></div>
@@ -653,7 +653,7 @@ function mgDlgPaint(first){
     act = `<div class="mg-neg"><h3>Ask ${esc(p.club)} about a loan</h3><p class="hint">Until the end of the season. His wage: ${mgWageTxt(p.wage)} · your wage room: ${mgWageTxt(M.fin.wb - mgBill())}.</p>
       <div class="label">Share of his wages you pay</div>${mgSeg("payset", "pay", [[0,"0%"],[.25,"25%"],[.5,"50%"],[.75,"75%"],[1,"100%"]], pay)}
       <div class="grid-form"><div class="field"><label for="mgRole">Squad role</label><select id="mgRole">${MG_ROLES.map((r, i)=>`<option value="${i}" ${role===i ? "selected" : ""}>${r}</option>`).join("")}</select></div>
-        <div class="field"><label for="mgOpt">Option to buy (£, 0 for none)</label><input id="mgOpt" type="number" min="0" step="100000" value="${D.opt ?? 0}" inputmode="numeric"></div></div>
+        <div class="field"><label for="mgOpt">Option to buy (£, 0 for none)</label><input id="mgOpt" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(D.opt ?? 0)}"></div></div>
       <div class="row"><button type="button" class="chip" data-mg="optset" data-v="${mgRoundFee(val*1.2)}">Add an option · ${mgMoney(mgRoundFee(val*1.2))}</button><button type="button" class="chip" data-mg="optset" data-v="0">No option</button></div>
       <div class="row">${mgBtn("doloan", "Make the loan offer", "primary")}${mgBtn("dmode", "Back", "", 'data-v="info"')}</div></div>`;
   } else if (D.mode==="train"){
@@ -734,6 +734,7 @@ document.addEventListener("click", e=>{
   if (a==="xtalk"){ const m = M.inbox.find(x=>x.id===+b.dataset.m); if (m) mgFlash(mgxTalkAnswer(m, b.dataset.v)); re(); return; }
   if (a==="xstaff"){ MGX_OPEN = MGX_OPEN===b.dataset.k ? null : b.dataset.k; re(); return; }
   if (a==="xhire"){ mgFlash(mgxHire(b.dataset.k, +b.dataset.i)); MGX_OPEN = null; re(); return; }
+  if (a==="xneg"){ const p = mgFind(id); if (p){ MG_DLG = {id, mode:p.club ? "bid" : "contract", msg:"", sure:false}; mgDlgPaint(true); mgDlgToForm(); } return; }
   if (a==="xtrust"){ mgFlash(mgxTrust(+b.dataset.i)); re(); window.scrollTo({top:0}); return; }
   if (a==="precoach"){ MG_PRE = null; MG_TAB = "coach"; re(); return; }
   if (a==="press"){ mgPressAnswer(MG_PRE, +b.dataset.i); mgFlash("Your answer is in tomorrow's papers."); re(); return; }
@@ -782,7 +783,7 @@ document.addEventListener("click", e=>{
   if (a==="dmode"){ D.mode = b.dataset.v; D.msg = ""; D.hint = ""; dlg(); if (D.mode!=="info") mgDlgToForm(); return; }
   // the deal forms keep what's been typed when a button redraws them
   const keep = () => { const v = id => { const el = document.getElementById(id); return el ? el.value : null; };
-    [["mgFee","fee"],["mgAddon","addon"],["mgWage","wage"],["mgSignOn","sign"],["mgApp","app"],["mgRc","rc"],["mgBb","bb"],["mgOpt","opt"]].forEach(([i, k])=>{ const x = v(i); if (x!=null) D[k] = Math.round(+x || 0); });
+    [["mgFee","fee"],["mgAddon","addon"],["mgWage","wage"],["mgSignOn","sign"],["mgApp","app"],["mgRc","rc"],["mgBb","bb"],["mgOpt","opt"]].forEach(([i, k])=>{ const x = v(i); if (x!=null) D[k] = moneyOut(x); });
     const sw = v("mgSwap"); if (sw!=null) D.swap = sw || null; const y = v("mgYrs"); if (y!=null) D.yrs = +y; const r = v("mgRole"); if (r!=null) D.role = +r; };
   if (a==="feeset"){ keep(); D.fee = +b.dataset.v; dlg(); return; }
   if (a==="dset"){ keep(); D[b.dataset.k] = +b.dataset.v; dlg(); return; }
@@ -790,10 +791,10 @@ document.addEventListener("click", e=>{
   if (a==="bbset"){ keep(); D.bb = +b.dataset.v; dlg(); return; }
   if (a==="docounter"){ keep(); const o = (M.offers || []).find(x=>x.id===D.offer); if (!o) return; const t = mgAnswerOffer(o, "ask", {fee:D.fee, inst:D.inst ?? o.inst ?? 0, sell:D.sell || 0, bb:D.bb || 0});
     if (o.st==="open"){ D.msg = t; D.ok = false; dlg(); re(); return; } mgDlgClose(); mgFlash(t); re(); return; }
-  if (a==="payset"){ D.pay = +b.dataset.v; D.role = +document.getElementById("mgRole").value; D.opt = +document.getElementById("mgOpt").value || 0; dlg(); return; }
+  if (a==="payset"){ D.pay = +b.dataset.v; D.role = +document.getElementById("mgRole").value; D.opt = moneyOut(document.getElementById("mgOpt").value); dlg(); return; }
   if (a==="optset"){ D.opt = +b.dataset.v; D.role = +document.getElementById("mgRole").value; dlg(); return; }
   if (a==="doloan"){
-    const pay = D.pay ?? .5, role = +document.getElementById("mgRole").value, opt = Math.round(+document.getElementById("mgOpt").value || 0); D.role = role; D.opt = opt;
+    const pay = D.pay ?? .5, role = +document.getElementById("mgRole").value, opt = moneyOut(document.getElementById("mgOpt").value); D.role = role; D.opt = opt;
     const r = mgLoanAsk(p, pay, role, opt);
     if (r.ok){ const q = mgLoanIn(p, pay, role, opt); mgDlgClose(); mgFlash(`✍ ${q.n} joins on loan from ${q.lin.from}! ${q._in ? `Your assistant has put him straight into the XI at ${q._in.pos}${q._in.out ? `, in place of ${mgShort(q._in.out)}` : ""}.` : "He starts on the bench."}`); MG_RES = MG_RES ? MG_RES.filter(x=>x.id!==p.id) : null; re(); return; }
     D.msg = r.txt; D.ok = false; if (r.counter!=null) D.pay = r.counter; if (r.opt) D.opt = r.opt; dlg(); return; }
