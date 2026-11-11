@@ -13,14 +13,14 @@ const DR = {
   pas:{t:"Passing and crossing", n:5, unit:"good balls", help:"pass", reps:[["cross"], ["pass"], ["cross"], ["pass"], ["cross"]]},
   pac:{t:"1v1 take-ons", n:5, unit:"beaten", help:"takeon", reps:[["takeon"], ["takeon"], ["takeon"], ["takeon"], ["takeon"]], ramp:true},
   def:{t:"Defending station", n:5, unit:"won", help:"tackle", reps:[["tackle"], ["block"], ["header","def"], ["tackle"], ["block"]]},
-  gk:{t:"Shot-stopping", n:5, unit:"saves", help:"save2", reps:[["save"], ["save","pen"], ["save"], ["save"], ["save","pen"]]},
-  sta:{t:"Pressing intervals", n:6, unit:"won back", help:"intercept", reps:[["intercept"], ["tackle"], ["intercept"], ["tackle"], ["intercept"], ["tackle"]], press:true},
+  gk:{t:"Shot-stopping", n:5, unit:"saves", help:"save3", reps:[["save"], ["save","pen"], ["save"], ["save"], ["save","pen"]]},
+  sta:{t:"Pressing intervals", n:6, unit:"won back", help:"intercept2", reps:[["intercept"], ["tackle"], ["intercept"], ["tackle"], ["intercept"], ["tackle"]], press:true},
   prep:{t:"Free kicks", n:3, unit:"free kicks", help:"flick3", reps:[["shot","freekick"], ["shot","freekick"], ["shot","freekick"]]}
 };
 const DR_BEEP_MAX = 16;   // shuttles in a perfect beep test
 
 Object.assign(LV_HELP, {
-  flick:LV_HELP.shot, flick2:LV_HELP.shot, flick3:LV_HELP.shot, save2:LV_HELP.save,
+  flick:LV_HELP.shot, flick2:LV_HELP.shot, flick3:LV_HELP.shot, save2:LV_HELP.save, save3:LV_HELP.save, intercept2:LV_HELP.intercept,
   drills:{t:"Training drills", steps:["Once a week you can do a <b>drill</b> for your training focus: a quicker, easier version of a match mini-game.",
     "The better the session, the more that attribute grows on top of the week's training. A perfect score adds about the same again.",
     "Drills are optional. Rest weeks have none, and you can't do one while you're injured."]},

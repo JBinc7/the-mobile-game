@@ -90,6 +90,12 @@ In both Manager Career and Director of Football:
 
 Fixed in 2.5: substituted players were counted twice (doubled appearances, minutes and injury messages), cards in friendlies led to bans, and a first-choice player back from injury stayed on the bench.
 
+## 3.0, part 1: the mini-game rebuild
+
+- **In goal, you're in control.** The keeper does what you ask, whenever you ask it. Tap the goal where the ball's going and you dive there, or press **Dive left**, **Stay** or **Dive right** under the goal. Before the shot, hold a finger on the goal to shuffle along your line; slide it as he strikes and you dive that way. Shots and penalties are a touch slower, and a dive as he hits it is an honest guess: only going well before the kick sends it the other way. This is every save in the game: matches, shootouts, drills and the lab.
+- **Interceptions are played, not tapped.** You move your defender yourself: hold a finger on the pitch and he runs to it. Their midfielder looks at the man he's about to find (a dashed gold line), then passes: be in the way of the ball and it's yours. He won't pass through you, so camping in a lane just sends it elsewhere.
+- **Practise first.** Every mini-game's guide has a *Practise it first* button: a go at the real thing that doesn't count. The rebuilt games show their new guide once more.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.

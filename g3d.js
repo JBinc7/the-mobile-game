@@ -1392,6 +1392,8 @@ void main(){
           B.rotateOnAxis(spinAxis, -.35); W.trailPush(); bs.position.set(B.position.x, .006, B.position.z); });
         return flying;
       },
+      // a shuffle along your line before the shot (x: where you're standing, in the 2D goal's numbers)
+      shift(x){ kp.position.x = gx(x); ks.position.x = kp.position.x; },
       // your dive: your hands go where you tapped (as far as you can reach)
       dive(x, y, rot, ms){
         const R = reachFor(new THREE.Vector3(gx(x), Math.max(.15, gy(y)), kz), W.reach), kFrom = kp.position.clone(), r0 = kp.rotation.z;

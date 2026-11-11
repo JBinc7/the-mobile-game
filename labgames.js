@@ -100,7 +100,7 @@ async function lgShootout(st){
 }
 lgAdd({id:"shootout", t:"Penalty shootout", d:"Five penalties each: take yours, then save theirs. Sudden death if it's level.", ic:"spot", run:lgShootout},
   {t:"Penalty shootout", steps:["Five penalties each, in turns: <b>you shoot</b>, then <b>you're in goal</b>.", "Shooting: drag the ball to your spot in the goal, hold, and let go with the power bar in the green.",
-    "In goal: watch the ball and tap the side it's going. Level after five each and it's sudden death."]});
+    "In goal: <b>tap the goal where the ball's going</b> as he hits it and you dive there, or press <b>Dive left</b>, <b>Stay</b> or <b>Dive right</b>. Level after five each and it's sudden death."]});
 
 /* ---------- 2. Keepy-uppy: touch it up each time it drops into the green ---------- */
 function lgKeepy(st){

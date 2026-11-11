@@ -507,7 +507,7 @@ function lvOutcome(st, R){
   lvBuzz(goal ? "goal" : R.ok ? "good" : "bad");
   // some mini-games (take-ons) have their own buttons instead of a main one: swap those for it
   let act = lv$(".lv-act"); if (!act){ act = document.createElement("button"); act.type = "button"; lv$(".lv-in").appendChild(act); }
-  lv$(".lv-lr")?.remove(); act.hidden = false;
+  lv$(".lv-lr")?.remove(); lv$(".lv-dives")?.remove(); lv$(".lv-status")?.remove(); act.hidden = false;
   act.textContent = st.lab ? st.lab.next || "Continue" : R.card && R.card!=="y" ? "Walk off" : st.left>1 ? "Next moment" : "Full time"; act.disabled = true; act.className = "btn big primary lv-act"; act.onclick = null;
   lv$("[data-lv-skip]")?.remove();
   // a short pause, so the tap that made the tackle can't also skip past its result
@@ -555,11 +555,11 @@ const LV_HELP = {
   block:{t:"How to block", steps:["A shot is heading for goal.", "Tap <b>Block!</b> when the ball is <b>in the green</b>.", "Miss it and they'll probably score, and sometimes it deflects in off you."],
     svg:`<svg viewBox="0 0 240 120"><rect width="240" height="120" rx="12" fill="#1D6537"/><path d="M14 60H214" stroke="rgba(255,255,255,.35)" stroke-width="4"/><rect x="166" y="28" width="34" height="64" rx="8" fill="rgba(74,222,128,.35)" stroke="#4ADE80" stroke-width="2"/>
       <rect x="216" y="24" width="12" height="72" fill="rgba(255,255,255,.2)" stroke="#F4F7F2" stroke-width="3"/><circle cx="80" cy="60" r="9" fill="#fff"/><path d="M98 60h40m-8-7 8 7-8 7" stroke="#FFE9A8" stroke-width="3" fill="none"/>${LV_TXT(115,112,"TAP WHEN THE BALL'S IN THE GREEN")}</svg>`},
-  intercept:{t:"How to intercept", steps:["Their midfielder has the ball, with three team-mates to pass to: left, middle and right.", "Wait until his <b>lane lights up gold</b> and the button says <b>Now!</b>, then <b>tap that lane</b> (anywhere in that third of the pitch) to step in and win it.",
-    "Good passers flash a look one way and pass the other, so don't go on the first glance. Too slow and the pass gets through."],
-    svg:lvDemo("bottom", `${lvMan(150,40,"#EF4444")}${lvMan(70,110,"#EF4444")}${lvMan(150,124,"#EF4444")}${lvMan(230,110,"#EF4444")}<path d="M150 46L222 100" stroke="#F5C542" stroke-width="4" stroke-dasharray="7 5"/>${lvMan(150,84,"#F5C542")}`, "TAP THE LANE HE'S LOOKING AT")},
-  save:{t:"How to save", steps:["The striker lines up his shot. Don't move too early: strikers punish keepers who guess, and put it the other way.",
-    "Watch the ball, then <b>tap where it's going</b>: anywhere on the goal. You dive there.", "Your shot-stopping decides how far you can dive and how much your hands cover. Late, and you won't get across; right at your hands, and you hold it."],
+  intercept:{t:"How to intercept", steps:["You're the defender with the <b>gold ring</b>, and you move him yourself: <b>hold your finger on the pitch</b> and he runs to it.", "Their midfielder has three team-mates to find. A <b>dashed gold line</b> shows who he's looking at, then he passes: <b>get in the way of the ball</b> and it's yours.",
+    "Don't sit in a lane early: he won't pass through you, he'll just pick someone else. Good passers flash a look one way and pass the other."],
+    svg:lvDemo("bottom", `${lvMan(150,40,"#EF4444")}${lvMan(70,110,"#EF4444")}${lvMan(150,124,"#EF4444")}${lvMan(230,110,"#EF4444")}<path d="M150 46L222 100" stroke="#F5C542" stroke-width="4" stroke-dasharray="7 5"/><path d="M158 82L186 76" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity=".85"/>${lvMan(150,86,"#F5C542")}`, "RUN INTO THE PATH OF THE PASS")},
+  save:{t:"How to save", steps:["You're the keeper. <b>Tap the goal where the ball's going</b> and you dive there. Or press <b>Dive left</b>, <b>Stay</b> or <b>Dive right</b> under the goal.",
+    "Before the shot you can <b>hold a finger on the goal</b> to shuffle along your line. Go as he hits it: dive well before and he'll see you and put it the other way.", "Your shot-stopping decides how far you can dive and how much your hands cover. Late, and you won't get across; right at your hands, and you hold it."],
     svg:`<svg viewBox="0 0 240 150"><rect x="20" y="10" width="200" height="90" fill="rgba(255,255,255,.05)" stroke="#F4F7F2" stroke-width="4"/>
       <circle cx="120" cy="130" r="8" fill="#fff"/><path d="M112 124 62 70" stroke="#FFE9A8" stroke-width="3" stroke-dasharray="5 4"/><circle cx="54" cy="62" r="20" fill="rgba(245,197,66,.25)" stroke="#F5C542" stroke-width="3"/>${LV_TXT(160,140,"TAP WHERE IT'S GOING","start")}</svg>`},
   claim:{t:"How to claim a cross", steps:["A cross is coming into your box. A <b>ring closes in</b> on the ball.", "Tap <b>Claim it!</b> when it meets the <b>gold target ring</b>.",
@@ -573,12 +573,28 @@ const LV_HELP = {
 };
 function lvSeen(){ try{ return JSON.parse(localStorage.getItem(Account.storageKey("tips"))) || {}; }catch(e){ return {}; } }
 function lvMarkSeen(k){ const s = lvSeen(); s[k] = 1; try{ localStorage.setItem(Account.storageKey("tips"), JSON.stringify(s)); }catch(e){} }
+// which mini-game a guide is for (so its card can offer a practice go), as [game, variation]
+const LV_TRY = {shot:["shot","box"], flick:["shot","box"], flick2:["shot","box"], flick3:["shot","box"], header:["header"], pass:["pass"], takeon:["takeon"], cross:["cross"], tackle:["tackle"], block:["block"],
+  intercept:["intercept"], intercept2:["intercept"], save:["save"], save2:["save"], save3:["save"], claim:["claim"], rush:["rush"]};
+// a practice go from a guide: the real mini-game in the lab's sandbox, so nothing counts (no stats, no coins, no score)
+async function lvTry(k, H){
+  const T = LV_TRY[k]; if (!T || typeof labCtx!=="function" || !LV_GAMES[T[0]]) return;
+  const st = labCtx({t:"Practice", id:"try_" + k}); st.lab.next = "Back to the guide"; lvCountNext = true;
+  let R; try{ R = await LV_GAMES[T[0]](st, {q:1, g:T[0], v:T[1], min:0}); }catch(e){ return; }
+  if (R && R!=="skip" && lv$(".lv-stage")) await lvOutcome(st, R);
+}
 async function lvHelp(keys, first){
   for (const k of keys){
     const H = LV_HELP[k]; if (!H) continue;
-    await lvAsk(`<div class="lv-card lv-help"><div class="lv-eye">${first ? "First time? Here's how it works" : "How to play"}</div><h2 class="lv-t">${H.t}</h2>
-      ${H.svg ? `<div class="lv-demo" aria-hidden="true">${H.svg}</div>` : ""}<ol class="lv-steps">${H.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
-      <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>${first ? "Got it, let's play" : "Got it"}</button></div>`);
+    const can = !!LV_TRY[k] && typeof labCtx==="function";
+    for (;;){
+      const r = await lvAsk(`<div class="lv-card lv-help"><div class="lv-eye">${first ? "First time? Here's how it works" : "How to play"}</div><h2 class="lv-t">${H.t}</h2>
+        ${H.svg ? `<div class="lv-demo" aria-hidden="true">${H.svg}</div>` : ""}<ol class="lv-steps">${H.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
+        <button type="button" class="btn primary big" data-lv="ok" data-lv-focus>${first ? "Got it, let's play" : "Got it"}</button>
+        ${can ? `<button type="button" class="btn big lv-try" data-lv="try">Practise it first</button><p class="lv-trynote">A practice go doesn't count: no stats, no score.</p>` : ""}</div>`);
+      if (r!=="try") break;
+      await lvTry(k, H);
+    }
     lvMarkSeen(k);
   }
 }
@@ -1272,107 +1288,130 @@ function lvGameTiming(st, m){
   });
 }
 
-/* ---------- interceptions: read the passer's eyes ---------- */
+/* ---------- interceptions: get your man into the path of the pass ----------
+   You are the defender with the gold ring, and you move him yourself: put a finger down and he runs towards it. Their
+   midfielder carries the ball at you with three team-mates to find. He looks at the one he's going to pass to (a dashed
+   gold line), then plays it; the better passers flash a look one way first. Be standing in the way of the ball as it
+   comes through and it's yours. He won't pass through you, so sitting in a lane early only sends it somewhere else. */
 function lvGameIntercept(st, m){
   const f = st.f, a = lvAttr(st), e = lvEase(st, a.def*.7 + a.pas*.3), kit = lvKits(st);
-  const react = clamp(700*(1 + e), 400, 1100), wait = 700 + Math.random()*800, dummy = f.oppStr > a.def + 3 && Math.random()<.35;
+  const tell = clamp(450*(1 + e), 300, 650), fly = clamp(600*(1 + e*.5), 460, 800), wait = 900 + Math.random()*900, dummy = f.oppStr > a.def + 3 ? Math.random()<.45 : Math.random()<.2;
+  const vMe = clamp(92*(1 + e*.4), 76, 112), rad = clamp(12*(1 + e*.5), 9.5, 16);
   // nothing stands still: he carries it at you, and his three teammates weave as they run, so the lanes keep moving
-  const L0 = {l:[70,108], c:[150,124], r:[230,108]}, ph = {l:Math.random()*6, c:Math.random()*6, r:Math.random()*6};
-  const Lp = (z, t) => [L0[z][0] + Math.sin(t*.0021 + ph[z])*12 + (z==="l" ? 1 : z==="r" ? -1 : 0)*Math.min(14, t*.006), L0[z][1] + Math.sin(t*.0016 + ph[z])*5 + Math.min(12, t*.005)];
-  const Pp = t => [150 + Math.sin(t*.0014)*9, 40 + Math.min(20, t*.011)];
-  const L = {l:Lp("l", 0), c:Lp("c", 0), r:Lp("r", 0)};
+  const L0 = {l:[62,112], c:[150,132], r:[238,112]}, ph = {l:Math.random()*6, c:Math.random()*6, r:Math.random()*6};
+  const Lp = (z, t) => [L0[z][0] + Math.sin(t*.0021 + ph[z])*10 + (z==="l" ? 1 : z==="r" ? -1 : 0)*Math.min(10, t*.004), L0[z][1] + Math.sin(t*.0016 + ph[z])*5 + Math.min(10, t*.004)];
+  const Pp = t => [150 + Math.sin(t*.0014)*9, 36 + Math.min(14, t*.008)];
+  const L = {l:Lp("l", 0), c:Lp("c", 0), r:Lp("r", 0)}, Z = ["l", "c", "r"];
+  const seg = (p, a2, b) => { const vx = b[0] - a2[0], vy = b[1] - a2[1], LL = vx*vx + vy*vy || 1, u = clamp(((p[0] - a2[0])*vx + (p[1] - a2[1])*vy)/LL, 0, 1); return Math.hypot(a2[0] + vx*u - p[0], a2[1] + vy*u - p[1]); };
   return new Promise(res=>{
-    lvShow(`${lvHead(st, m.min)}<h2 class="lv-t">Cut out the pass</h2><p class="lv-s">He's passing to one of his three team-mates. When his lane lights up gold, tap it to step in. He might look one way first.</p>
-      <div class="lv-stage">${lvField("bottom", `${Object.entries(L).map(([z,[x,y]])=>`<path id="lvLn${z}" d="M150 46L${x} ${y}" stroke="rgba(255,255,255,.13)" stroke-width="14" stroke-linecap="round"/>`).join("")}<g id="lvIp">${lvMan(0, 0, kit.them, {run:true})}</g>${Object.keys(L).map(z=>`<g id="lvIr${z}">${lvMan(0, 0, kit.them, {run:true})}</g>`).join("")}<g id="lvMe">${lvMan(0,0,kit.us,{ring:"#F5C542"})}</g>
-          <path id="lvLook" d="M0 0" stroke="#F5C542" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6" opacity="0"/>${lvBallSvg("lvIb", 150, 44, 4)}`)}
-        <div class="lv-thirds">${["l","c","r"].map(z=>`<button type="button" class="lv-tap" data-z="${z}" aria-label="Cut out the pass ${{l:"left",c:"through the middle",r:"right"}[z]}"></button>`).join("")}</div></div>
-      <button type="button" class="btn big lv-act" disabled>Watch his eyes…</button>`);
+    lvShow(`${lvHead(st, m.min)}<h2 class="lv-t">Cut out the pass</h2><p class="lv-s">You're the one with the <b>gold ring</b>. Hold your finger on the pitch and he runs to it. Watch who their midfielder looks at, then get in the way of the pass.</p>
+      <div class="lv-stage">${lvField("bottom", `${Z.map(z=>`<path id="lvLn${z}" d="M150 46L${L[z][0]} ${L[z][1]}" stroke="rgba(255,255,255,.10)" stroke-width="12" stroke-linecap="round"/>`).join("")}<g id="lvIp">${lvMan(0, 0, kit.them, {run:true})}</g>${Z.map(z=>`<g id="lvIr${z}">${lvMan(0, 0, kit.them, {run:true})}</g>`).join("")}
+          <circle id="lvGo" r="7" fill="none" stroke="#F5C542" stroke-width="2" stroke-dasharray="4 3" opacity="0"/><g id="lvMe">${lvMan(0,0,kit.us,{ring:"#F5C542", run:true})}</g>
+          <path id="lvLook" d="M0 0" stroke="#F5C542" stroke-width="4" stroke-linecap="round" stroke-dasharray="8 6" opacity="0"/>${lvBallSvg("lvIb", 150, 44, 4)}`)}</div>
+      <p class="lv-status" aria-live="polite">Watch his eyes…</p>`);
     lvSkippable(res);
-    const stage = lv$(".lv-stage"), look = lv$("#lvLook"), act = lv$(".lv-act"), lane = (z, col) => lv$("#lvLn" + z)?.setAttribute("stroke", col), t0 = performance.now(); let dir = null, at = 0, done = false, faked = !dummy, cur = [150, 44];
-    lvMove("#lvMe", 150, 86);
-    let lookZ = null, P = Pp(0), rel = null;
-    const show = z => { lookZ = z; look.setAttribute("opacity", 1); };
-    // everyone moving: the passer, his teammates, the lanes between them, where he's looking, and the ball at his feet
+    const stage = lv$(".lv-stage"), look = lv$("#lvLook"), status = lv$(".lv-status"), lane = (z, col) => lv$("#lvLn" + z)?.setAttribute("stroke", col), t0 = performance.now();
+    const me = [150, 92]; let tgt = null, moved = false, dir = null, at = 0, done = false, faked = !dummy, fakeZ = null, cur = [150, 44], lookZ = null, P = Pp(0), rel = null, to = null, last = t0;
+    lvMove("#lvMe", me[0], me[1]);
+    const show = z => { lookZ = z; look.setAttribute("opacity", z ? 1 : 0); };
     const place = t => { P = Pp(t); lvMove("#lvIp", P[0], P[1]);
-      ["l", "c", "r"].forEach(z=>{ L[z] = Lp(z, t); lvMove(`#lvIr${z}`, L[z][0], L[z][1]); lv$("#lvLn" + z)?.setAttribute("d", `M${P[0].toFixed(1)} ${(P[1] + 6).toFixed(1)}L${L[z][0].toFixed(1)} ${L[z][1].toFixed(1)}`); });
+      Z.forEach(z=>{ L[z] = Lp(z, t); lvMove(`#lvIr${z}`, L[z][0], L[z][1]); lv$("#lvLn" + z)?.setAttribute("d", `M${P[0].toFixed(1)} ${(P[1] + 6).toFixed(1)}L${L[z][0].toFixed(1)} ${L[z][1].toFixed(1)}`); });
       if (lookZ){ const [x, y] = L[lookZ]; look.setAttribute("d", `M${P[0].toFixed(1)} ${(P[1] + 6).toFixed(1)}L${(P[0] + (x - P[0])*.72).toFixed(1)} ${(P[1] + 6 + (y - P[1] - 6)*.72).toFixed(1)}`); }
       if (!rel) lvBallAt("#lvIb", P[0] + 2, P[1] + 6, 1, 0, t*.5); };
     place(0);
+    // you: running towards your finger (it stays your target after you lift it), never right up to the man on the ball
+    lvDrag(stage, {ok:()=>!done, start:q=>{ tgt = q; }, move:q=>{ tgt = q; }});
+    lvKey = k=>{ const z = {l:"l", c:"c", r:"r"}[k]; if (z) tgt = [(P[0] + L[z][0])/2, (P[1] + L[z][1])/2 + 8]; };
     lvLoop(now=>{
       if (done) return false;
-      const t = now - t0; place(t);
-      if (!faked && t>=wait-450){ faked = true; show(pick(["l","c","r"])); setTimeout(()=>{ if (!dir && lvEl){ look.setAttribute("opacity", 0); lookZ = null; } }, 200); }
-      if (!dir && t>=wait){ dir = pick(["l","c","r"]); at = now; stage.dataset.look = dir; show(dir); lane(dir, "rgba(245,197,66,.42)"); act.textContent = "Now! Tap his lane"; act.classList.add("primary"); }
-      if (dir){ const k = clamp((now-at-react*.45)/(react*.55), 0, 1), [x,y] = L[dir]; if (k > 0 && !rel) rel = [P[0] + 2, P[1] + 6];
-        if (rel){ cur = [rel[0] + (x - rel[0])*k, rel[1] + (y - rel[1])*k]; lvBallAt("#lvIb", cur[0], cur[1], 1, 0, k*500, k>0); } if (k>=1){ end(null); return false; } }
+      const t = now - t0, dt = Math.min(.05, Math.max(0, now - last)/1000); last = now; place(t);
+      let running = false;
+      if (tgt){ const g = [clamp(tgt[0], 16, 284), clamp(tgt[1], 66, 150)], dx = g[0] - me[0], dy = g[1] - me[1], dd = Math.hypot(dx, dy);
+        const go = lv$("#lvGo"); if (go){ go.setAttribute("cx", g[0].toFixed(1)); go.setAttribute("cy", (g[1] + 12).toFixed(1)); go.setAttribute("opacity", dd > 4 ? .8 : 0); }
+        if (dd > 1.5){ const s = Math.min(dd, vMe*dt); me[0] += dx/dd*s; me[1] += dy/dd*s; running = true; moved = true; } }
+      lvMove("#lvMe", me[0], me[1]); lv$("#lvMe .lv-legs")?.classList.toggle("run", running);
+      // a look one way first, from the better passers
+      if (!faked && t >= wait - 520){ faked = true; fakeZ = pick(Z); show(fakeZ); setTimeout(()=>{ if (!dir && lvEl && !done) show(null); }, 260); }
+      // his mind's made up: never a lane you're already standing in (unless you've shut all three)
+      if (!dir && t >= wait){ const open = Z.filter(z=>seg(me, [P[0], P[1] + 6], L[z]) > rad + 5 && z!==fakeZ), any = Z.filter(z=>seg(me, [P[0], P[1] + 6], L[z]) > rad + 5);
+        dir = pick(open.length ? open : any.length ? any : Z); at = now; show(dir); lane(dir, "rgba(245,197,66,.38)"); status.textContent = "He's looking! Get in the way"; status.classList.add("on"); }
+      if (dir && !rel && now - at >= tell){ rel = [P[0] + 2, P[1] + 6]; to = Lp(dir, t + fly).slice(); lvKick("#lvIp .lv-man"); show(null); }
+      if (rel){ const k = clamp((now - at - tell)/fly, 0, 1); cur = [rel[0] + (to[0] - rel[0])*k, rel[1] + (to[1] - rel[1])*k]; lvBallAt("#lvIb", cur[0], cur[1], 1, 0, k*500, true);
+        if (k > .12 && Math.hypot(cur[0] - me[0], cur[1] - (me[1] - 3)) < rad){ end(true); return false; }
+        if (k >= 1){ end(false); return false; } }
     });
-    const end = async z=>{
-      if (done) return; done = true; cancelAnimationFrame(lvRaf);
-      const ok = z && (dir ? z===dir : Math.random()<1/3);
-      if (z) lane(z, ok ? "rgba(74,222,128,.5)" : "rgba(248,113,113,.45)");
-      // you step across into the lane you picked; if it's the right one, the ball's yours
-      if (z){ const tx = {l:104, c:150, r:196}[z]; await lvTween(200, k=>lvMove("#lvMe", 150 + (tx-150)*lvEaseOut(k), 86 + 6*k));
-        if (ok) await lvFly("#lvIb", cur, [tx + 6, 90], 160); }
-      if (ok) return res(Math.random()<.08 ? {ok:true, big:"Intercepted!", small:"…and the counter ends in a goal", gf:1, bonus:.4} : {ok:true, big:"Intercepted!", small: dir ? "You read it perfectly" : "A lucky guess", bonus:.3});
-      const why = !z ? "Too slow to react" : !dir ? "You went before he'd decided" : "Wrong lane";
+    const end = async ok=>{
+      if (done) return; done = true; cancelAnimationFrame(lvRaf); lv$("#lvMe .lv-legs")?.classList.remove("run"); lv$("#lvGo")?.setAttribute("opacity", 0);
+      lane(dir, ok ? "rgba(74,222,128,.5)" : "rgba(248,113,113,.4)");
+      if (ok){ await lvFly("#lvIb", cur, [me[0] + 4, me[1] + 2], 120);
+        return res(Math.random()<.08 ? {ok:true, big:"Intercepted!", small:"…and the counter ends in a goal", gf:1, bonus:.4} : {ok:true, big:"Intercepted!", small:"You read it perfectly", bonus:.3}); }
+      const near = seg([me[0], me[1] - 3], rel, to), why = !moved ? "You didn't move: hold your finger on the pitch to run there" : near < rad*2.4 ? "Just too late: half a step away" : fakeZ && fakeZ!==dir && seg(me, rel, L[fakeZ]) < rad*2.4 ? "He looked one way and passed the other" : "Wrong lane";
       res(Math.random() < .3*m.q ? {ok:false, big:"They score", small:`${why}: they broke through`, ga:1, bonus:-.3} : {ok:false, big:"Pass completed", small:why, bonus:-.1});
     };
-    lvEl.querySelectorAll(".lv-thirds button").forEach(b=>lvTap(b, ()=>end(b.dataset.z)));
-    lvKey = k=>{ if (k!=="go") end(k); };
   });
 }
 
-/* ---------- saves and penalties: react to the shot ---------- */
+/* ---------- saves and penalties: you are the keeper ----------
+   He always does what you ask, whenever you ask it. Before the shot, hold a finger on the goal and he shuffles along
+   his line towards it. To dive: tap the goal where the ball's going (or slide your finger there and he goes), or press
+   Dive left, Stay or Dive right underneath. Dive well before he's hit it and he'll see you go and put it the other
+   way; go as he strikes it and it's an honest guess. */
 function lvGameSave(st, m){
   const f = st.f, a = lvAttr(st), pen = m.v==="pen", kit = lvKits(st), e = lvEase(st, a.def);
-  const react = pen ? clamp(470*(1 + e*.5), 380, 600) : clamp(720*(1 + e*.8), 420, 1000);   // the ball's flight: a penalty's on you in half a second
-  // how far you can get from the middle of the goal, and how much your hands cover at the end of the dive: both grow
+  const react = pen ? clamp(600*(1 + e*.5), 500, 760) : clamp(780*(1 + e*.8), 500, 1050);   // the ball's flight
+  // how far you can dive from where you're standing, and how much your hands cover at the end of the dive: both grow
   // with your shot-stopping. The dive itself takes a quarter of a second
-  const R = clamp(80 + e*50, 60, 108), hands = clamp(22 + e*10, 16, 29), diveMs = 250, C = [150, 84];
-  const T = pen ? {t:"Penalty!", s:"Watch the ball, then tap where it's going: you dive there. Go too early and he'll put it the other way."}
-    : pick([{t:"One-on-one!", s:"He's through. Watch the ball and tap where it's going: you dive there."}, {t:"Shot from the edge of the box", s:"Watch the ball, then tap where it's going: you dive there."}]);
+  const R = clamp(80 + e*50, 60, 108), hands = clamp(22 + e*10, 16, 29), diveMs = 250, lim = 34, vK = 95;
+  const T = pen ? {t:"Penalty!", s:"<b>Tap the goal</b> where it's going and you dive there, or use the buttons. Go as he hits it: too early and he'll put it the other way."}
+    : pick([{t:"One-on-one!", s:"He's through. <b>Tap the goal</b> where it's going and you dive there, or use the buttons."}, {t:"Shot from the edge of the box", s:"<b>Tap the goal</b> where it's going and you dive there, or use the buttons."}]);
   return new Promise(res=>{
     lvShow(`${m.head || lvHead(st, m.min)}<h2 class="lv-t">${m.title || T.t}</h2><p class="lv-s">${T.s}</p>
-      <div class="lv-stage lv-savestage" role="button" tabindex="0" aria-label="Tap where the ball is going to dive there">${lvGoalSvg(kit.us, null, true)}
+      <div class="lv-stage lv-savestage" role="button" tabindex="0" data-lv-focus aria-label="Tap where the ball is going to dive there">${lvGoalSvg(kit.us, null, true)}
         <span class="lv-cue">${pen ? "Penalty" : "Here he comes"}…</span></div>
-      <button type="button" class="btn big lv-act" disabled>Watch the ball</button>`);
+      <div class="lv-dives" role="group" aria-label="Dive"><button type="button" class="btn big" data-dive="l">◀ Dive left</button><button type="button" class="btn big" data-dive="c">Stay</button><button type="button" class="btn big" data-dive="r">Dive right ▶</button></div>`);
     lvSkippable(res);
     const stage = lv$(".lv-stage");
+    let cx = 150, C = [150, 84], tgtX = null, held = null, strikePt = null;
     let target = null, tap = null, kp = null, tapAt = 0, rel = 0, done = false, curl = 0, diving = null;
-    const windUp = (pen ? 1100 : 650) + Math.random()*700, t0 = performance.now();
+    const windUp = (pen ? 1100 : 650) + Math.random()*700, t0 = performance.now(); let last = t0;
     // in 3D: their striker runs up and shoots, and you're the keeper diving (g3d.js)
     const g3 = typeof G3!=="undefined" ? G3.save(stage, lv3dLooks(st, kit, pen ? "pen" : "box")) : null;
     if (g3) g3.runup(windUp);
-    // where he puts it: mostly the corners, now and then down the middle; and away from you if you've gone early
-    const pickTarget = () => {
+    // where he puts it: mostly the corners, now and then down the middle; away from you if he's seen you go early, and
+    // more often than not into the bigger gap if you've come off the middle of your line
+    const pickTarget = now => {
       let side = Math.random()<.5 ? -1 : 1;
-      if (tap){ const ts = tap[0]<150 ? -1 : 1; if (Math.random()<.8) side = -ts; }
+      if (Math.abs(cx - 150) > 12 && Math.random()<.65) side = cx < 150 ? 1 : -1;
+      if (tap && tapAt < now - 200){ const ts = tap[0]<cx ? -1 : tap[0]>cx ? 1 : 0; if (ts && Math.random()<.8) side = -ts; }
       if (!tap && Math.random()<.12) return [150 + (Math.random()*40 - 20), 46 + Math.random()*62];
       return [150 + side*(46 + Math.random()*70), 38 + Math.random()*76];
     };
     lvLoop(now=>{
       if (done) return false;
-      if (!target && now-t0>=windUp){ target = pickTarget(); rel = now; curl = (Math.random()*2-1)*(pen ? 4 : 12); lv$(".lv-cue")?.remove(); g3?.release(target[0], target[1], curl, react); if (typeof SND!=="undefined") SND.kick(.9); }
+      const dt = Math.min(.05, Math.max(0, now - last)/1000); last = now;
+      // shuffling along your line towards your finger, until you dive
+      if (!tap && tgtX != null){ const gx = clamp(tgtX, 150 - lim, 150 + lim), d = gx - cx; if (Math.abs(d) > .4){ cx += Math.sign(d)*Math.min(Math.abs(d), vK*dt); C = [cx, 84]; if (g3) g3.shift?.(cx); else lvMove("#lvKp", cx, 84); } }
+      if (!target && now-t0>=windUp){ target = pickTarget(now); rel = now; curl = (Math.random()*2-1)*(pen ? 4 : 12); if (held) strikePt = held.p; lv$(".lv-cue")?.remove(); g3?.release(target[0], target[1], curl, react); if (typeof SND!=="undefined") SND.kick(.9); }
       if (target){ const k = Math.min(1, (now-rel)/react), q = lvEaseOut(k); lvBallAt("#lvBall", 150 + (target[0]-150)*q + curl*Math.sin(Math.PI*q), 166 + (target[1]-166)*q, 1 - .38*q, 0, k*480, true); if (k>=1){ end(); return false; } }
     });
-    // a dive towards where you tapped, as far as you can reach
+    // a dive towards where you asked, from where you're standing, as far as you can reach
     const dive = pt=>{
-      if (tap || done || !pt) return; tap = pt; tapAt = performance.now();
-      const dx = pt[0] - C[0], dy = pt[1] - C[1], L = Math.hypot(dx, dy), s = L > R ? R/L : 1;
-      kp = [C[0] + dx*s, C[1] + dy*s];
+      if (tap || done || !pt) return; tap = pt; tapAt = performance.now(); tgtX = null;
+      const C0 = C.slice(), dx = pt[0] - C0[0], dy = pt[1] - C0[1], L = Math.hypot(dx, dy), s = L > R ? R/L : 1;
+      C = C0; kp = [C0[0] + dx*s, C0[1] + dy*s];
       const rot = clamp(dx/R, -1, 1)*(dy > 0 ? 80 : 62);
-      lv$("#lvKp")?.classList.add("dive");
-      diving = g3 ? g3.dive(kp[0], kp[1], rot, diveMs) : lvTween(diveMs, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", C[0] + (kp[0]-C[0])*q, C[1] + (kp[1]-C[1])*q, rot*q, 1 + .06*q); });
+      lv$("#lvKp")?.classList.add("dive"); lvEl.querySelectorAll("[data-dive]").forEach(b=>{ b.disabled = true; });
+      diving = g3 ? g3.dive(kp[0], kp[1], rot, diveMs) : lvTween(diveMs, k=>{ const q = lvEaseOut(k); lvMove("#lvKp", C0[0] + (kp[0]-C0[0])*q, C0[1] + (kp[1]-C0[1])*q, rot*q, 1 + .06*q); });
     };
     // the ball always finishes its flight and your dive always finishes, however late you went, before the verdict
     const end = async ()=>{
       if (done) return; done = true;
-      if (!target) target = pickTarget();
+      if (!target) target = pickTarget(performance.now());
       // where you were when it got there: still on your way if you went late
       const arrive = rel + react, prog = tap ? clamp((arrive - tapAt)/diveMs, 0, 1) : 0, pq = lvEaseOut(prog);
       const at = tap ? [C[0] + (kp[0]-C[0])*pq, C[1] + (kp[1]-C[1])*pq] : C;
       const dist = Math.hypot(target[0] - at[0], (target[1] - at[1])*.85), reach = tap ? hands : hands*.8;
-      const held = dist < reach*.55, saved = dist < reach || (dist < reach*1.25 && Math.random() < .35);
+      const held2 = dist < reach*.55, saved = dist < reach || (dist < reach*1.25 && Math.random() < .35);
       if (diving) await diving;
       const post = !saved && Math.random() > .92*m.q;
       if (g3){ g3.release(target[0], target[1], curl, 1); await g3.finish(saved, post); await lvWait(120); }
@@ -1381,15 +1420,30 @@ function lvGameSave(st, m){
         if (!saved) lvRipple(target[0], target[1]);
         await lvWait(250);
       }
-      if (saved) return res({ok:true, big: held ? "Held it!" : "Saved!", small: pen && tap && tapAt<rel ? "You guessed right" : held ? (pen ? "Penalty saved, and held" : "Safe hands") : dist < reach ? "Pushed it round the post" : "Fingertips!", bonus: pen ? .55 : held ? .38 : .32});
+      const early = tap && tapAt < rel - 200;
+      if (saved) return res({ok:true, big: held2 ? "Held it!" : "Saved!", small: pen && tap && tapAt<rel ? "You guessed right" : held2 ? (pen ? "Penalty saved, and held" : "Safe hands") : dist < reach ? "Pushed it round the post" : "Fingertips!", bonus: pen ? .55 : held2 ? .38 : .32});
       if (post) return res({ok:true, big:"Off the post!", small:"Lucky", bonus:-.05});
       res({ok:false, big:"Goal", ga:1, bonus: pen ? -.1 : -.3,
-        small: !tap ? "You didn't move" : tapAt<rel && (target[0]<150) !== (tap[0]<150) ? "You went too early: he put it the other way" : prog<1 ? "Too late: you couldn't get across" : dist < reach*2 ? "Just out of reach" : "Wrong way"});
+        small: !tap ? "You didn't dive: tap the goal, or a Dive button, as he hits it" : early && (target[0]<C[0]) !== (tap[0]<C[0]) ? "You went too early: he put it the other way" : prog<1 ? "Too late: you couldn't get across" : dist < reach*2 ? "Just out of reach" : "Wrong way"});
     };
-    // tap (or click) where it's going; in 3D the tap is found on the goal in the picture
+    // a finger on the goal; in 3D it's found on the goal in the picture
     const toGoal = ev => g3 ? g3.toGoal(ev.clientX, ev.clientY) : (r => [(ev.clientX - r.left)/r.width*300, (ev.clientY - r.top)/r.height*180])(stage.getBoundingClientRect());
-    stage.addEventListener("pointerdown", ev=>{ if (ev.target.closest("button")) return; ev.preventDefault(); dive(toGoal(ev)); });
-    lvKey = k=>{ const P = {l:[62, 92], r:[238, 92], c:[150, 60]}[k]; if (P) dive(P); };
+    stage.addEventListener("pointerdown", ev=>{ if (ev.target.closest("button") || tap || done) return; ev.preventDefault(); const p = toGoal(ev); if (!p) return;
+      if (target) return dive(p);   // he's hit it: go
+      try{ stage.setPointerCapture(ev.pointerId); }catch(er){}
+      held = {p0:p, p, t:performance.now(), far:0}; tgtX = p[0]; });
+    stage.addEventListener("pointermove", ev=>{ if (!held || tap || done) return; const p = toGoal(ev); if (!p) return;
+      held.far = Math.max(held.far, Math.hypot(p[0] - held.p0[0], p[1] - held.p0[1])); held.p = p;
+      if (!target){ tgtX = p[0]; return; }
+      // your finger was down as he hit it: slide it to where the ball's going and you dive there
+      strikePt ||= held.p0; if (Math.hypot(p[0] - strikePt[0], p[1] - strikePt[1]) > 14) dive(p); });
+    const up = ev=>{ if (!held) return; const h = held, p = toGoal(ev) || h.p; held = null; if (tap || done) return;
+      // a quick tap is always a dive, even before he's hit it (a guess); letting go after the shot is one too
+      if (target || (h.far < 10 && performance.now() - h.t < 280)) dive(p); else tgtX = null; };
+    stage.addEventListener("pointerup", up); stage.addEventListener("pointercancel", ()=>{ held = null; });
+    const BTN = k => ({l:[C[0] - R, 92], r:[C[0] + R, 92], c:[C[0], 58]}[k]);
+    lvEl.querySelectorAll("[data-dive]").forEach(b=>lvTap(b, ()=>dive(BTN(b.dataset.dive))));
+    lvKey = k=>{ const P = BTN(k); if (P) dive(P); };
   });
 }
 
@@ -1428,7 +1482,7 @@ function lvGameRush(st, m){
 }
 
 /* ---------- the lab's games as match moments: one go, against this opponent, with your attributes ---------- */
-const lvHelpKey = m => m.g==="lab" ? "lg_" + m.v : m.g==="shot" ? "flick3" : m.g==="save" ? "save2" : m.g;   // "flick2": the flick-and-bar shot's guide (1.40), shown once more
+const lvHelpKey = m => m.g==="lab" ? "lg_" + m.v : m.g==="shot" ? "flick3" : m.g==="save" ? "save3" : m.g==="intercept" ? "intercept2" : m.g;   // "save3", "intercept2": the rebuilt keeper and interception games (3.0), shown once more   // "flick2": the flick-and-bar shot's guide (1.40), shown once more
 async function lvGameLab(st, m){
   const g = (typeof LAB_NEW!=="undefined" ? LAB_NEW : []).find(x=>x.id===m.v), K = LV_LABM[m.v];
   if (!g || !K) return lvAuto(st, m);
