@@ -111,6 +111,13 @@ A new **Records room** on the main menu covers everything you've done on the acc
 - **All-time records:** your best across every career: most goals in a season, best season rating, most trophies, biggest win, best top-flight finish and more.
 - It's all worked out from your saves, so careers started before 3.0 count. What you've unlocked is kept on the account and in backups, so deleting a save never takes an achievement away.
 
+## 3.1, part 1: contracts and job moves (Manager and Director of Football)
+
+- **You have a contract.** Wage, length and what the board expects are agreed when you take a job: sign what's offered, or ask for more money or a longer deal first. Club > Jobs shows your deal, time left and career earnings. Careers started before 3.1 are given a two-year deal.
+- **Renewals and expiry.** In the last January of your deal a happy board opens talks. At the end of its last season the board either offers a new contract or lets you go; leave it unsigned and you walk away as a free agent. Sacked early, you're paid half of what was left.
+- **Free agency, with the world carrying on.** Out of work, time no longer stands still: wait a week or a month and the season plays on without you (your old club under a new manager), vacancies come and go, and after a couple of months your reputation starts to fade.
+- **Moves are rare.** A few vacancies a season, from sackings and from managers whose own deals run out. Now and then a bigger club asks to speak to you; leave mid-contract and they pay compensation, and walking out in mid-season costs some reputation. You can also resign.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
@@ -294,6 +301,7 @@ Players on different phones can't see each other's careers. That would need an o
 | `shop.js` | The shop: boots (and their icons) and training boosts bought with gold coins, coin packs, and the Editor pen with its player editor |
 | `themes.js` | The competition themes (3.0): colours and patterns for every league, cup, European and international competition, and the banners, strips and chips that show them in all three modes. |
 | `records.js` | The Records room (3.0): achievements and all-time records across all three modes, worked out from your saves. |
+| `mgcareer.js` | Your own contract and the job market (3.1) for Manager Career and Director of Football: terms, renewals, expiry, resigning, being out of work while the world carries on. |
 | `g3d.js` | The 3D graphics (three.js): the player on the home screen, the 3D scenes for shots, saves, headers, volleys, tackles and crosses, and a 3D version of every other mini-game drawn from its 2D picture; the stadium, light and weather, replays and celebrations, and the broadcast finish over the picture |
 | `sound.js` | The sound, all made in the browser (no recordings): the crowd, its chants and reactions, the ball, the net, the whistle and the rain |
 | `sw.js` | Offline support: keeps a copy of the game on the phone |

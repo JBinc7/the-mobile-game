@@ -579,3 +579,10 @@ button.mg-xir:hover{background:rgba(255,255,255,.05)} .mgx-marked{outline:1px so
 .mgx-pick{display:grid;grid-template-columns:22px auto minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}
 .mgx-rank{font-family:var(--f-display);font-weight:900;font-size:18px;color:#C86BFF}
 @media (max-width:480px){.mg-fxr{grid-template-columns:72px 64px minmax(0,1fr) auto;gap:6px;padding-inline:8px}.mg-fxo{text-overflow:ellipsis}.mg-fxo>svg{flex:none}}
+
+/* 3.1: your contract and the job market (mgcareer.js) */
+.mgc-offer{border-color:var(--gold);box-shadow:inset 0 3px 0 var(--gold)}
+.mgc-head{display:flex;gap:12px;align-items:center;margin:6px 0 12px}.mgc-head h2{margin:0}
+.mgc-card{padding:12px 14px;margin-bottom:16px;border-radius:4px 14px 4px 14px;background:var(--surface-2);border:1px solid var(--line);display:grid;gap:10px}
+.mgc-out{display:grid;gap:10px;margin-top:10px}
+.mgc-offer .mg-kpis b,.mgc-card .mg-kpis b,.mgc-out .mg-kpis b{font-size:17px}

@@ -105,7 +105,7 @@ function mgRender(){
   const dof = mgDof(), tabs = [["home","Home"],["squad","Squad"],dof ? ["coach","Head coach","Coach"] : ["tactics","Tactics"],["transfers","Transfers"],["comps","Competitions","Comps"],["club","Club"],["inbox","Inbox"]];
   if (dof && MG_TAB==="tactics") MG_TAB = "coach"; if (!dof && MG_TAB==="coach") MG_TAB = "tactics";
   const nf = M.phase==="season" || M.phase==="pre" ? mgNextFixture() : null, today = nf && nf.day===M.day;
-  const cont = M.phase==="summer" ? "Next season" : M.phase==="sacked" ? "Find a job" : today ? "Match day ▶" : "Continue";
+  const cont = M.phase==="summer" ? "Next season" : M.phase==="sacked" ? "Wait a week" : today ? "Match day ▶" : "Continue";
   const body = MG_PRE ? mgPreHTML() : MG_TAB==="home" ? mgHomeHTML(nf) : MG_TAB==="squad" ? mgSquadHTML() : MG_TAB==="tactics" ? mgTacticsHTML() : MG_TAB==="coach" ? mdfCoachHTML() : MG_TAB==="transfers" ? mgTransfersHTML()
     : MG_TAB==="comps" ? mgCompsHTML() : MG_TAB==="club" ? mgClubHTML() : mgInboxHTML();
   const c = meta(M.club);
@@ -126,7 +126,7 @@ function mgRender(){
 }
 function mgGo(){
   if (MG_BUSY || !M) return;
-  if (M.phase==="sacked"){ MG_TAB = "club"; MG_SUB.club = "jobs"; MG_PRE = null; mgRender(); return; }
+  if (M.phase==="sacked"){ mgcWait(7); mgFlash(`${mgFmt(M.day)}. ${(M.jobs || []).length} vacanc${(M.jobs || []).length===1 ? "y" : "ies"} open.`); MG_TAB = "home"; MG_PRE = null; mgRender(); return; }
   const today = mgUserFixture();
   if (!M.done && today){ MG_PRE = today; mgRender(); window.scrollTo({top:0}); return; }
   MG_BUSY = true; mgRender();
@@ -205,9 +205,10 @@ function mgVsHTML(f, big){
   return `<div class="mg-vs">${side(f.h)}<div class="mg-vs-v"><span>VS</span><small>${esc(mgVenue(f))}</small></div>${side(f.a)}</div>`;
 }
 function mgHomeHTML(nf){
-  if (M.phase==="summer" && M.review) return mgReviewHTML();
   if (M.phase==="sacked") return mgSackedHTML();
+  if (M.phase==="summer" && M.review) return mgcOfferHTML() + mgReviewHTML();
   const out = [];
+  if (M.offer) out.push(mgcOfferHTML());
   if (MG_LAST) out.push(mgLastHTML());
   if (nf){ const today = nf.day===M.day && !M.done;
     out.push(`<section class="panel mg-next themed themed-top" data-pat="${mgTheme(nf).pat}" style="${themeVars(mgTheme(nf))}"><div class="mg-next-top">${compChip(mgTheme(nf), mgCompName(nf), "mg-comp")}<span class="mg-when">${mgFmt(nf.day)} · ${mgRel(nf.day)}</span></div>
@@ -273,12 +274,12 @@ function mgReviewHTML(){
 }
 function mgSackedHTML(){
   return `<section class="panel mg-review"><div class="eyebrow">Out of work</div><h2>You've left ${esc(M.club)}</h2>
-    <p class="hint">Clubs with vacancies are listed below. Apply for any of them: the bigger the club, the better your reputation needs to be (yours: ${Math.round(M.mgr.rep)}).</p>
-    ${mgJobsHTML()}</section>`;
+    <p class="hint">You're a free agent. Clubs with vacancies are listed below. Apply for any of them: the bigger the club, the better your reputation needs to be.</p>
+    ${mgcOutHTML()}</section>${mgcOfferHTML()}<section class="panel"><h2>Vacancies</h2>${mgJobsHTML()}</section>`;
 }
 function mgJobsHTML(){
   const J = M.jobs || [];
-  if (!J.length) return `<p class="hint">No vacancies right now. Check back after a few weeks.</p>`;
+  if (!J.length) return `<p class="hint">No vacancies right now. They come up a few times a season, as managers are sacked or their contracts run out.</p>`;
   return `<div class="mg-list">${J.map(j=>{ const t = mgTierOf(j.club), ch = clamp(.55 + (M.mgr.rep - j.need)/25, .05, .97);
     return `<div class="mg-job">${clubBadge(j.club, 40)}<div style="min-width:0"><b>${esc(j.club)}</b><small>${t!=null ? esc(TIERS[t].name) : ""} · ${mgStarsHTML(mgStars(j.club))}</small><small>Board expects: ${esc(j.exp)}</small></div>
       <div class="mg-job-r"><span class="pill ${ch>.6 ? "up" : ch<.3 ? "down" : ""}">${ch>.75 ? "Strong chance" : ch>.45 ? "Good chance" : ch>.2 ? "Outside chance" : "Long shot"}</span>${mgBtn("apply", "Apply", "small primary", `data-c="${esc(j.club)}"`)}</div></div>`; }).join("")}</div>`;
@@ -560,7 +561,7 @@ function mgClubHTML(){
       <h3>Individual training (${T.ind.length}/5)</h3><p class="hint">Pick up to five players to work on one attribute: they grow faster, especially there. Set it from a player's card.</p>
       ${T.ind.length ? `<div class="mg-list">${T.ind.map(x=>{ const p = M.P[x.id]; return p ? `<div class="mg-row">${mgPosC(p.pos)}<b>${esc(p.n)}</b><small>${(p.pos==="GK" ? MG_GKATT : MG_ATT)[x.k]}</small>${mgBtn("indx", "Stop", "small", `data-id="${esc(p.id)}"`)}</div>` : ""; }).join("")}</div>` : ""}`;
   }
-  else if (sub==="jobs"){ body = `<p class="hint">Your reputation: <b>${Math.round(M.mgr.rep)}</b>/100. Clubs looking for a manager:</p>${mgJobsHTML()}`; }
+  else if (sub==="jobs"){ body = M.phase==="sacked" ? `${mgcOutHTML()}${mgJobsHTML()}` : `${mgcCardHTML()}<p class="hint">Your reputation: <b>${Math.round(M.mgr.rep)}</b>/100. Clubs looking for a ${mgcRole()}:</p>${mgJobsHTML()}`; }
   else {
     const c2 = M.car;
     body = `<div class="mg-mgr">${mgAvatar({lk:{s:1, h:2, c:"Brown", b:0}}, M.club, 84)}<div><h3>${esc(M.mgr.name)}</h3><p class="hint">${esc(M.mgr.nat)} · ${M.mgr.age} · ${esc((MG_BG.find(b=>b[0]===M.mgr.bg) || [])[1] || "")}</p>
@@ -739,8 +740,15 @@ document.addEventListener("click", e=>{
   if (a==="precoach"){ MG_PRE = null; MG_TAB = "coach"; re(); return; }
   if (a==="press"){ mgPressAnswer(MG_PRE, +b.dataset.i); mgFlash("Your answer is in tomorrow's papers."); re(); return; }
   if (a==="lastx"){ MG_LAST = null; re(); return; }
-  if (a==="apply"){ const r = mgApplyJob(b.dataset.c); mgFlash(r.txt); if (r.ok){ MG_TAB = "home"; MG_LAST = null; } re(); window.scrollTo({top:0}); return; }
-  if (a==="jobyes"){ const m = M.inbox.find(x=>x.id===+b.dataset.m); if (m) m.act.done = "Accepted"; if (M.phase==="season" || M.phase==="pre") M.hist.push(mgHistRow(true)); mgTakeJob(b.dataset.c); mgFlash(`You're the new manager of ${M.club}!`); MG_TAB = "home"; re(); return; }
+  if (a==="apply"){ const r = mgApplyJob(b.dataset.c); mgFlash(r.txt); if (r.ok){ MG_TAB = "home"; MG_PRE = null; } re(); window.scrollTo({top:0}); return; }
+  if (a==="jobyes"){ const m = M.inbox.find(x=>x.id===+b.dataset.m); if (m) m.act.done = "In talks"; mgcOffer(b.dataset.c); mgFlash(`${b.dataset.c} have made you an offer.`); MG_TAB = M.phase==="sacked" ? "club" : "home"; re(); window.scrollTo({top:0}); return; }
+  if (a==="csign"){ const txt = mgcSign(); mgFlash(txt); MG_TAB = "home"; MG_LAST = null; MG_PRE = null; re(); window.scrollTo({top:0}); return; }
+  if (a==="cask"){ mgcAsk(b.dataset.v==="wage" ? "wage" : "yrs"); re(); return; }
+  if (a==="cno"){ mgcDecline(); re(); return; }
+  if (a==="cresign"){ MG_RESIGN = true; re(); return; }
+  if (a==="cresign0"){ MG_RESIGN = false; re(); return; }
+  if (a==="cresign2"){ MG_RESIGN = false; mgcResign(); MG_TAB = "home"; MG_PRE = null; MG_LAST = null; re(); window.scrollTo({top:0}); return; }
+  if (a==="cwait"){ mgcWait(+b.dataset.v || 7); mgFlash(`${mgFmt(M.day)}. ${(M.jobs || []).length} vacanc${(M.jobs || []).length===1 ? "y" : "ies"} open.`); re(); return; }
   if (a==="jobno"){ const m = M.inbox.find(x=>x.id===+b.dataset.m); if (m) m.act.done = "Declined"; mgSave(); re(); return; }
   // squad and tactics
   if (a==="sqf"){ MG_SUB.squad = b.dataset.v; re(); return; }

@@ -276,7 +276,7 @@ function mdfSeasonEnd(){
   if (!C.int){
     const d = mdfPerf(C), wonT = M.trophies.filter(x=>x.s===seasonLabel(M.season) && x.club===M.club).length;
     C.rep = Math.round(clamp(C.rep + d/4 + wonT*3, 5, 99));
-    M.mgr.rep = clamp(M.mgr.rep + d/10, 1, 100);
+    if (!M.out) M.mgr.rep = clamp(M.mgr.rep + d/10, 1, 100);
     // a coach who's done well gets offers
     if (d>4 && Math.random()<.35) mdfPoach();
     // his contract
