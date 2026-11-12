@@ -118,6 +118,30 @@ A new **Records room** on the main menu covers everything you've done on the acc
 - **Free agency, with the world carrying on.** Out of work, time no longer stands still: wait a week or a month and the season plays on without you (your old club under a new manager), vacancies come and go, and after a couple of months your reputation starts to fade.
 - **Moves are rare.** A few vacancies a season, from sackings and from managers whose own deals run out. Now and then a bigger club asks to speak to you; leave mid-contract and they pay compensation, and walking out in mid-season costs some reputation. You can also resign.
 
+## 3.1 and 3.2: depth in the dugout and boardroom, and one world
+
+**Manager Career**
+- **Touchline calls.** Up to three times a live match the game stops and asks you to react: a red card for either side, an hour gone and you're behind, a one-goal lead late on, two goals conceded in ten minutes, all square with twenty to go. Each answer changes how the team plays for a spell.
+- **Press persona.** After six press answers you become known as a Motivator (team talks land better), a Diplomat (the board is slower to lose faith) or a Firebrand (demanding more from the touchline works more often). It's shown under Club > Jobs.
+- **Weather.** Rain, wind, snow and heat on match day, shown before kick-off, each suiting some styles and hurting others.
+- **Why it went that way.** Up to three plain reasons under every result: chances made, shots, red cards, possession, tired legs, the weather.
+
+**Both roles**
+- **Scouting network** (Club > Staff): send scouts to eight regions at three levels. They file reports on young players and put them on your shortlist.
+- **Deadline day:** on the last day of each window, a late over-the-odds bid for one of your players and a club selling one of your targets cheaply, for that day only.
+
+**Director of Football**
+- **Monthly board pack:** league position against target, money, the head coach, the squad and your philosophy in one message.
+- **Interviews:** a candidate's ratings are a rough range until you interview him (three interviews per search), which also tells you how he works.
+- **Club philosophy** (Club > Owner): develop our own, live within our means, play on the front foot or win now. The owner judges you on it every summer.
+
+**Player Career**
+- **Boot deals:** as your value grows, brands sign you up for a yearly payment on top of your wage, from a local deal to a global one.
+
+**One world (3.2)**
+- The players you've made in Player Career appear in your Manager and Director saves at their current clubs, marked ★.
+- A retired player can **go into management** from the main menu: his name, a reputation built from his playing career, and a better hearing at his old clubs.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
@@ -302,6 +326,7 @@ Players on different phones can't see each other's careers. That would need an o
 | `themes.js` | The competition themes (3.0): colours and patterns for every league, cup, European and international competition, and the banners, strips and chips that show them in all three modes. |
 | `records.js` | The Records room (3.0): achievements and all-time records across all three modes, worked out from your saves. |
 | `mgcareer.js` | Your own contract and the job market (3.1) for Manager Career and Director of Football: terms, renewals, expiry, resigning, being out of work while the world carries on. |
+| `mgdepth.js` | 3.1/3.2: touchline calls, press persona, weather, match reasons, scouting network, deadline day, the director's board pack, interviews and philosophy, and the shared world. |
 | `g3d.js` | The 3D graphics (three.js): the player on the home screen, the 3D scenes for shots, saves, headers, volleys, tackles and crosses, and a 3D version of every other mini-game drawn from its 2D picture; the stadium, light and weather, replays and celebrations, and the broadcast finish over the picture |
 | `sound.js` | The sound, all made in the browser (no recordings): the crowd, its chants and reactions, the ball, the net, the whistle and the rain |
 | `sw.js` | Offline support: keeps a copy of the game on the phone |
