@@ -237,6 +237,26 @@ function mgwApply(){
   if (X.pslot && typeof UNI!=="undefined"){ M.uni = {slot:X.pslot}; try{ const d = UNI.read("player", X.pslot); if (d){ d.uni = {mode:M.role==="dof" ? "dof" : "manager", slot:MG_SLOT}; localStorage.setItem(UNI.key("player", X.pslot), JSON.stringify(d)); } }catch(e){} }
 }
 
+/* ================= 7. A WORLD THAT MOVES WITHOUT YOU =================
+   Week by week, in the news: clubs in your league on a winning run or in freefall, and now and then a takeover that
+   lifts a club's standing and strength for good. */
+function mgwEvents(){
+  if (!M.club || M.phase!=="season") return;
+  const t = mgLeagueOf(), seen = (M._runs ||= {}), tb = mgTable(t);
+  tb.forEach((r, i)=>{ if (r.n===M.club || !r.form || r.form.length<5) return;
+    const f = r.form.slice(-5), k = /^W{5}$/.test(f) ? "W" : /^L{5}$/.test(f) ? "L" : "";
+    if (!k){ if (seen[r.n] && !f.endsWith(seen[r.n].k)) delete seen[r.n]; return; }
+    if (seen[r.n] && seen[r.n].k===k) return; seen[r.n] = {k, d:M.day};
+    if (k==="W") mgMail("news", `${r.n} make it five wins in a row`, `${r.n} are flying: five straight league wins have taken them to ${ord(i + 1)} in the ${TIERS[t].name}.`);
+    else mgMail("news", `${r.n} in freefall`, `Five league defeats in a row have left ${r.n} ${ord(i + 1)} in the ${TIERS[t].name}. The pressure on ${M.am[r.n] || "their manager"} is growing.`); });
+  if (Math.random()<.012){
+    const pool = MG_PLAYABLE.flatMap(k=>M.tiers[k]).filter(c=>c!==M.club && mgRep(c)<.95 && !(M._owned || {})[c]);
+    if (pool.length){ const c = pool[Math.floor(Math.random()*pool.length)]; (M._owned ||= {})[c] = M.season;
+      M.rep[c] = +clamp(mgRep(c) + .04, .55, 1.06).toFixed(3); if (M.vs[c]!=null) M.vs[c] = +(M.vs[c] + 2).toFixed(1); M._lv = null;
+      mgMail("news", `${c} taken over`, `${c} have new owners, who have promised to invest in the squad. Expect them to be stronger from here, and busier in the transfer market.`); }
+  }
+}
+
 /* ---------- clicks for everything above that lives in the manager screens ---------- */
 document.addEventListener("click", e=>{
   const b = e.target.closest("[data-mg]"); if (!b || typeof M==="undefined" || !M) return;

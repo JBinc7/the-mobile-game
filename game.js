@@ -1710,7 +1710,25 @@ function addLoyalty(club, d, why){
   return after;
 }
 // bad seasons in a row before the club gives up on you
-function patience(club, score){ const L = loyaltyOf(club); if (score!=null && score<.3) return 2; return L>=70 ? 4 : L>=40 ? 3 : 2; }
+function patience(club, score){ const L = loyaltyOf(club); if (score!=null && score<.3) return 2; const D = dressOf(club); return (L>=70 ? 4 : L>=40 ? 3 : 2) + (S.captain===club ? 1 : 0) - (D<25 && D>0 ? 1 : 0); }
+/* 3.4: the dressing room. Your standing among the squad at each club (0-100): it grows with good seasons, time at
+   the club, trophies and age, and drops with poor seasons. Become a leader and stay a second season and you're
+   given the armband: the club stands by a captain for longer, and it pays a bonus. An outsider gets less patience. */
+const DRESS_LABELS = [[75, "Leader"], [55, "Respected"], [30, "Squad player"], [0, "Outsider"]];
+function dressOf(club){ return (S.dress || {})[club] || 0; }
+const dressLabel = v => DRESS_LABELS.find(x=>v>=x[0])[1];
+function dressUpdate(pf, won, age){
+  const club = S.club, D = (S.dress ||= {}), had = D[club] ?? (age>=28 ? 40 : age>=23 ? 32 : 24), yrs = (S.history || []).filter(h=>h.club===club).length;
+  let d = pf.score>.85 ? 14 : pf.score>.6 ? 8 : pf.score>.4 ? 3 : pf.score>.25 ? -4 : -10;
+  d += Math.min(4, yrs) + (age>=30 ? 3 : age>=26 ? 1 : 0) + (won && won.length ? 5 : 0);
+  D[club] = clamp(Math.round(had + d), 5, 100);
+  const was = dressLabel(had), now = dressLabel(D[club]);
+  if (now!==was) note(D[club]>had ? "good" : "info", `Dressing room: ${now}`, D[club]>had ? `Your standing in the ${club} dressing room has grown. The squad now see you as ${now==="Leader" ? "a leader" : now==="Respected" ? "a respected voice" : "one of the group"}.` : `Your standing in the ${club} dressing room has slipped to ${now.toLowerCase()}.`);
+  if (D[club]>=75 && yrs>=1 && S.captain!==club && !S.loan){ S.captain = club; const bonus = Math.round(S.wage*8); S.earnings += bonus;
+    note("good", `Captain of ${club}`, `The manager has given you the armband. It comes with a ${gbp(bonus)} bonus, and the club will stand by its captain for longer after a poor season.`); }
+  else if (S.captain===club && D[club]<55){ S.captain = null; note("info", "You've lost the armband", `After that season the manager has given the ${club} captaincy to someone else.`); }
+  if (S.captain && S.captain!==club) S.captain = null;
+}
 function saleIntent(club, pf, age){
   const t = tierOf(club), m = clubModel(club), T = TIERS[t];
   if (T.pool) return null;
@@ -1848,6 +1866,7 @@ function finishSeason(comps, janFrom){
     M.trust = clamp(Math.round(M.trust + d), 5, 100);
   }
   M.seasons++;
+  dressUpdate(pf, won, age);
   const tl0 = trustLabel(trust0), tl1 = trustLabel(M.trust);
   if (tl0!==tl1){
     if (M.trust < trust0) note(M.trust<30?"bad":"warn", `${M.name}: ${tl1.toLowerCase()}`, M.trust<30 ? `The manager has lost faith in you. Expect to be picked for only about ${Math.round(selectShare()*100)}% of games next season unless something changes.` : `The manager has doubts after that season. You'll have to fight for your place: about ${Math.round(selectShare()*100)}% of games next season.`);
@@ -2951,6 +2970,7 @@ function renderCareer(){
           <div class="facts">
             <div class="fact"><div class="label">Age</div><div class="v">${S.age}</div></div>
             <div class="fact"><div class="label">Position</div><div class="v">${pl.pos}</div></div>
+            ${S.dress && S.dress[S.club] ? `<div class="fact"><div class="label">Dressing room</div><div class="v" style="font-size:15px">${S.captain===S.club ? "Captain" : dressLabel(S.dress[S.club])}</div></div>` : ""}
             ${S.spons ? `<div class="fact"><div class="label">Boot deal</div><div class="v" style="font-size:15px">${esc(S.spons.n)}</div></div>` : ""}
             <div class="fact"><div class="label">Contract</div><div class="v">${S.phase==="retired"?"—":S.years<=0?"Expired":"'"+String((S.season+S.years+(S.phase==="window"?1:0))%100).padStart(2,"0")}</div></div>
           </div>

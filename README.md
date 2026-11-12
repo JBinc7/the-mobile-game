@@ -153,6 +153,12 @@ A Player Career can share a world with one of your Manager or Director of Footba
 
 The two games still play their own matches, so scores and league tables are not shared: what's shared is who is where.
 
+## 3.4: the last of the plan
+
+- **The dressing room (Player Career).** Your standing in the squad at each club (Outsider, Squad player, Respected, Leader) grows with good seasons, time at the club, trophies and age. Become a leader and you're given the armband: a bonus, and the club stands by its captain for longer after a poor season. An outsider gets less patience.
+- **A world that moves (Manager and Director).** The news now reports clubs in your league on five-game winning runs or in freefall, and now and then a club is taken over and gets stronger for good.
+- **One universe fix.** When your player moves on in his own career from the club you manage, he now leaves in the manager's world too, instead of being offered straight back.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.

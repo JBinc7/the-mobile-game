@@ -67,13 +67,15 @@ function uniSyncWorld(){
   p.age = clamp(L.age, 15, 45);
   const dv = L.ovr - mgOvr(p); if (Math.abs(dv)>=2) p.at = p.at.map(v=>Math.round(clamp(v + dv, 12, 99)));
   if (p.pot<mgOvr(p)) p.pot = mgOvr(p);
-  if (p.club===L.club){ p.uniMine = false; return; }
-  // you've signed him here: tell his Player Career, once, and keep him
-  if (p.club===M.club){ if (!p.uniMine){ p.uniMine = true; d.uniOffer = {club:M.club, by:M.mgr.name}; localStorage.setItem(UNI.key("player", slot), JSON.stringify(d));
+  if (p.club===L.club){ p.uniMine = false; p.uniAt = L.club; return; }
+  // out of step. Did he move in his own career since we last looked (he moves here too), or was he moved in this world?
+  const movedThere = p.uniAt!=null && p.uniAt!==L.club;
+  if (!movedThere && p.club===M.club){   // you've signed him here: tell his Player Career, once, and keep him
+    if (!p.uniMine){ p.uniMine = true; d.uniOffer = {club:M.club, by:M.mgr.name}; localStorage.setItem(UNI.key("player", slot), JSON.stringify(d));
       mgMail("news", `${d.player.name}: over to him`, `You've signed ${d.player.name} in this world. His Player Career will get your offer in its next transfer window: accept it there and the two stay in step.`); } return; }
-  // he's moved in his own career: he moves here too
   const from = p.club, C0 = M.cl[from]; if (C0) C0.sq = C0.sq.filter(x=>x!==id);
   const C1 = mgMaterialize(L.club) || M.cl[L.club]; if (!C1){ delete M.P[id]; return; }
-  p.club = L.club; if (!C1.sq.includes(id)) C1.sq.push(id); p.uniMine = false; M._lv = null;
+  if (from===M.club){ M.tac.xi = M.tac.xi.map(x=>x===id ? null : x); M.tac.bench = M.tac.bench.filter(x=>x!==id); }
+  p.club = L.club; if (!C1.sq.includes(id)) C1.sq.push(id); p.uniMine = false; p.uniAt = L.club; M._lv = null;
   mgMail("news", `${d.player.name} joins ${L.club}`, `In your Player Career, ${d.player.name} has moved from ${from} to ${L.club}. He's made the same move in this world.`);
 }

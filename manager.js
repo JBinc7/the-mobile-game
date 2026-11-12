@@ -798,6 +798,7 @@ function mgWeekly(){
   mgxWeekly();
   mgcWeekly();
   mgnWeekly();
+  mgwEvents();
   if (mgDof()){ if (M.coach) mgFinAdd("exp", "staff", M.coach.wage); mdfWeekly(); }
   if (mgInWindow()) mgWindowWeek();
   mgAiManagers();
