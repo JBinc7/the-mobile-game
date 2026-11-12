@@ -209,7 +209,7 @@ if (typeof mgAsk==="function"){ const mgAsk0 = mgAsk; mgAsk = function(p){ const
 let MGW = null;
 function mgwLoad(){
   if (MGW) return MGW; MGW = [];
-  try{ const S = typeof Hub!=="undefined" && Hub.saves ? Hub.saves().player || [] : [];
+  try{ const S = [1, 2, 3].map(i=>typeof UNI!=="undefined" ? UNI.read("player", i) : null);   // by slot, so a player keeps his place in a world whatever else is saved
     S.forEach((d, i)=>{ if (!d || !d.player || !d.club || d.phase==="retired") return;
       const v = +d.value || 3e5; MGW.push({id:"LG" + i + "_" + String(d.player.name).replace(/\W/g, ""), n:d.player.name, nat:d.player.nation || "England", pos:d.player.pos, age:d.age || 20, club:d.club, ovr:Math.round(clamp(50 + 13.5*Math.log10(Math.max(1, v/2e5)), 45, 93))}); });
   }catch(e){}
@@ -233,6 +233,8 @@ function mgwFromPlayer(d){
 function mgwApply(){
   const X = typeof MG_NEW!=="undefined" && MG_NEW && MG_NEW.ex ? MG_NEW : null; if (!X) return;
   M.mgr.rep = X.exRep; M.mgr.ex = X.ex; M.mgr.was = "player";
+  // his playing career and this world are one universe from the start
+  if (X.pslot && typeof UNI!=="undefined"){ M.uni = {slot:X.pslot}; try{ const d = UNI.read("player", X.pslot); if (d){ d.uni = {mode:M.role==="dof" ? "dof" : "manager", slot:MG_SLOT}; localStorage.setItem(UNI.key("player", X.pslot), JSON.stringify(d)); } }catch(e){} }
 }
 
 /* ---------- clicks for everything above that lives in the manager screens ---------- */

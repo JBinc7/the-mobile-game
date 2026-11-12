@@ -125,7 +125,20 @@ const Hub = (() => {
       <div class="row"><button type="button" class="btn primary" data-hub="enter" data-m="${mode}" data-i="${i}">Continue</button>
         ${mode==="player" && s.done && typeof mgwFromPlayer==="function" ? `<button type="button" class="btn small" data-hub="tomgr" data-m="player" data-i="${i}">Go into management</button>` : ""}
         <button type="button" class="btn small danger" data-hub="del" data-m="${mode}" data-i="${i}">${sure===id ? "Tap again to delete" : "Delete"}</button></div>
-      ${mode==="player" && s.done && sure==="mgrfull" ? `<p class="hint">All your manager slots are full. Delete one to start his managerial career.</p>` : ""}</article>`;
+      ${mode==="player" && s.done && sure==="mgrfull" ? `<p class="hint">All your manager slots are full. Delete one to start his managerial career.</p>` : ""}
+      ${typeof UNI!=="undefined" ? uniCard(mode, i) : ""}</article>`;
+  }
+  // one universe (universe.js): which world a Player Career shares, and the way to link or unlink it
+  function uniCard(mode, i){
+    const d = read(mode, i); if (!d) return "";
+    if (mode!=="player"){ if (!d.uni) return ""; const p = read("player", d.uni.slot); return p && p.player ? `<p class="uni-line">One universe with <b>${esc(p.player.name)}</b> (Player Career, slot 0${d.uni.slot})</p>` : ""; }
+    const W = UNI.worlds(), cur = d.uni ? W.find(w=>w.mode===d.uni.mode && w.slot===d.uni.slot) : null, open = sure===`uni-${i}`;
+    if (!W.length && !cur) return `<p class="uni-line muted">Start a Manager or Director career to link this player to its world.</p>`;
+    return `<div class="uni-box"><p class="uni-line">${cur ? `One universe with <b>${esc(cur.name)}</b> · ${esc(cur.club)} (${cur.role==="dof" ? "Director" : "Manager"})` : "Not linked to a world"}
+        <button type="button" class="btn small" data-hub="uniopen" data-i="${i}">${open ? "Close" : cur ? "Change" : "Link to a world"}</button></p>
+      ${open ? `<div class="uni-opts">${W.map(w=>`<button type="button" class="btn small ${cur===w ? "primary" : ""}" data-hub="unilink" data-i="${i}" data-m="${w.mode}" data-s="${w.slot}">${esc(w.name)} · ${esc(w.club)}${w.pslot && w.pslot!==i ? " (linked to another player)" : ""}</button>`).join("")}
+        ${cur ? `<button type="button" class="btn small danger" data-hub="unilink" data-i="${i}" data-m="">Unlink</button>` : ""}</div>
+        <p class="hint">Linked, the two share a world: he plays in that world's squads and follows his career here, its promotions and relegations shape his leagues, and if you sign him there his career gets the offer.</p>` : ""}</div>`;
   }
   function count(mode){ let n = 0; for (let i = 1; i<=HUB_SLOTS; i++) if (sumOf(mode, i)) n++; return n; }
   function homeHTML(){
@@ -207,8 +220,10 @@ const Hub = (() => {
       const d = read("player", i), free = [1, 2, 3].slice(0, HUB_SLOTS).find(k=>!read("manager", k));
       if (!d || typeof mgwFromPlayer!=="function") return;
       if (!free){ sure = "mgrfull"; hubRender(); return; }
-      window.MGW_PREFILL = mgwFromPlayer(d); enter("manager", free);
+      window.MGW_PREFILL = {...mgwFromPlayer(d), pslot:i}; enter("manager", free);
     }
+    else if (a==="uniopen"){ sure = sure===`uni-${i}` ? "" : `uni-${i}`; hubRender(); }
+    else if (a==="unilink"){ UNI.link(i, b.dataset.m || null, +b.dataset.s || 0); sure = ""; hubRender(); }
     else if (a==="enter") enter(m, i);
     else if (a==="del"){
       const id = `${m}-${i}`;
@@ -222,7 +237,7 @@ const Hub = (() => {
   });
 
   return {
-    saves:allSaves,
+    saves:allSaves, key:keyOf,
     // after sign-in: straight back into a save if the page was reloaded to open one, otherwise the main menu
     boot(){
       let b = null; try{ b = JSON.parse(sessionStorage.getItem(BOOT)); sessionStorage.removeItem(BOOT); }catch(e){}

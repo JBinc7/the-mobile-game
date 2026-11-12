@@ -12,13 +12,14 @@
 const mgcRole = () => mgDof() ? "Director of Football" : "manager";
 const mgcWageTxt = w => `${mgMoney(w)} a week`;
 // what a club would pay you: its size sets the scale, your reputation moves it
-function mgcTerms(club, renew){
+function mgcTerms(club, renew, role){
+  role = role==="dof" || role==="mgr" ? role : M.role==="dof" ? "dof" : "mgr";
   const j = mgJob(club), rep = clamp((mgLevel(club) - 48)/40, 0, 1);   // the squad's strength says how big the club is, across every league
-  let wage = 1200*Math.pow(120, rep)*(.8 + M.mgr.rep/220)*(mgDof() ? .75 : 1);
+  let wage = 1200*Math.pow(120, rep)*(.8 + M.mgr.rep/220)*(role==="dof" ? .75 : 1);
   if (renew && M.con) wage = Math.max(wage, M.con.wage*(1.08 + clamp((M.board.conf - 55)/200, 0, .2)));
   wage = wage>=10000 ? Math.round(wage/1000)*1000 : Math.round(wage/100)*100;
   const yrs = renew ? (M.board.conf>=72 ? 3 : 2) : M.mgr.rep>=j.need + 12 ? 3 : M.mgr.rep>=j.need - 6 ? 2 : 1;
-  return {club, wage, yrs, exp:j.exp, need:j.need, renew:!!renew, askW:false, askY:false, note:""};
+  return {club, wage, yrs, exp:j.exp, need:j.need, renew:!!renew, role, askW:false, askY:false, note:""};
 }
 const mgcUntil = yrs => M.season + yrs - (M.phase==="summer" || (M.phase==="sacked" && M.day>=MGD(M.season + 1, 5, 1)) ? 0 : 1);
 const mgcLeft = () => M.con ? Math.max(0, M.con.until - M.season + (M.phase==="summer" ? 0 : 1)) : 0;   // seasons still to run, this one included
@@ -27,7 +28,7 @@ function mgcEnsure(){
   if (!M.con && M.club && M.phase!=="sacked" && M.phase!=="new" && !M.out){ const T = mgcTerms(M.club); M.con = {club:M.club, wage:T.wage, from:M.job ? M.job.since : M.season, until:Math.max(M.season + 1, (M.job ? M.job.since : M.season) + 1), yrs:2}; }
 }
 /* ---------- agreeing a deal ---------- */
-function mgcOffer(club, renew){ M.offer = mgcTerms(club, renew); mgSave(); return M.offer; }
+function mgcOffer(club, renew, role){ M.offer = mgcTerms(club, renew, role); mgSave(); return M.offer; }
 function mgcAsk(what){
   const O = M.offer; if (!O) return;
   const ok = Math.random() < clamp(.4 + (M.mgr.rep - O.need)/40 + (O.renew ? (M.board.conf - 60)/100 : 0), .1, .85);
@@ -47,6 +48,8 @@ function mgcSign(){
     M._left = {club:old, comp, mid};
   }
   M.out = false; M.jobs = []; M.outW = 0;
+  // a change of role with the change of job: the same career, the same world (universe.js)
+  if (O.role && O.role!==(M.role==="dof" ? "dof" : "mgr")){ M.role = O.role; if (O.role!=="dof") M.coach = null; M.cands = null; (M.mgr.roles ||= []).push({s:M.season, role:O.role}); if (typeof Hub!=="undefined") Hub.paintBand(M.role); }
   mgTakeJob(O.club);
   M.con = {club:O.club, wage:O.wage, from:M.season, until:mgcUntil(O.yrs), yrs:O.yrs};
   if (M._left){ const L = M._left; M._left = null; mgMail("news", `${M.mgr.name} leaves ${L.club} for ${O.club}`, `${O.club} have paid ${L.club} ${mgMoney(L.comp)} in compensation to release you from your contract.${L.mid ? " Leaving in mid-season hasn't gone down well: your reputation has taken a small knock." : ""}`); }
@@ -147,7 +150,7 @@ function mgcOfferHTML(){
   const O = M.offer; if (!O) return "";
   const t = mgTierOf(O.club), until = (O.renew ? M.season + O.yrs : mgcUntil(O.yrs)) + 1;
   return `<section class="panel mgc-offer"><div class="eyebrow">${O.renew ? "New contract offer" : "Contract offer"}</div>
-    <div class="mgc-head">${clubBadge(O.club, 46)}<div style="min-width:0"><h2>${esc(O.club)}</h2><p class="hint">${t!=null ? esc(TIERS[t].name) : ""} · ${O.renew ? "they want you to stay" : `they want you as their ${mgcRole()}`}</p></div></div>
+    <div class="mgc-head">${clubBadge(O.club, 46)}<div style="min-width:0"><h2>${esc(O.club)}</h2><p class="hint">${t!=null ? esc(TIERS[t].name) : ""} · ${O.renew ? "they want you to stay" : `they want you as their ${O.role==="dof" ? "Director of Football" : O.role==="mgr" ? "manager" : mgcRole()}`}</p></div></div>
     <div class="mg-kpis"><div><span class="label">Wage</span><b>${mgcWageTxt(O.wage)}</b></div><div><span class="label">Length</span><b>${O.yrs} year${O.yrs>1 ? "s" : ""}</b></div><div><span class="label">Runs to</span><b>Summer ${until}</b></div><div><span class="label">Board expects</span><b>${esc(O.exp)}</b></div></div>
     ${O.note ? `<p class="ref" role="status">${esc(O.note)}</p>` : ""}
     ${!O.renew && M.con && M.phase!=="sacked" ? `<p class="hint">You're under contract at ${esc(M.club)}: ${esc(O.club)} will pay compensation.${M.phase==="season" || M.phase==="pre" ? " Leaving in mid-season will cost you a little reputation." : ""}</p>` : ""}

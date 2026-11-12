@@ -142,6 +142,17 @@ A new **Records room** on the main menu covers everything you've done on the acc
 - The players you've made in Player Career appear in your Manager and Director saves at their current clubs, marked ★.
 - A retired player can **go into management** from the main menu: his name, a reputation built from his playing career, and a better hearing at his old clubs.
 
+## 3.3: one universe
+
+A Player Career can share a world with one of your Manager or Director of Football saves (`universe.js`). Link them from the Player Career slot on the main menu; a retired player who goes into management is linked automatically.
+
+- **He lives in that world.** Your player is in its squads (★) and follows his own career: when he moves club, ages or retires in Player Career, he does there too.
+- **Sign yourself.** Buy him in the manager's world and his Player Career gets that offer, from you, in its next transfer window.
+- **One set of leagues.** Each new Player Career season takes its divisions from the linked world's promotions and relegations (his own club stays in the division it earned), and if you manage his club, you're named as his manager.
+- **One career, three roles.** Inside a world you can change role when you change job: every vacancy can be applied for as manager or as director, in the same save. So a career can run from the pitch to the dugout to the boardroom.
+
+The two games still play their own matches, so scores and league tables are not shared: what's shared is who is where.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
@@ -327,6 +338,7 @@ Players on different phones can't see each other's careers. That would need an o
 | `records.js` | The Records room (3.0): achievements and all-time records across all three modes, worked out from your saves. |
 | `mgcareer.js` | Your own contract and the job market (3.1) for Manager Career and Director of Football: terms, renewals, expiry, resigning, being out of work while the world carries on. |
 | `mgdepth.js` | 3.1/3.2: touchline calls, press persona, weather, match reasons, scouting network, deadline day, the director's board pack, interviews and philosophy, and the shared world. |
+| `universe.js` | One universe (3.3): linking a Player Career to a manager's world and keeping the two in step. |
 | `g3d.js` | The 3D graphics (three.js): the player on the home screen, the 3D scenes for shots, saves, headers, volleys, tackles and crosses, and a 3D version of every other mini-game drawn from its 2D picture; the stadium, light and weather, replays and celebrations, and the broadcast finish over the picture |
 | `sound.js` | The sound, all made in the browser (no recordings): the crowd, its chants and reactions, the ball, the net, the whistle and the rain |
 | `sw.js` | Offline support: keeps a copy of the game on the phone |

@@ -209,3 +209,9 @@ tbody tr:hover td{background:rgba(0,240,168,.04)}
 .rec-row b{font-family:var(--f-display);font-weight:900;font-size:22px;color:var(--gold);text-align:right}
 .rec-who{grid-column:1/-1;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rec-new{border-color:var(--gold)}
+
+/* 3.3: one universe (universe.js) */
+.uni-box{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);display:grid;gap:8px}
+.uni-line{margin:8px 0 0;font-size:13.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.uni-box .uni-line{margin:0}.uni-line b{color:var(--ink)}
+.uni-opts{display:flex;flex-wrap:wrap;gap:6px}

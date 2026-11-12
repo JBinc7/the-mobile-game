@@ -76,7 +76,7 @@ const Mgr = {
   summary:mgSummary,
   open(slot, key, role){
     MG_SLOT = slot; MG_KEY = key; M = mgLoad(key); MG_TAB = "home"; MG_PRE = null; MG_LAST = null; MG_FLASH = ""; MG_SEL = null; MG_RES = null; mgVCache.clear();
-    if (M){ M._tier = null; M._idx = null; M._lv = null; mgTierOf(M.club); if (M.phase!=="new" && M.club && M.tac) mgMendXI(true); }
+    if (M){ M._tier = null; M._idx = null; M._lv = null; mgTierOf(M.club); if (typeof uniSyncWorld==="function") try{ uniSyncWorld(); }catch(e){} if (M.phase!=="new" && M.club && M.tac) mgMendXI(true); }
     else MG_NEW = {step:1, name:"", nat:"England", age:42, bg:role==="dof" ? "analyst" : "pro", kit:0, lg:1, club:null, role:role==="dof" ? "dof" : "mgr"};
     // a retired player going into management (mgdepth.js): his name, and a head start
     if (!M && window.MGW_PREFILL){ const X = window.MGW_PREFILL; window.MGW_PREFILL = null; Object.assign(MG_NEW, {name:X.name, nat:SQ_NAMES[X.nat] ? X.nat : "England", age:X.age, bg:"player", ex:X.ex, exRep:X.rep}); }
@@ -286,7 +286,7 @@ function mgJobsHTML(){
   if (!J.length) return `<p class="hint">No vacancies right now. They come up a few times a season, as managers are sacked or their contracts run out.</p>`;
   return `<div class="mg-list">${J.map(j=>{ const t = mgTierOf(j.club), ch = clamp(.55 + (M.mgr.rep - j.need)/25, .05, .97);
     return `<div class="mg-job">${clubBadge(j.club, 40)}<div style="min-width:0"><b>${esc(j.club)}</b><small>${t!=null ? esc(TIERS[t].name) : ""} · ${mgStarsHTML(mgStars(j.club))}</small><small>Board expects: ${esc(j.exp)}</small></div>
-      <div class="mg-job-r"><span class="pill ${ch>.6 ? "up" : ch<.3 ? "down" : ""}">${ch>.75 ? "Strong chance" : ch>.45 ? "Good chance" : ch>.2 ? "Outside chance" : "Long shot"}</span>${mgBtn("apply", "Apply", "small primary", `data-c="${esc(j.club)}"`)}</div></div>`; }).join("")}</div>`;
+      <div class="mg-job-r"><span class="pill ${ch>.6 ? "up" : ch<.3 ? "down" : ""}">${ch>.75 ? "Strong chance" : ch>.45 ? "Good chance" : ch>.2 ? "Outside chance" : "Long shot"}</span>${mgBtn("apply", mgDof() ? "Apply as director" : "Apply as manager", "small primary", `data-c="${esc(j.club)}"`)}${mgBtn("apply", mgDof() ? "As manager" : "As director", "small", `data-c="${esc(j.club)}" data-r="${mgDof() ? "mgr" : "dof"}"`)}</div></div>`; }).join("")}</div>`;
 }
 
 /* ================= MATCH DAY ================= */
@@ -744,7 +744,7 @@ document.addEventListener("click", e=>{
   if (a==="precoach"){ MG_PRE = null; MG_TAB = "coach"; re(); return; }
   if (a==="press"){ mgPressAnswer(MG_PRE, +b.dataset.i); mgFlash("Your answer is in tomorrow's papers."); re(); return; }
   if (a==="lastx"){ MG_LAST = null; re(); return; }
-  if (a==="apply"){ const r = mgApplyJob(b.dataset.c); mgFlash(r.txt); if (r.ok){ MG_TAB = "home"; MG_PRE = null; } re(); window.scrollTo({top:0}); return; }
+  if (a==="apply"){ const r = mgApplyJob(b.dataset.c, b.dataset.r); mgFlash(r.txt); if (r.ok){ MG_TAB = "home"; MG_PRE = null; } re(); window.scrollTo({top:0}); return; }
   if (a==="jobyes"){ const m = M.inbox.find(x=>x.id===+b.dataset.m); if (m) m.act.done = "In talks"; mgcOffer(b.dataset.c); mgFlash(`${b.dataset.c} have made you an offer.`); MG_TAB = M.phase==="sacked" ? "club" : "home"; re(); window.scrollTo({top:0}); return; }
   if (a==="csign"){ const txt = mgcSign(); mgFlash(txt); MG_TAB = "home"; MG_LAST = null; MG_PRE = null; re(); window.scrollTo({top:0}); return; }
   if (a==="cask"){ mgcAsk(b.dataset.v==="wage" ? "wage" : "yrs"); re(); return; }

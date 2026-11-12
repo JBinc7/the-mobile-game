@@ -47,7 +47,7 @@ const Records = (() => {
       best(pre + "Tro", n(e.tro), who); best(pre + "Wins", n(e.w), {...who, sub:`${n(e.p)} games`}); if (n(e.p)>=30) best(pre + "Pct", Math.round(e.w/e.p*100), {...who, sub:`${n(e.p)} games`}); };
     ["manager", "dof"].forEach(mode=>(saves[mode] || []).forEach(d=>{
       if (!d || !d.mgr || !d.club) return;
-      const role = mode==="dof" ? "dof" : "mgr", X = role==="dof" ? F.d : F.m, hist = (d.hist || []).filter(h=>!h.part), c = d.car || {};
+      const role = d.role==="dof" ? "dof" : d.role==="mgr" ? "mgr" : mode==="dof" ? "dof" : "mgr", X = role==="dof" ? F.d : F.m, hist = (d.hist || []).filter(h=>!h.part), c = d.car || {};
       seen.add(d.id);
       career(role, {name:d.mgr.name, club:d.club, clubs:[...new Set((d.clubs || []).map(x=>x.club))], seasons:hist.length, p:c.p, w:c.w, tro:(d.trophies || []).length, rep:d.mgr.rep});
       const who = {name:d.mgr.name};

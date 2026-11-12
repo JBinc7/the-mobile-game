@@ -572,7 +572,7 @@ function boardPanel(){
 }
 let S = null, draft = null, flash = "", tab = "season", migratedNote = "", reviewIdx = null, leagueView = null, cardOpen = false;
 const negoOpen = new Set();   // offer cards whose negotiation is open, kept open between rounds of talks
-function load(){ try{ const raw = localStorage.getItem(KEY); if (raw) S = JSON.parse(raw);}catch(e){} }
+function load(){ try{ const raw = localStorage.getItem(KEY); if (raw) S = JSON.parse(raw);}catch(e){} if (S && typeof uniPull==="function") try{ uniPull(); }catch(e){} }
 function save(){
   if (!S) return;
   // keep the inbox to the latest 250 messages so saves stay small
@@ -2071,6 +2071,7 @@ function genOffers(pf, opts={}){
       loans.push({club, tier:t, loan:true});
     }
   }
+  if (typeof uniOffer==="function") try{ uniOffer(offers, make, feeFor); }catch(e){}
   return {list:offers, renewal, loans, demand};
 }
 function getOffer(key){ return key==="renew" ? S.pending.offers.renewal : S.pending.offers.list[+key]; }
@@ -2230,6 +2231,7 @@ function decide(kind, key){
     S.phase = "retired"; S.log.push({season:done, text:`Retired at ${S.age}`, fee:null}); S.pending=null; save(); recordCareer(); render(); return;
   }
   S.season += 1; S.age += 1; S.pending = null; S.lastSim = S.sim; S.sim = null; S.phase = "stats"; tab = "season"; S.half = 1; S.h1 = null; S.intlAway = 1;
+  if (typeof uniRoll==="function") try{ uniRoll(); uniPull(); }catch(e){}
   if (S.age<=42){ rollInjuries(); scheduleIntl(); }
   if (S.age>42){ S.phase="retired"; S.log.push({season:done, text:`Retired at ${S.age-1}`, fee:null}); note("info","Time to hang up the boots","Nobody plays on past 42. Your career is over: see the Statistics tab for the full story."); }
   save(); recordCareer(); render(); window.scrollTo({top:0, behavior:"smooth"});

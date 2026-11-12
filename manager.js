@@ -1612,12 +1612,12 @@ function mgVacancies(fired){
   const ok = all.filter(c=>mgJob(c).need<=cap);
   return mgShuffleR(ok, R).slice(0, 6).map(mgJob).sort((a, b)=>mgRep(b.club) - mgRep(a.club));
 }
-function mgApplyJob(club){
+function mgApplyJob(club, role){
   const j = (M.jobs || []).find(x=>x.club===club) || mgJob(club);
   const chance = clamp(.55 + (M.mgr.rep - j.need)/25 + ((M.mgr.ex || []).includes(club) ? .25 : 0), .05, .97);   // an old club of your playing days gives you a hearing
   if (Math.random()>chance){ M.jobs = M.jobs.filter(x=>x.club!==club); mgSave(); return {ok:false, txt:`${club} have gone with another candidate.`}; }
-  mgcOffer(club);
-  return {ok:true, txt:`${club} want you. Agree your contract.`};
+  mgcOffer(club, false, role);
+  return {ok:true, txt:`${club} want you${role && role!==M.role ? ` as their ${role==="dof" ? "Director of Football" : "manager"}` : ""}. Agree your contract.`};
 }
 
 /* ================= THE MANAGERS' HALL OF FAME ================= */
