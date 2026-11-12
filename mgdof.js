@@ -272,6 +272,7 @@ function mdfBuild(k){
 
 /* ---------- the end of a season ---------- */
 function mdfSeasonEnd(){
+  mgdPhilEnd();
   const C = M.coach; if (!C) return;
   if (!C.int){
     const d = mdfPerf(C), wonT = M.trophies.filter(x=>x.s===seasonLabel(M.season) && x.club===M.club).length;

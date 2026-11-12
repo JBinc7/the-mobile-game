@@ -586,3 +586,16 @@ button.mg-xir:hover{background:rgba(255,255,255,.05)} .mgx-marked{outline:1px so
 .mgc-card{padding:12px 14px;margin-bottom:16px;border-radius:4px 14px 4px 14px;background:var(--surface-2);border:1px solid var(--line);display:grid;gap:10px}
 .mgc-out{display:grid;gap:10px;margin-top:10px}
 .mgc-offer .mg-kpis b,.mgc-card .mg-kpis b,.mgc-out .mg-kpis b{font-size:17px}
+
+/* 3.1 / 3.2: touchline calls, persona, weather, scouting network, philosophy, interviews (mgdepth.js) */
+.mg-why{margin:8px 0 0;padding:0 0 0 18px;display:grid;gap:4px;font-size:14px;color:var(--muted)}
+.mdf-iv{margin:6px 0 8px;font-size:13.5px}
+.mgp-name{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:20px;color:var(--gold)}
+.mgn{margin-top:14px}
+.mgn-list{display:grid;gap:6px}
+.mgn-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:8px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.mgn-row .mgn-lv{grid-column:1;font-size:13px;color:var(--muted)}
+.mgn-row .mgn-c{grid-column:1;font-size:12px;color:var(--muted)}
+.mgn-row .row{grid-column:2;grid-row:1/4;justify-content:flex-end}
+.mgd-phil{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.mgd-phil .btn{white-space:normal;min-height:48px}

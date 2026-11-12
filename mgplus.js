@@ -62,7 +62,7 @@ function mgxStaffHTML(){
       <p class="hint">${MGX_ROLES[k][1]}</p>
       ${open ? `<div class="mg-list">${mgxStaffCands(k).map((c, i)=>`<div class="mg-row mgx-cand">${mgOvrB(c.r, "sm")}<span class="mg-pn"><b>${esc(c.n)}</b><small>${c.age} · ${mgWageTxt(c.w)}</small></span>${mgBtn("xhire", "Hire", "small primary", `data-k="${k}" data-i="${i}"`)}</div>`).join("") || `<p class="hint">Nobody available this month.</p>`}</div>
         <p class="hint">Hiring pays off ${esc(mgSurname(x.n))} with four weeks' wages (${mgMoney(x.w*4)}), from the transfer budget.</p>` : mgBtn("xstaff", "Find a replacement", "small", `data-k="${k}"`)}</div>`; };
-  return `<div class="mgx-staffs">${card("asst")}${card("phys")}${card("scout")}</div>
+  return `<div class="mgx-staffs">${card("asst")}${card("phys")}${card("scout")}</div>${mgnHTML()}
     ${dof ? "" : `<label class="chk mgx-chk"><input type="checkbox" data-mgin="xpick" ${S.pick ? "checked" : ""}> When I quick sim a match, let my assistant rest tired players and pick the men in form</label>`}
     <p class="hint">Staff wages (${mgWageTxt(mgxStaffBill())}) are paid weekly with the players'.</p>`;
 }

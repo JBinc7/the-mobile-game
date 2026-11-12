@@ -392,7 +392,7 @@ function mgObjectives(){
   return mgDof() ? mdfObjectives(o) : o;
 }
 const mgConfLabel = c => c>=80 ? "Delighted" : c>=65 ? "Pleased" : c>=50 ? "Satisfied" : c>=35 ? "Concerned" : c>=20 ? "Worried" : "Furious";
-function mgBoardShift(d, why){ if (M.out) return; const B = M.board; B.conf = +clamp(B.conf + d, 0, 100).toFixed(1); if (why) B.hist.push({d:M.day, v:d, why}); if (B.hist.length>40) B.hist.shift(); }
+function mgBoardShift(d, why){ if (M.out) return; if (d<0 && mgpIs()===1) d *= .88; const B = M.board; B.conf = +clamp(B.conf + d, 0, 100).toFixed(1); if (why) B.hist.push({d:M.day, v:d, why}); if (B.hist.length>40) B.hist.shift(); }
 
 /* ---------- the inbox ---------- */
 // kinds: board, transfer, contract, scout, youth, injury, news, event, job, award, match
@@ -762,7 +762,8 @@ function mgTick(){
   }
   if (M.phase==="pre" && M.day>=MGD(M.season, 7, 1)) M.phase = "season";
   if (dow===1) mgWeekly();
-  if (dom===1) mgMonthly();
+  if (dom===1){ mgMonthly(); mgdMonthly(); }
+  mgdDeadline();
   (mgDayIdx().get(M.day) || []).forEach(e=>{ if (e.k==="X") mgSpecial(e.w); });
   // scouting reports come in when they're ready
   M.scout = (M.scout || []).filter(s=>{ if (--s.d>0) return true; mgScoutDone(s); return false; });
@@ -796,6 +797,7 @@ function mgWeekly(){
   }
   mgxWeekly();
   mgcWeekly();
+  mgnWeekly();
   if (mgDof()){ if (M.coach) mgFinAdd("exp", "staff", M.coach.wage); mdfWeekly(); }
   if (mgInWindow()) mgWindowWeek();
   mgAiManagers();
@@ -1585,7 +1587,7 @@ function mgPressAnswer(fx, i){
   const P = mgPressFor(fx); if (!P) return; const e = P.a[i][1];
   if (e.mor) mgMine().forEach(p=>{ p.mor = clamp(p.mor + e.mor, 0, 100); });
   if (e.board) mgBoardShift(e.board);
-  M.pressOpp = e.opp || 0; M.pressDone = fx.key; mgSave();
+  M.pressOpp = e.opp || 0; M.pressDone = fx.key; mgpTally(i); mgSave();
 }
 
 /* ================= THE JOB MARKET ================= */
@@ -1612,7 +1614,7 @@ function mgVacancies(fired){
 }
 function mgApplyJob(club){
   const j = (M.jobs || []).find(x=>x.club===club) || mgJob(club);
-  const chance = clamp(.55 + (M.mgr.rep - j.need)/25, .05, .97);
+  const chance = clamp(.55 + (M.mgr.rep - j.need)/25 + ((M.mgr.ex || []).includes(club) ? .25 : 0), .05, .97);   // an old club of your playing days gives you a hearing
   if (Math.random()>chance){ M.jobs = M.jobs.filter(x=>x.club!==club); mgSave(); return {ok:false, txt:`${club} have gone with another candidate.`}; }
   mgcOffer(club);
   return {ok:true, txt:`${club} want you. Agree your contract.`};

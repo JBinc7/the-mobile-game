@@ -59,7 +59,7 @@ function mmRate(S){
 /* ---------- a match ---------- */
 function mmNew(f, userSide){
   const H = mmSide(f.h, userSide===0, f), A = mmSide(f.a, userSide===1, f);
-  const G = {f, S:[H, A], min:0, add:[1 + Math.floor(Math.random()*4), 2 + Math.floor(Math.random()*5)], half:1, score:[0, 0], ev:[], poss:[0, 0], mom:0, user:userSide,
+  const G = {wx:f.c==="F" ? "clear" : mgWx(f).k, f, S:[H, A], min:0, add:[1 + Math.floor(Math.random()*4), 2 + Math.floor(Math.random()*5)], half:1, score:[0, 0], ev:[], poss:[0, 0], mom:0, user:userSide,
     ko:!!f.ko, first:f.first || null, neutral:!!f.neutral, phase:"1h", et:false, pens:null, done:false, pressOpp:0};
   if (userSide>=0 && M.pressDone===f.key && M.pressOpp){ G.S[1 - userSide].boost += M.pressOpp*.4; }
   if (userSide>=0) mgxMatchSetup(G, userSide);
@@ -77,6 +77,7 @@ function mmLam(G, s){
   if (A.tac.style==="Counter" && mb>=1) l *= 1.1;
   if (A.tac.pass===2 && B.tac.line===2) l *= 1.07;
   if (A.tac.width===2 && ["4-1-2-1-2","4-2-3-1"].includes(B.form)) l *= 1.04;
+  l *= mgWxF(G, A);
   return Math.max(.08, l);
 }
 const mmPick = (list, w) => { const t = list.reduce((s, x)=>s + Math.max(0, w(x)), 0); let r = Math.random()*t; for (const x of list){ r -= Math.max(0, w(x)); if (r<=0) return x; } return list[list.length - 1]; };
@@ -346,6 +347,7 @@ function mmFrame(now){
     if (!mdBusy()){
       if (LV.wantSub){ const o = LV.wantSub; LV.wantSub = null; LV.forced = o; mmOpen("subs"); }
       else if (LV.wantTalk){ LV.wantTalk = false; mmOpen("talk"); }
+      else if (LV.wantCall && !G.done){ LV.call = LV.wantCall; LV.wantCall = null; mmOpen("call"); }
       else if (G.done && !LV.ended) mmOpen("ft");
     }
   }
@@ -354,6 +356,7 @@ function mmFrame(now){
 }
 function mmAdvance(){
   const G = LV.G, evs = mmStep(G);
+  if (typeof mgtCheck==="function") mgtCheck(G, evs);
   // each event is acted out on the pitch (and reaches the commentary when it happens there), or shown now
   for (const e of evs) if (!mdEvent(e)) mmShow(e);
   if (G.needSub && G.user===LV.us){ LV.wantSub = G.needSub; G.needSub = null; }
@@ -415,6 +418,7 @@ function mmShut(){ LV.modal = null; const m = document.getElementById("mmModal")
 function mmModal(){
   const m = document.getElementById("mmModal"), G = LV.G, S = G.S[LV.us], k = LV.modal; if (!m) return;
   m.hidden = false;
+  if (k==="call"){ m.innerHTML = mgtHTML(); return; }
   if (k==="talk"){
     const gd = G.score[LV.us] - G.score[1 - LV.us];
     m.innerHTML = `<div class="mm-card-in"><div class="eyebrow">Half-time team talk</div><h3>${gd>0 ? "You're ahead" : gd<0 ? "You're behind" : "All square"} · ${G.score[0]}–${G.score[1]}</h3>
@@ -477,6 +481,7 @@ function mmClick(e){
   else if (a==="soff"){ LV.subOff = S.on[+b.dataset.i]; mmModal(); }
   else if (a==="son"){ LV.subOn = S.bench.find(x=>x.p.id===b.dataset.id)?.p || null; mmModal(); }
   else if (a==="dosub"){ mgxFxMark(G, LV.us, "sub"); if (LV.subOff && LV.subOn && mmSub(G, LV.us, LV.subOff, LV.subOn)){ mmFeed(G.ev[G.ev.length - 1]); LV.forced = null; LV.subOff = LV.subOn = null; mmBoard(); mmShut(); } }
+  else if (a==="calldo"){ mgtDo(+b.dataset.i); mmShut(); }
   else if (a==="shoutdo"){ mgxFxMark(G, LV.us, "shout"); mmShout(b.dataset.v); mmShut(); }
   else if (a==="talk"){ mmTalk(b.dataset.v); LV.talkDone = true; mmShut(); }
   else if (a==="post"){ LV.post = b.dataset.v; mmModal(); }
@@ -487,7 +492,7 @@ function mmShout(k){
   const G = LV.G, S = G.S[LV.us], gd = G.score[LV.us] - G.score[1 - LV.us]; LV.shoutAt = G.min;
   let txt = "";
   if (k==="enc"){ S.boost = gd<=0 ? 1 : .5; S.boostT = 10; txt = "You urge your players on from the touchline."; }
-  else if (k==="demand"){ const ok = Math.random()<(gd<0 ? .6 : .4); S.boost = ok ? 2 : -1; S.boostT = 15; txt = ok ? "You demand more, and they respond!" : "Your demands fall flat: heads go down."; }
+  else if (k==="demand"){ const ok = Math.random()<(gd<0 ? .6 : .4) + mgpBonus("demand"); S.boost = ok ? 2 : -1; S.boostT = 15; txt = ok ? "You demand more, and they respond!" : "Your demands fall flat: heads go down."; }
   else if (k==="focus"){ S.focus = .8; setTimeout(()=>{ if (LV) S.focus = 0; }, 15000); txt = "You tell them to concentrate."; }
   else if (k==="push"){ S.push = 1; S.pushT = 15; txt = "You wave your team forward."; }
   else if (k==="tight"){ S.push = -1; S.pushT = 15; txt = "You signal to tighten up."; }
@@ -496,7 +501,7 @@ function mmShout(k){
 function mmTalk(k){
   const G = LV.G, S = G.S[LV.us], gd = G.score[LV.us] - G.score[1 - LV.us];
   const fx = {calm:gd>0 ? 1 : 0, enc:gd<=0 ? 1.2 : .4, praise:gd>0 ? 1.2 : -.6, demand:gd<0 ? (Math.random()<.6 ? 1.8 : -1) : gd===0 ? .6 : -.5, crit:gd<0 ? (Math.random()<.5 ? 2 : -1.5) : -1.2}[k];
-  S.boost = fx; S.boostT = 30; mmRate(S);
+  S.boost = fx + mgpBonus("talk"); S.boostT = 30; mmRate(S);
   mmFeed(mmSay(G, LV.us, "talk", fx>=1 ? "The team talk fires them up!" : fx>0 ? "The players nod and head back out." : "The team talk goes down badly."));
   mgMine().forEach(p=>{ p.mor = clamp(p.mor + fx*1.5, 0, 100); });
 }

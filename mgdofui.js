@@ -37,7 +37,8 @@ function mdfMarketHTML(){
   return `<div class="mdf-cands">${L.map((c, i)=>{ const I = mdfInterest(c), ask = mgRoundWage(c.ask*(I.hard ? 1.25 : 1));
     return `<article class="mdf-cand ${I.ok ? "" : "no"}"><div class="mdf-cand-h">${mdfFace(c, 54)}<div style="min-width:0"><b>${esc(c.n)}</b><small>${esc(c.nat)} · ${c.age} · ${esc(c.style)} · ${esc(c.f)}</small>
         <small>${c.club ? `At ${esc(c.club)} · compensation ${mgMoney(c.comp)}` : "Out of work"} · reputation ${c.rep}</small></div></div>
-      <div class="mdf-mini"><span>TAC <b>${c.tac}</b></span><span>MOT <b>${c.mot}</b></span><span>DEV <b>${c.dev}</b></span><span>YTH <b>${c.yth}</b></span></div>
+      <div class="mdf-mini"><span>TAC <b>${mgdRange(c, "tac")}</b></span><span>MOT <b>${mgdRange(c, "mot")}</b></span><span>DEV <b>${mgdRange(c, "dev")}</b></span><span>YTH <b>${mgdRange(c, "yth")}</b></span></div>
+      ${c.iv ? `<ul class="mg-why mdf-iv">${(c.ivt || []).map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : I.ok ? `<div class="row">${mgdIvLeft() ? mgBtn("mdfiv", `Interview him (${mgdIvLeft()} left)`, "small", `data-i="${i}"`) : `<span class="hint">No interviews left for this search: his numbers stay a rough guide.</span>`}</div>` : ""}
       <p class="mg-int ${I.ok ? "ok" : "bad"}">${esc(I.txt)}</p>
       ${I.ok ? `<div class="mdf-form"><div class="field"><label for="mdfW${i}">Wage (£/wk) · he wants about ${mgWageTxt(ask)}</label><input id="mdfW${i}" type="text" class="money-in" inputmode="text" autocomplete="off" value="${moneyIn(ask)}"></div>
         <div class="field"><label for="mdfY${i}">Years</label><select id="mdfY${i}">${[1,2,3,4].map(y=>`<option ${y===c.yrs ? "selected" : ""}>${y}</option>`).join("")}</select></div>${mgBtn("mdfhire", "Appoint him", "primary small", `data-i="${i}"`)}</div>` : ""}</article>`; }).join("")}</div>`;

@@ -123,7 +123,9 @@ const Hub = (() => {
       <div class="slot-id">${s.club ? clubBadge(s.club, 46) : ""}<div style="min-width:0"><p class="slot-name">${esc(s.name)}</p><p class="slot-sub">${esc(s.sub)}</p></div><span class="slot-season">${esc(s.season)}</span></div>
       <div class="slot-stats">${s.stats.map(([k, v])=>`<div><span class="label">${esc(k)}</span><b>${esc(v)}</b></div>`).join("")}</div>
       <div class="row"><button type="button" class="btn primary" data-hub="enter" data-m="${mode}" data-i="${i}">Continue</button>
-        <button type="button" class="btn small danger" data-hub="del" data-m="${mode}" data-i="${i}">${sure===id ? "Tap again to delete" : "Delete"}</button></div></article>`;
+        ${mode==="player" && s.done && typeof mgwFromPlayer==="function" ? `<button type="button" class="btn small" data-hub="tomgr" data-m="player" data-i="${i}">Go into management</button>` : ""}
+        <button type="button" class="btn small danger" data-hub="del" data-m="${mode}" data-i="${i}">${sure===id ? "Tap again to delete" : "Delete"}</button></div>
+      ${mode==="player" && s.done && sure==="mgrfull" ? `<p class="hint">All your manager slots are full. Delete one to start his managerial career.</p>` : ""}</article>`;
   }
   function count(mode){ let n = 0; for (let i = 1; i<=HUB_SLOTS; i++) if (sumOf(mode, i)) n++; return n; }
   function homeHTML(){
@@ -201,6 +203,12 @@ const Hub = (() => {
     const a = b.dataset.hub, m = b.dataset.m, i = +b.dataset.i;
     if (a==="mode"){ view = b.dataset.v; sure = ""; hubRender(); window.scrollTo({top:0}); }
     else if (a==="home") home();
+    else if (a==="tomgr"){   // a retired player goes into management, in the first free manager slot
+      const d = read("player", i), free = [1, 2, 3].slice(0, HUB_SLOTS).find(k=>!read("manager", k));
+      if (!d || typeof mgwFromPlayer!=="function") return;
+      if (!free){ sure = "mgrfull"; hubRender(); return; }
+      window.MGW_PREFILL = mgwFromPlayer(d); enter("manager", free);
+    }
     else if (a==="enter") enter(m, i);
     else if (a==="del"){
       const id = `${m}-${i}`;
@@ -214,6 +222,7 @@ const Hub = (() => {
   });
 
   return {
+    saves:allSaves,
     // after sign-in: straight back into a save if the page was reloaded to open one, otherwise the main menu
     boot(){
       let b = null; try{ b = JSON.parse(sessionStorage.getItem(BOOT)); sessionStorage.removeItem(BOOT); }catch(e){}

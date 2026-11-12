@@ -78,6 +78,8 @@ const Mgr = {
     MG_SLOT = slot; MG_KEY = key; M = mgLoad(key); MG_TAB = "home"; MG_PRE = null; MG_LAST = null; MG_FLASH = ""; MG_SEL = null; MG_RES = null; mgVCache.clear();
     if (M){ M._tier = null; M._idx = null; M._lv = null; mgTierOf(M.club); if (M.phase!=="new" && M.club && M.tac) mgMendXI(true); }
     else MG_NEW = {step:1, name:"", nat:"England", age:42, bg:role==="dof" ? "analyst" : "pro", kit:0, lg:1, club:null, role:role==="dof" ? "dof" : "mgr"};
+    // a retired player going into management (mgdepth.js): his name, and a head start
+    if (!M && window.MGW_PREFILL){ const X = window.MGW_PREFILL; window.MGW_PREFILL = null; Object.assign(MG_NEW, {name:X.name, nat:SQ_NAMES[X.nat] ? X.nat : "England", age:X.age, bg:"player", ex:X.ex, exRep:X.rep}); }
     if (typeof Hub!=="undefined") Hub.paintBand(M ? M.role : role);
     mgRender();
   },
@@ -188,6 +190,7 @@ function mgRenderNew(){
 function mgCreate(){
   const N = MG_NEW;
   mgNewSave({name:N.name, nat:N.nat, age:N.age, bg:N.bg, kit:N.kit, role:N.role});
+  mgwApply();
   M._tier = null; mgSeasonLevels();
   mgTakeJob(N.club, true);
   mgStartSeason(); M.phase = "pre";
@@ -202,7 +205,7 @@ function mgClubForm(club){ const t = mgTierOf(club); if (t!=null && M.tab[t] && 
 function mgRel(day){ const d = day - M.day; return d<=0 ? "Today" : d===1 ? "Tomorrow" : `In ${d} days`; }
 function mgVsHTML(f, big){
   const side = c => `<div class="mg-vs-t">${clubBadge(c, big ? 72 : 56)}<b>${esc(c)}</b><span class="mg-vs-f">${mgFormPills(mgClubForm(c))}</span><span class="mg-vs-l">Team ${mgOvrB(Math.round(mgLevel(c)), "sm")}</span></div>`;
-  return `<div class="mg-vs">${side(f.h)}<div class="mg-vs-v"><span>VS</span><small>${esc(mgVenue(f))}</small></div>${side(f.a)}</div>`;
+  return `<div class="mg-vs">${side(f.h)}<div class="mg-vs-v"><span>VS</span><small>${esc(mgVenue(f))}${f.c!=="F" && mgWx(f).k!=="clear" ? ` · ${mgWx(f).icon} ${mgWx(f).label}` : ""}</small></div>${side(f.a)}</div>`;
 }
 function mgHomeHTML(nf){
   if (M.phase==="sacked") return mgSackedHTML();
@@ -258,6 +261,7 @@ function mgLastHTML(){
     <div class="mg-last-sc">${clubBadge(f.h, 44)}<b>${r.hg}–${r.ag}</b>${clubBadge(f.a, 44)}</div>
     <p class="mg-last-v">${won ? "Victory" : lost ? "Defeat" : "Draw"}${r.dec && r.dec.pens ? ` · ${r.dec.pens.join("–")} on penalties` : r.dec && r.dec.et ? " · after extra time" : ""}</p>
     ${r.goals.length ? `<p class="hint mg-last-g">${r.goals.map(g=>`${g.side===0 ? "" : ""}<b>${esc(mgSurname(g.n))}</b> ${g.m}'${g.pen ? " (p)" : ""}`).join(" · ")}</p>` : ""}
+    ${(w=>w.length ? `<ul class="mg-why">${w.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>` : "")(mgWhy(f, r))}
     ${r.potm ? `<p class="hint">Player of the Match: <b>${esc(r.potm.n)}</b> · ${r.potm.rt.toFixed(1)}</p>` : ""}
     ${others.length ? `<details class="mg-more"><summary>Other results</summary><div class="mg-others">${others.map(x=>`<div>${esc(x[0])} <b>${x[2]}–${x[3]}</b> ${esc(x[1])}</div>`).join("")}</div></details>` : ""}
     <div class="row">${mgBtn("lastx", "Dismiss", "small")}</div></section>`;
@@ -561,7 +565,7 @@ function mgClubHTML(){
       <h3>Individual training (${T.ind.length}/5)</h3><p class="hint">Pick up to five players to work on one attribute: they grow faster, especially there. Set it from a player's card.</p>
       ${T.ind.length ? `<div class="mg-list">${T.ind.map(x=>{ const p = M.P[x.id]; return p ? `<div class="mg-row">${mgPosC(p.pos)}<b>${esc(p.n)}</b><small>${(p.pos==="GK" ? MG_GKATT : MG_ATT)[x.k]}</small>${mgBtn("indx", "Stop", "small", `data-id="${esc(p.id)}"`)}</div>` : ""; }).join("")}</div>` : ""}`;
   }
-  else if (sub==="jobs"){ body = M.phase==="sacked" ? `${mgcOutHTML()}${mgJobsHTML()}` : `${mgcCardHTML()}<p class="hint">Your reputation: <b>${Math.round(M.mgr.rep)}</b>/100. Clubs looking for a ${mgcRole()}:</p>${mgJobsHTML()}`; }
+  else if (sub==="jobs"){ body = M.phase==="sacked" ? `${mgcOutHTML()}${mgJobsHTML()}` : `${mgcCardHTML()}${mgpHTML()}<p class="hint">Your reputation: <b>${Math.round(M.mgr.rep)}</b>/100. Clubs looking for a ${mgcRole()}:</p>${mgJobsHTML()}`; }
   else {
     const c2 = M.car;
     body = `<div class="mg-mgr">${mgAvatar({lk:{s:1, h:2, c:"Brown", b:0}}, M.club, 84)}<div><h3>${esc(M.mgr.name)}</h3><p class="hint">${esc(M.mgr.nat)} · ${M.mgr.age} · ${esc((MG_BG.find(b=>b[0]===M.mgr.bg) || [])[1] || "")}</p>
@@ -572,7 +576,7 @@ function mgClubHTML(){
       <h3>Seasons</h3>${M.hist.length ? `<div class="tablewrap"><table class="mg-table"><thead><tr><th class="l">Season</th><th class="l">Club</th><th>Pos</th><th>W–D–L</th></tr></thead><tbody>${M.hist.map(h=>`<tr><td class="l">${esc(h.s)}${h.part ? "*" : ""}</td><td class="l">${mgCrestName(h.club, 16)}</td><td>${h.pos ? ord(h.pos) : "–"}</td><td>${h.w}–${h.d}–${h.l}</td></tr>`).join("")}</tbody></table></div>` : `<p class="hint">Your first season is under way.</p>`}`;
   }
   if (mgDof() && sub==="training") MG_SUB.club = "facilities";
-  if (mgDof()) return `<section class="panel"><h2>${esc(M.club)}</h2>${mgSubTabs("club", [["overview","Overview"],["finances","Finances"],["facilities","Facilities"],["staff","Staff"],["board","Owner"],["academy","Academy"],["jobs","Jobs"],["career","Your career"]])}<div class="subview">${sub==="facilities" ? mdfFacilitiesHTML() : sub==="staff" ? mgxStaffHTML() : body}</div></section>`;
+  if (mgDof()) return `<section class="panel"><h2>${esc(M.club)}</h2>${mgSubTabs("club", [["overview","Overview"],["finances","Finances"],["facilities","Facilities"],["staff","Staff"],["board","Owner"],["academy","Academy"],["jobs","Jobs"],["career","Your career"]])}<div class="subview">${sub==="facilities" ? mdfFacilitiesHTML() : sub==="staff" ? mgxStaffHTML() : sub==="board" ? mgdPhilHTML() + body : body}</div></section>`;
   return `<section class="panel"><h2>${esc(M.club)}</h2>${mgSubTabs("club", [["overview","Overview"],["finances","Finances"],["board","Board"],["academy","Academy"],["training","Training"],["staff","Staff"],["jobs","Jobs"],["career","Your career"]])}<div class="subview">${sub==="staff" ? mgxStaffHTML() : body}</div></section>`;
 }
 const mgWeeksLeft = () => Math.max(10, Math.round((MGD(M.season + 1, 5, 1) - M.day)/7));
