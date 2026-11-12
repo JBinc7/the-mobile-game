@@ -193,7 +193,7 @@ function mgCreate(){
   mgwApply();
   M._tier = null; mgSeasonLevels();
   mgTakeJob(N.club, true);
-  mgStartSeason(); M.phase = "pre";
+  mgStartSeason(); M.phase = "pre"; mgcEnsure();
   M.board.obj = mgObjectives(); M.board.season = M.season;
   MG_NEW = null; MG_TAB = "home"; mgSave(); mgHallRecord();
   MG_FLASH = mgDof() ? `Welcome to ${M.club}. Meet your head coach, ${M.coach.n}, then press Continue to start pre-season.` : `Welcome to ${M.club}, boss. Press Continue to start pre-season.`;

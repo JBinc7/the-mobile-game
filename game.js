@@ -1681,6 +1681,18 @@ function pressure(){
 }
 function pressureLabel(p){ return p>=1 ? "Huge" : p>=.6 ? "High" : p>=.3 ? "Some" : "Low"; }
 function standing(n){ const t = tierOf(n); return TIERS[t].pr * repOf(n, t); }
+/* 3.1: life off the pitch. As your name grows, brands come calling: a boot deal that pays every year on top of your wage.
+   The bigger your value, the bigger the brand; a strong season brings an upgrade, and a deal runs for three years. */
+const SPONSORS = [{n:"Northgate Sports", min:4e5, pay:15e3, t:"a local boot deal"}, {n:"Kestrel", min:4e6, pay:120e3, t:"a national boot deal"}, {n:"Vanta Athletic", min:25e6, pay:1.2e6, t:"a major boot deal"}, {n:"Apex One", min:70e6, pay:6e6, t:"a global signature boot deal"}];
+function sponsorCheck(pf){
+  if (S.phase==="retired") return;
+  const cur = S.spons, lvl = SPONSORS.reduce((b, x, i)=>S.value>=x.min ? i : b, -1);
+  if (cur){ S.earnings += cur.pay; if (cur.until<=S.season) { S.spons = null; if (lvl<0) note("info", `${cur.n} deal ends`, `Your boot deal with ${cur.n} has run its course and won't be renewed.`); } }
+  if (lvl<0) return;
+  const now = S.spons ? SPONSORS.findIndex(x=>x.n===S.spons.n) : -1;
+  if (lvl>now && (now<0 || (pf && pf.score>.55))){ const X = SPONSORS[lvl]; S.spons = {n:X.n, pay:X.pay, until:S.season + 3};
+    note("good", `${X.n}: ${X.t}`, `${X.n} have signed you to ${X.t}, worth ${gbp(X.pay)} a year for three years on top of your wage.${now>=0 ? " It replaces your old deal." : ""}`); }
+}
 function note(kind, title, text){ (S.notes ||= []).push({season:seasonLabel(S.season), kind, title, text}); }
 // contract length on offer shrinks as you age
 function yearsFor(age){ return age<=23? [3,5] : age<=27? [2,5] : age<=29? [2,4] : age<=31? [1,3] : age<=33? [1,2] : [1,1]; }
@@ -1929,6 +1941,7 @@ function finishSeason(comps, janFrom){
   if (S.years===1 && !listed && !loanEnded && age>=30 && sale!=="makeway") note("info", "One year left", `Your contract runs out next summer. At ${age}, expect clubs to offer shorter deals.`);
   const offerOpts = {listed, loanAsk, share:adjShare, loanFrom:loanEnded, good:pf.score>.75, sale, bid:tgSeasonEnd()};
   S.pending = {pf, f:tgt.f, prev, won, listed, loanAsk, warn: warn && !(youth && S.badStreak<2), stoodBy, loanEnded, sale, injuries, offerOpts, offers:genOffers(pf, offerOpts)};
+  sponsorCheck(pf);
   S.phase = "window"; tab = "season";
   if (tourPending){
     S.tourney = {...tourPending, bd:{won:won.concat(intlWon).map(w=>({name:w.name, kind:w.kind})), tot, tier:sim.tier, comps, age, score:pf.score}};
@@ -2936,6 +2949,7 @@ function renderCareer(){
           <div class="facts">
             <div class="fact"><div class="label">Age</div><div class="v">${S.age}</div></div>
             <div class="fact"><div class="label">Position</div><div class="v">${pl.pos}</div></div>
+            ${S.spons ? `<div class="fact"><div class="label">Boot deal</div><div class="v" style="font-size:15px">${esc(S.spons.n)}</div></div>` : ""}
             <div class="fact"><div class="label">Contract</div><div class="v">${S.phase==="retired"?"—":S.years<=0?"Expired":"'"+String((S.season+S.years+(S.phase==="window"?1:0))%100).padStart(2,"0")}</div></div>
           </div>
           <div class="facts">
