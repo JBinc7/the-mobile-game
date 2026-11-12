@@ -45,6 +45,13 @@ function uniRoll(){
     next[there][next[there].indexOf(S.club)] = swap; next[mine][next[mine].indexOf(swap)] = S.club; }
   const moved = keys.some(k=>next[k].some(c=>!T[k].includes(c)));
   S.world.tiers = next;
+  // ...and the same clubs are strong: within each division, strengths here are handed out in the linked world's order
+  // (the scale stays this game's own; your club keeps the strength it has)
+  let shifted = 0;
+  if (W.vs && S.world.str) keys.forEach(k=>{ const L = next[k]; if (!L.every(c=>W.vs[c]!=null)) return;
+    const vals = L.map(c=>S.world.str[c] ?? 36).sort((a, b)=>b - a), order = L.slice().sort((a, b)=>W.vs[b] - W.vs[a]);
+    order.forEach((c, i)=>{ if (c!==S.club && S.world.str[c]!==vals[i]){ S.world.str[c] = vals[i]; shifted++; } }); });
+  S.uniStr = shifted;
   if (moved) note("info", "The leagues have changed", `Promotion and relegation in your linked world (${W.mgr.name} at ${W.club}) have set this season's divisions.`);
 }
 // offers: the club you run in the linked world has signed you there, so it comes for you here

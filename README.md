@@ -159,6 +159,10 @@ The two games still play their own matches, so scores and league tables are not 
 - **A world that moves (Manager and Director).** The news now reports clubs in your league on five-game winning runs or in freefall, and now and then a club is taken over and gets stronger for good.
 - **One universe fix.** When your player moves on in his own career from the club you manage, he now leaves in the manager's world too, instead of being offered straight back.
 
+## 3.5: the same clubs are strong in both
+
+In a linked universe, each new Player Career season now also takes the pecking order from the manager's world: within every division, the clubs that are strong there are the strong ones here (a club that's been taken over or built up in the manager's world is a force in the Player Career too). Your own club keeps the strength it has.
+
 ## How the game looks
 
 A dark, night-game look across both careers: deep navy under floodlight glows and a neon pitch grid, mint-to-cyan for the main actions and violet-to-magenta for the big moments, angled panels with a lit corner, and condensed capitals throughout. It's in `theme.css`, which sets the colours every other stylesheet uses.
